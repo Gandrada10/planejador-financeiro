@@ -1,24 +1,27 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 
-import type { Transaction } from '../../types';
+import type { Transaction, Category } from '../../types';
 
 interface Props {
   onSubmit: (data: Omit<Transaction, 'id' | 'createdAt'>) => void;
   onClose: () => void;
   titularNames?: string[];
+  categories?: Category[];
+  accountNames?: string[];
 }
 
-export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props) {
+export function TransactionForm({ onSubmit, onClose, titularNames = [], categories = [], accountNames = [] }: Props) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'despesa' | 'receita'>('despesa');
   const [account, setAccount] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [familyMember, setFamilyMember] = useState('');
   const [titular, setTitular] = useState('');
   const [installments, setInstallments] = useState('');
-  const [tags, setTags] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState('');
   const [notes, setNotes] = useState('');
 
   function handleSubmit(e: React.FormEvent) {
@@ -28,6 +31,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props)
     const totalInst = installments ? parseInt(installments, 10) : null;
     onSubmit({
       date: new Date(date + 'T12:00:00'),
+      purchaseDate: purchaseDate ? new Date(purchaseDate + 'T12:00:00') : null,
       description,
       amount: type === 'despesa' ? -Math.abs(value) : Math.abs(value),
       account,
@@ -37,9 +41,9 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props)
       totalInstallments: totalInst || null,
       cardNumber: null,
       pluggyTransactionId: null,
-      tags: tags ? tags.split(',').map((t) => t.trim()) : [],
+      tags: [],
       notes,
-      categoryId: null,
+      categoryId: categoryId || null,
       importBatch: null,
     });
     onClose();
@@ -94,8 +98,13 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props)
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Conta/Banco</label>
-              <input tabIndex={4} type="text" value={account} onChange={(e) => setAccount(e.target.value)} className={inputClass} placeholder="Nubank, Itau..." />
+              <label className={labelClass}>Conta/Cartao</label>
+              <select tabIndex={4} value={account} onChange={(e) => setAccount(e.target.value)} className={inputClass}>
+                <option value="">Selecione...</option>
+                {accountNames.map((name) => (
+                  <option key={name} value={name}>{name}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className={labelClass}>Titular</label>
@@ -123,9 +132,24 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props)
             </div>
           </div>
 
+          {installments && parseInt(installments, 10) >= 2 && (
+            <div>
+              <label className={labelClass}>Data da compra original</label>
+              <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className={inputClass} />
+              <p className="text-[10px] text-text-secondary mt-1">Quando a compra foi feita (se diferente da data da fatura)</p>
+            </div>
+          )}
+
           <div>
-            <label className={labelClass}>Tags (separadas por virgula)</label>
-            <input tabIndex={6} type="text" value={tags} onChange={(e) => setTags(e.target.value)} className={inputClass} placeholder="viagem, reforma..." />
+            <label className={labelClass}>Categoria</label>
+            <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass}>
+              <option value="">Sem categoria</option>
+              {categories
+                .filter((c) => c.type === 'ambos' || c.type === type)
+                .map((cat) => (
+                  <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                ))}
+            </select>
           </div>
 
           <div>
