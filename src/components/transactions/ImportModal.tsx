@@ -48,7 +48,7 @@ function detectColumns(headers: string[]): { dateCol: number; descCol: number; a
   const lower = headers.map((h) => (h || '').toString().toLowerCase().trim());
 
   const datePatterns = ['data', 'date', 'dt', 'dia'];
-  const descPatterns = ['descri', 'historico', 'lancamento', 'memo', 'detail', 'description'];
+  const descPatterns = ['descri', 'historico', 'lancamento', 'lançamento', 'lanc', 'lanç', 'memo', 'detail', 'description'];
   const amountPatterns = ['valor', 'value', 'amount', 'quantia', 'vl'];
 
   const find = (patterns: string[]) => lower.findIndex((h) => patterns.some((p) => h.includes(p)));
