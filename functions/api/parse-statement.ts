@@ -21,7 +21,7 @@ interface ParsedTransaction {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const apiKey = context.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key not configured' }), {
+    return new Response(JSON.stringify({ error: 'API key not configured', env_keys: Object.keys(context.env) }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -45,6 +45,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     });
   }
 
+  // Truncate to ~15000 chars to stay within reasonable token limits
   const truncatedText = rawText.slice(0, 15000);
 
   const prompt = `Voce e um parser de extratos bancarios brasileiros. Analise o texto abaixo extraido de um arquivo "${fileName}" e retorne APENAS um JSON array com as transacoes encontradas.
@@ -106,6 +107,7 @@ ${truncatedText}`;
     const textBlock = data.content.find((b) => b.type === 'text');
     const rawJson = textBlock?.text || '[]';
 
+    // Try to parse the JSON - Claude might wrap it in markdown
     let cleanJson = rawJson.trim();
     if (cleanJson.startsWith('```')) {
       cleanJson = cleanJson.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '').trim();
