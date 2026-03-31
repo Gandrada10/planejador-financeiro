@@ -105,7 +105,9 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: 'Erro de conexao' }));
-        throw new Error((err as { error?: string }).error || `Erro ${response.status}`);
+        const errData = err as { error?: string; raw?: string };
+        if (errData.raw) console.log('[API raw response]', errData.raw);
+        throw new Error(errData.error || `Erro ${response.status}`);
       }
 
       const data = await response.json() as {
