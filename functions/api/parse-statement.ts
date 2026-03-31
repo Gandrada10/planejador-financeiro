@@ -21,7 +21,7 @@ interface ParsedTransaction {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   const apiKey = context.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key not configured', env_keys: Object.keys(context.env) }), {
+    return new Response(JSON.stringify({ error: 'API key not configured' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
@@ -107,30 +107,37 @@ ${truncatedText}`;
     const textBlock = data.content.find((b) => b.type === 'text');
     const rawJson = textBlock?.text || '[]';
 
-    // Try to parse the JSON - Claude might wrap it in markdown
+    // Try to parse the JSON - Claude might wrap it in markdown or add extra text
     let cleanJson = rawJson.trim();
-    if (cleanJson.startsWith('```')) {
-      cleanJson = cleanJson.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '').trim();
+
+    // Strip markdown code blocks
+    if (cleanJson.includes('```')) {
+      cleanJson = cleanJson.replace(/```[a-z]*\n?/g, '').replace(/```/g, '').trim();
     }
 
-    let transactions: ParsedTransaction[];
+    // Try direct parse first
+    let transactions: ParsedTransaction[] | null = null;
     try {
-      transactions = JSON.parse(cleanJson);
-    } catch (e) {
-      console.error('JSON parse error:', e, 'Raw response:', rawJson);
-      return new Response(JSON.stringify({
-        error: 'Failed to parse AI response. The AI might not have found transactions in the file.',
-        raw: rawJson.slice(0, 500)
-      }), {
-        status: 422,
-        headers: { 'Content-Type': 'application/json' },
-      });
+      const parsed = JSON.parse(cleanJson);
+      transactions = Array.isArray(parsed) ? parsed : null;
+    } catch {
+      // Try to extract JSON array from anywhere in the response
+      const arrayMatch = cleanJson.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        try {
+          const parsed = JSON.parse(arrayMatch[0]);
+          transactions = Array.isArray(parsed) ? parsed : null;
+        } catch {
+          // ignore
+        }
+      }
     }
 
-    if (!Array.isArray(transactions)) {
+    if (!transactions) {
+      console.error('JSON parse failed. Raw response:', rawJson.slice(0, 1000));
       return new Response(JSON.stringify({
-        error: 'Invalid response format. Expected array of transactions.',
-        raw: rawJson.slice(0, 500)
+        error: 'Failed to parse AI response',
+        raw: rawJson.slice(0, 800)
       }), {
         status: 422,
         headers: { 'Content-Type': 'application/json' },
