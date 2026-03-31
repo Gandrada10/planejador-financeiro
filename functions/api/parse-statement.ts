@@ -50,7 +50,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const prompt = `Voce e um parser de extratos bancarios brasileiros. Analise o texto abaixo extraido de um arquivo "${fileName}" e retorne APENAS um JSON array com as transacoes encontradas.
 
 Para cada transacao, extraia:
-- "date": data no formato "YYYY-MM-DD"
+- "date": data no formato "YYYY-MM-DD" (converter qualquer formato de data para ISO)
 - "description": descricao da transacao (limpa, sem codigos internos desnecessarios)
 - "amount": valor numerico (negativo para debitos/despesas, positivo para creditos/receitas)
 - "titular": nome do titular do cartao se identificavel no extrato, senao string vazia
@@ -59,17 +59,19 @@ Para cada transacao, extraia:
 - "cardNumber": ultimos 4 digitos do cartao se visivel no extrato, senao null
 
 Regras importantes:
-- Detecte parcelas em qualquer formato: "PARC 3/10", "PARCELA 3 DE 10", "3/10", "(3/10)", etc.
+- Detecte parcelas em qualquer formato: "PARC 3/10", "PARCELA 3 DE 10", "3/10", "(3/10)", "parcelado em 10x", etc.
 - Valores de debito/saida devem ser NEGATIVOS
 - Valores de credito/entrada devem ser POSITIVOS
-- Ignore linhas de saldo, totais, cabecalhos e rodapes
+- Ignore linhas de saldo, totais, cabecalhos, rodapes e linhas em branco
 - Se o extrato for de cartao de credito, todas as compras sao negativas (despesas)
 - Limpe descricoes removendo codigos internos mas mantendo o nome do estabelecimento
+- Detecte datas em formatos: DD/MM/YYYY, YYYY-MM-DD, DD-MM-YYYY, DD.MM.YYYY
+- Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
 
 Responda APENAS com o JSON array, sem markdown, sem explicacao, sem code blocks. Exemplo:
-[{"date":"2026-03-15","description":"MERCADO LIVRE","amount":-149.90,"titular":"","installmentNumber":3,"totalInstallments":10,"cardNumber":null}]
+[{"date":"2026-03-15","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]
 
-Texto do extrato:
+Texto do extrato (pode estar desformatado, PDFs frequentemente tem quebras estranhas):
 ${truncatedText}`;
 
   try {
@@ -112,8 +114,22 @@ ${truncatedText}`;
     let transactions: ParsedTransaction[];
     try {
       transactions = JSON.parse(cleanJson);
-    } catch {
-      return new Response(JSON.stringify({ error: 'Failed to parse AI response', raw: rawJson }), {
+    } catch (e) {
+      console.error('JSON parse error:', e, 'Raw response:', rawJson);
+      return new Response(JSON.stringify({
+        error: 'Failed to parse AI response. The AI might not have found transactions in the file.',
+        raw: rawJson.slice(0, 500)
+      }), {
+        status: 422,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (!Array.isArray(transactions)) {
+      return new Response(JSON.stringify({
+        error: 'Invalid response format. Expected array of transactions.',
+        raw: rawJson.slice(0, 500)
+      }), {
         status: 422,
         headers: { 'Content-Type': 'application/json' },
       });
