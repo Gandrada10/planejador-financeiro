@@ -1,0 +1,26 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { Layout } from './components/Layout';
+import { DashboardPage } from './components/dashboard/DashboardPage';
+import { TransactionsPage } from './components/transactions/TransactionsPage';
+import { CategoriesPage } from './components/categories/CategoriesPage';
+import { BudgetPage } from './components/budget/BudgetPage';
+import { FamilyView } from './components/family/FamilyView';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <ProtectedRoute>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<DashboardPage />} />
+            <Route path="/transacoes" element={<TransactionsPage />} />
+            <Route path="/categorias" element={<CategoriesPage />} />
+            <Route path="/orcamento" element={<BudgetPage />} />
+            <Route path="/familia" element={<FamilyView />} />
+          </Route>
+        </Routes>
+      </ProtectedRoute>
+    </BrowserRouter>
+  );
+}
