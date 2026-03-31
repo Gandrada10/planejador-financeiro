@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, ChevronRight } from 'lucide-react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';

@@ -176,6 +176,7 @@ export function usePublicCategorizationSession(token: string) {
             icon: d.data().icon,
             color: d.data().color,
             type: d.data().type,
+            parentId: d.data().parentId ?? null,
             createdAt: new Date(),
           }))
         );
