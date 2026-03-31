@@ -45,18 +45,39 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
       for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
+
+        // Group by Y with tolerance of 3px so same visual line stays together
         const lineMap = new Map<number, { x: number; text: string }[]>();
         for (const item of content.items) {
-          if (!('str' in item)) continue;
-          const y = Math.round(item.transform[5]);
+          if (!('str' in item) || !item.str.trim()) continue;
+          const rawY = item.transform[5];
+          // Snap to nearest 3px bucket
+          const y = Math.round(rawY / 3) * 3;
           if (!lineMap.has(y)) lineMap.set(y, []);
           lineMap.get(y)!.push({ x: item.transform[4], text: item.str });
         }
+
         const lines = Array.from(lineMap.entries())
           .sort((a, b) => b[0] - a[0])
-          .map(([, items]) => items.sort((a, b) => a.x - b.x).map((i) => i.text).join('  '));
-        text += lines.join('\n') + '\n';
+          .map(([, items]) => items.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '));
+
+        text += lines.join('\n') + '\n\n';
       }
+
+      // Fallback: if spatial extraction produced very little text, try sequential
+      if (text.trim().length < 100) {
+        text = '';
+        for (let p = 1; p <= pdf.numPages; p++) {
+          const page = await pdf.getPage(p);
+          const content = await page.getTextContent();
+          text += content.items
+            .filter((i) => 'str' in i)
+            .map((i) => ('str' in i ? i.str : ''))
+            .join(' ') + '\n';
+        }
+      }
+
+      console.log('[PDF extract] chars:', text.length, '| preview:', text.slice(0, 300));
       return text;
     }
     throw new Error('Formato nao suportado. Use .xlsx, .xls, .csv ou .pdf');
@@ -69,6 +90,13 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
 
     try {
       const rawText = await extractRawText(file);
+
+      if (rawText.trim().length < 50) {
+        setError('Nao foi possivel extrair texto do PDF. O arquivo pode ser baseado em imagem (escaneado). Tente converter para Excel/CSV.');
+        setAiParsing(false);
+        return;
+      }
+
       const response = await fetch('/api/parse-statement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -119,7 +147,7 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
       });
 
       if (parsed.length === 0) {
-        setError('A IA nao encontrou transacoes no arquivo. Verifique se o arquivo contem dados validos.');
+        setError(`A IA nao encontrou transacoes no arquivo (${rawText.length} chars extraidos). Abra o DevTools (F12 > Console) para ver o texto extraido.`);
         setAiParsing(false);
         return;
       }
