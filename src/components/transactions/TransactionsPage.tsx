@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { Upload, Plus, Search, Send, CheckCircle } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
+import { useAccounts } from '../../hooks/useAccounts';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
 import { TransactionTable } from './TransactionTable';
@@ -14,6 +15,7 @@ import type { Transaction } from '../../types';
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch } = useTransactions();
   const { categories, matchCategory } = useCategories();
+  const { accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { sessions, applyCategorizationsFromSession } = useCategorizationSessions();
   const [showForm, setShowForm] = useState(false);
@@ -51,14 +53,12 @@ export function TransactionsPage() {
           t.description.toLowerCase().includes(q) ||
           t.account.toLowerCase().includes(q) ||
           t.familyMember.toLowerCase().includes(q) ||
-          (t.titular || '').toLowerCase().includes(q) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(q))
+          (t.titular || '').toLowerCase().includes(q)
       );
     }
     return list;
   }, [transactions, filterMonth, filterTitular, searchText]);
 
-  // Auto-categorize items before importing
   const handleImport = useCallback(async (items: Omit<Transaction, 'id' | 'createdAt'>[]) => {
     const categorized = items.map((item) => ({
       ...item,
@@ -97,21 +97,18 @@ export function TransactionsPage() {
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[200px]">
           <Search size={14} className="absolute left-2.5 top-2.5 text-text-secondary" />
           <input
-            tabIndex={1}
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Buscar por descricao, conta, membro, tag..."
+            placeholder="Buscar por descricao, conta, membro..."
             className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
           />
         </div>
         <select
-          tabIndex={2}
           value={filterTitular}
           onChange={(e) => setFilterTitular(e.target.value)}
           className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
@@ -122,7 +119,6 @@ export function TransactionsPage() {
           ))}
         </select>
         <select
-          tabIndex={3}
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}
           className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
@@ -134,7 +130,6 @@ export function TransactionsPage() {
         </select>
       </div>
 
-      {/* Summary */}
       <div className="flex gap-4 text-xs text-text-secondary">
         <span>{filtered.length} transacoes</span>
         <span className="text-accent-green">
@@ -145,7 +140,6 @@ export function TransactionsPage() {
         </span>
       </div>
 
-      {/* Pending categorization sessions */}
       {sessions.filter((s) => s.categorizedCount > 0 && s.expiresAt > new Date()).map((s) => (
         <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
           <div className="flex items-center gap-2">
@@ -171,11 +165,13 @@ export function TransactionsPage() {
 
       <TransactionTable
         transactions={filtered}
+        categories={categories}
+        accountNames={accountNames}
         onUpdate={updateTransaction}
         onDelete={deleteTransaction}
       />
 
-      {showForm && <TransactionForm onSubmit={addTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} />}
+      {showForm && <TransactionForm onSubmit={addTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} />}
       {showImport && (
         <ImportModal
           existingTransactions={transactions}
