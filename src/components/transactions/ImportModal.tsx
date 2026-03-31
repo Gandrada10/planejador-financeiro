@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
+import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import type { Transaction } from '../../types';
 import { formatBRL, formatDate } from '../../lib/utils';
 
-// PDF.js worker
-pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+// PDF.js worker bundled by Vite (avoids CDN dependency)
+pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type ImportItem = Omit<Transaction, 'id' | 'createdAt'>;
 
