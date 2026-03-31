@@ -20,6 +20,7 @@ function docToCategory(id: string, data: Record<string, unknown>): Category {
     icon: (data.icon as string) || '',
     color: (data.color as string) || '#f59e0b',
     type: (data.type as Category['type']) || 'despesa',
+    parentId: (data.parentId as string | null) ?? null,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
   };
 }
@@ -115,5 +116,20 @@ export function useCategories() {
     return null;
   }
 
-  return { categories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule, matchCategory };
+  // Root categories (no parent)
+  const rootCategories = categories.filter((c) => !c.parentId);
+  // Subcategories of a given parent
+  function subCategories(parentId: string) {
+    return categories.filter((c) => c.parentId === parentId);
+  }
+  // Flat ordered list: parent first, then its children (indented in UI)
+  const categoriesOrdered: (Category & { depth: number })[] = [];
+  for (const root of rootCategories) {
+    categoriesOrdered.push({ ...root, depth: 0 });
+    for (const sub of subCategories(root.id)) {
+      categoriesOrdered.push({ ...sub, depth: 1 });
+    }
+  }
+
+  return { categories, categoriesOrdered, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule, matchCategory };
 }

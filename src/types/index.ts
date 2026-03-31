@@ -4,6 +4,16 @@ export interface Category {
   icon: string;
   color: string;
   type: 'receita' | 'despesa' | 'ambos';
+  parentId: string | null;
+  createdAt: Date;
+}
+
+export interface BillingCycle {
+  id: string;
+  accountId: string;
+  monthYear: string; // "YYYY-MM"
+  status: 'open' | 'closed';
+  closedAt: Date | null;
   createdAt: Date;
 }
 

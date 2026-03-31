@@ -5,6 +5,7 @@ import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
+import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { TransactionTable } from './TransactionTable';
 import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
@@ -15,9 +16,10 @@ import type { Transaction } from '../../types';
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch } = useTransactions();
   const { categories, matchCategory } = useCategories();
-  const { accountNames } = useAccounts();
+  const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { sessions, applyCategorizationsFromSession } = useCategorizationSessions();
+  const { getClosedCycle, reopenCycle } = useBillingCycles();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -59,13 +61,48 @@ export function TransactionsPage() {
     return list;
   }, [transactions, filterMonth, filterTitular, searchText]);
 
+  /** Check if transaction date falls in a closed billing cycle for a credit card account */
+  function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
+    const account = accounts.find((a) => a.name === item.account && a.type === 'cartao');
+    if (!account) return null;
+    const closed = getClosedCycle(account.id, item.date);
+    if (!closed) return null;
+    return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
+  }
+
+  const handleAddTransaction = useCallback(async (item: Omit<Transaction, 'id' | 'createdAt'>) => {
+    const closed = checkClosedCycle(item);
+    if (closed) {
+      const reopen = window.confirm(
+        `A fatura "${closed.label}" está encerrada.\n\nDeseja reabri-la para adicionar esta transação?`
+      );
+      if (!reopen) return;
+      await reopenCycle(closed.cycleId);
+    }
+    await addTransaction(item);
+  }, [accounts, addTransaction, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleImport = useCallback(async (items: Omit<Transaction, 'id' | 'createdAt'>[]) => {
+    // Check for any closed cycles in the batch
+    const closedLabels = [...new Set(
+      items.map((i) => checkClosedCycle(i)?.label).filter(Boolean) as string[]
+    )];
+    if (closedLabels.length > 0) {
+      const reopen = window.confirm(
+        `As seguintes faturas estão encerradas:\n${closedLabels.join('\n')}\n\nDeseja reabri-las para importar?`
+      );
+      if (!reopen) return;
+      for (const item of items) {
+        const closed = checkClosedCycle(item);
+        if (closed) await reopenCycle(closed.cycleId);
+      }
+    }
     const categorized = items.map((item) => ({
       ...item,
       categoryId: item.categoryId || matchCategory(item.description),
     }));
     await importBatch(categorized);
-  }, [importBatch, matchCategory]);
+  }, [accounts, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return <div className="text-accent text-sm animate-pulse">Carregando transacoes...</div>;
@@ -171,12 +208,15 @@ export function TransactionsPage() {
         onDelete={deleteTransaction}
       />
 
-      {showForm && <TransactionForm onSubmit={addTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} />}
+      {showForm && <TransactionForm onSubmit={handleAddTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} />}
       {showImport && (
         <ImportModal
           existingTransactions={transactions}
           onImport={handleImport}
           onClose={() => setShowImport(false)}
+          accountNames={accountNames}
+          categories={categories}
+          allTitulars={allTitulars}
         />
       )}
       {showShareModal && (
