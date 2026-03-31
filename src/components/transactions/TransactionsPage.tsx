@@ -215,6 +215,7 @@ export function TransactionsPage() {
           onImport={handleImport}
           onClose={() => setShowImport(false)}
           accountNames={accountNames}
+          accounts={accounts}
           categories={categories}
           allTitulars={allTitulars}
         />

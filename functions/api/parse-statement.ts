@@ -70,8 +70,12 @@ Regras importantes:
 - Detecte datas em formatos: DD/MM/YYYY, YYYY-MM-DD, DD-MM-YYYY, DD.MM.YYYY
 - Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
 
-Responda APENAS com o JSON array, sem markdown, sem explicacao, sem code blocks. Exemplo:
-[{"date":"2026-01-15","purchaseDate":"2025-11-15","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]
+Responda APENAS com um JSON object com dois campos:
+- "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
+- "transactions": array com as transacoes
+
+Sem markdown, sem explicacao, sem code blocks. Exemplo:
+{"isCreditCard":true,"transactions":[{"date":"2026-01-15","purchaseDate":"2025-11-15","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]}
 
 Texto do extrato (pode estar desformatado, PDFs frequentemente tem quebras estranhas):
 ${truncatedText}`;
@@ -117,18 +121,38 @@ ${truncatedText}`;
 
     // Try direct parse first
     let transactions: ParsedTransaction[] | null = null;
+    let isCreditCard = false;
     try {
       const parsed = JSON.parse(cleanJson);
-      transactions = Array.isArray(parsed) ? parsed : null;
+      if (Array.isArray(parsed)) {
+        transactions = parsed;
+      } else if (parsed && Array.isArray(parsed.transactions)) {
+        transactions = parsed.transactions;
+        isCreditCard = !!parsed.isCreditCard;
+      }
     } catch {
-      // Try to extract JSON array from anywhere in the response
-      const arrayMatch = cleanJson.match(/\[[\s\S]*\]/);
-      if (arrayMatch) {
+      // Try to extract JSON from anywhere in the response
+      const objectMatch = cleanJson.match(/\{[\s\S]*\}/);
+      if (objectMatch) {
         try {
-          const parsed = JSON.parse(arrayMatch[0]);
-          transactions = Array.isArray(parsed) ? parsed : null;
+          const parsed = JSON.parse(objectMatch[0]);
+          if (Array.isArray(parsed.transactions)) {
+            transactions = parsed.transactions;
+            isCreditCard = !!parsed.isCreditCard;
+          }
         } catch {
           // ignore
+        }
+      }
+      if (!transactions) {
+        const arrayMatch = cleanJson.match(/\[[\s\S]*\]/);
+        if (arrayMatch) {
+          try {
+            const parsed = JSON.parse(arrayMatch[0]);
+            transactions = Array.isArray(parsed) ? parsed : null;
+          } catch {
+            // ignore
+          }
         }
       }
     }
@@ -146,6 +170,7 @@ ${truncatedText}`;
 
     return new Response(JSON.stringify({
       transactions,
+      isCreditCard,
       usage: data.usage,
     }), {
       headers: { 'Content-Type': 'application/json' },

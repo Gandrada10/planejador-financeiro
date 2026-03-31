@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles } from 'lucide-react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
-import type { Transaction, Category } from '../../types';
-import { formatBRL, formatDate } from '../../lib/utils';
+import type { Transaction, Category, Account } from '../../types';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -25,11 +25,23 @@ interface Props {
   onImport: (items: ImportItem[]) => Promise<void>;
   onClose: () => void;
   accountNames?: string[];
+  accounts?: Account[];
   categories?: Category[];
   allTitulars?: string[];
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], categories = [], allTitulars = [] }: Props) {
+/** Generate month options: 6 months back + current + 3 months forward */
+function generateMonthOptions(): string[] {
+  const options: string[] = [];
+  const now = new Date();
+  for (let offset = -6; offset <= 3; offset++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + offset, 1);
+    options.push(getMonthYear(d));
+  }
+  return options;
+}
+
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [] }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -38,6 +50,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [fileName, setFileName] = useState('');
   const [aiParsing, setAiParsing] = useState(false);
   const [aiUsage, setAiUsage] = useState<{ input_tokens: number; output_tokens: number } | null>(null);
+
+  // Credit card billing month
+  const [isCreditCard, setIsCreditCard] = useState(false);
+  const [billingMonth, setBillingMonth] = useState('');
+  const monthOptions = generateMonthOptions();
+  const creditCardAccounts = accounts.filter((a) => a.type === 'cartao');
 
   // Batch assignment controls
   const [batchAccount, setBatchAccount] = useState('');
@@ -137,10 +155,16 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           amount: number; titular: string;
           installmentNumber: number | null; totalInstallments: number | null; cardNumber: string | null;
         }>;
+        isCreditCard?: boolean;
         usage: { input_tokens: number; output_tokens: number };
       };
 
       setAiUsage(data.usage);
+
+      // Detect credit card: AI flag or heuristic (most transactions have cardNumber)
+      const hasCardNumbers = data.transactions.filter((t) => t.cardNumber).length > data.transactions.length / 2;
+      const detectedCreditCard = !!data.isCreditCard || hasCardNumbers;
+      setIsCreditCard(detectedCreditCard);
 
       const parsed: ImportRow[] = data.transactions.map((t) => {
         const date = new Date(t.date + 'T12:00:00');
@@ -168,6 +192,23 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         setError(`A IA nao encontrou transacoes no arquivo (${rawText.length} chars extraidos). Verifique o DevTools > Console para ver o texto extraido.`);
         setAiParsing(false);
         return;
+      }
+
+      // Auto-detect billing month from most common month in transaction dates
+      if (detectedCreditCard && parsed.length > 0) {
+        const monthCounts = new Map<string, number>();
+        for (const p of parsed) {
+          const my = getMonthYear(p.date);
+          monthCounts.set(my, (monthCounts.get(my) || 0) + 1);
+        }
+        const detectedMonth = [...monthCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+        setBillingMonth(detectedMonth);
+
+        // Auto-select credit card account if only one exists
+        if (creditCardAccounts.length === 1) {
+          const ccName = creditCardAccounts[0].name;
+          parsed.forEach((p) => { p.account = ccName; });
+        }
       }
 
       setItems(parsed);
@@ -219,7 +260,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
   async function handleImport() {
     setImporting(true);
-    const toImport = items.filter((_, i) => selected.has(i)).map(({ isDuplicate: _, ...rest }) => rest);
+    const toImport = items.filter((_, i) => selected.has(i)).map(({ isDuplicate: _, ...rest }) => {
+      // Ensure billing month is applied for credit card imports
+      if (isCreditCard && billingMonth) {
+        const [year, month] = billingMonth.split('-').map(Number);
+        return { ...rest, date: new Date(year, month - 1, 1, 12, 0, 0) };
+      }
+      return rest;
+    });
     await onImport(toImport);
     setStep('done');
     setImporting(false);
@@ -302,6 +350,39 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   </span>
                 )}
               </div>
+
+              {/* Credit card billing month */}
+              {isCreditCard && (
+                <div className="bg-accent/5 border border-accent/30 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <CreditCard size={16} className="text-accent" />
+                    <span className="text-xs font-bold text-text-primary">Fatura de cartao detectada</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-xs text-text-secondary whitespace-nowrap">Lancar na fatura de:</label>
+                    <select
+                      value={billingMonth}
+                      onChange={(e) => {
+                        const newMonth = e.target.value;
+                        setBillingMonth(newMonth);
+                        // Update all transaction dates to 1st of selected month
+                        if (newMonth) {
+                          const [year, month] = newMonth.split('-').map(Number);
+                          setItems((prev) => prev.map((item) => ({
+                            ...item,
+                            date: new Date(year, month - 1, 1, 12, 0, 0),
+                          })));
+                        }
+                      }}
+                      className={inputClass + ' !w-auto'}
+                    >
+                      {monthOptions.map((m) => (
+                        <option key={m} value={m}>{getMonthLabel(m)}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
 
               {/* Batch controls */}
               <div className="bg-bg-secondary border border-border rounded-lg p-3">
