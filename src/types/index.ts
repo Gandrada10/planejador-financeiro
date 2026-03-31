@@ -17,6 +17,7 @@ export interface CategoryRule {
 export interface Transaction {
   id: string;
   date: Date;
+  purchaseDate: Date | null;
   description: string;
   amount: number;
   categoryId: string | null;
@@ -30,6 +31,14 @@ export interface Transaction {
   tags: string[];
   notes: string;
   importBatch: string | null;
+  createdAt: Date;
+}
+
+export interface Account {
+  id: string;
+  name: string;
+  type: 'corrente' | 'cartao' | 'poupanca' | 'investimento' | 'outro';
+  bank: string;
   createdAt: Date;
 }
 
