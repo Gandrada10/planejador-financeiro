@@ -6,21 +6,26 @@ import { TransactionsPage } from './components/transactions/TransactionsPage';
 import { CategoriesPage } from './components/categories/CategoriesPage';
 import { BudgetPage } from './components/budget/BudgetPage';
 import { FamilyView } from './components/family/FamilyView';
+import { SettingsPage } from './components/settings/SettingsPage';
+import { CategorizationPage } from './components/categorization/CategorizationPage';
 
 export default function App() {
   return (
     <BrowserRouter>
-      <ProtectedRoute>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<DashboardPage />} />
-            <Route path="/transacoes" element={<TransactionsPage />} />
-            <Route path="/categorias" element={<CategoriesPage />} />
-            <Route path="/orcamento" element={<BudgetPage />} />
-            <Route path="/familia" element={<FamilyView />} />
-          </Route>
-        </Routes>
-      </ProtectedRoute>
+      <Routes>
+        {/* Rota publica - categorização via link */}
+        <Route path="/categorizar/:token" element={<CategorizationPage />} />
+
+        {/* Rotas protegidas */}
+        <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+          <Route path="/" element={<DashboardPage />} />
+          <Route path="/transacoes" element={<TransactionsPage />} />
+          <Route path="/categorias" element={<CategoriesPage />} />
+          <Route path="/orcamento" element={<BudgetPage />} />
+          <Route path="/familia" element={<FamilyView />} />
+          <Route path="/configuracoes" element={<SettingsPage />} />
+        </Route>
+      </Routes>
     </BrowserRouter>
   );
 }

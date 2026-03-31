@@ -1,28 +1,23 @@
 import { useState } from 'react';
 import { Plus, X } from 'lucide-react';
 
+import type { Transaction } from '../../types';
+
 interface Props {
-  onSubmit: (data: {
-    date: Date;
-    description: string;
-    amount: number;
-    account: string;
-    familyMember: string;
-    tags: string[];
-    notes: string;
-    categoryId: null;
-    importBatch: null;
-  }) => void;
+  onSubmit: (data: Omit<Transaction, 'id' | 'createdAt'>) => void;
   onClose: () => void;
+  titularNames?: string[];
 }
 
-export function TransactionForm({ onSubmit, onClose }: Props) {
+export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [type, setType] = useState<'despesa' | 'receita'>('despesa');
   const [account, setAccount] = useState('');
   const [familyMember, setFamilyMember] = useState('');
+  const [titular, setTitular] = useState('');
+  const [installments, setInstallments] = useState('');
   const [tags, setTags] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -30,12 +25,18 @@ export function TransactionForm({ onSubmit, onClose }: Props) {
     e.preventDefault();
     const value = parseFloat(amount.replace(',', '.'));
     if (!value || !description) return;
+    const totalInst = installments ? parseInt(installments, 10) : null;
     onSubmit({
       date: new Date(date + 'T12:00:00'),
       description,
       amount: type === 'despesa' ? -Math.abs(value) : Math.abs(value),
       account,
       familyMember,
+      titular,
+      installmentNumber: totalInst ? 1 : null,
+      totalInstallments: totalInst || null,
+      cardNumber: null,
+      pluggyTransactionId: null,
       tags: tags ? tags.split(',').map((t) => t.trim()) : [],
       notes,
       categoryId: null,
@@ -78,33 +79,53 @@ export function TransactionForm({ onSubmit, onClose }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Data</label>
-              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} required />
+              <input tabIndex={1} type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} required autoFocus />
             </div>
             <div>
               <label className={labelClass}>Valor (R$)</label>
-              <input type="text" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0,00" required />
+              <input tabIndex={2} type="text" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0,00" required />
             </div>
           </div>
 
           <div>
             <label className={labelClass}>Descricao</label>
-            <input type="text" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} required />
+            <input tabIndex={3} type="text" value={description} onChange={(e) => setDescription(e.target.value)} className={inputClass} required />
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass}>Conta/Banco</label>
-              <input type="text" value={account} onChange={(e) => setAccount(e.target.value)} className={inputClass} placeholder="Nubank, Itau..." />
+              <input tabIndex={4} type="text" value={account} onChange={(e) => setAccount(e.target.value)} className={inputClass} placeholder="Nubank, Itau..." />
             </div>
             <div>
+              <label className={labelClass}>Titular</label>
+              {titularNames.length > 0 ? (
+                <select tabIndex={5} value={titular} onChange={(e) => setTitular(e.target.value)} className={inputClass}>
+                  <option value="">Selecione...</option>
+                  {titularNames.map((name) => (
+                    <option key={name} value={name}>{name}</option>
+                  ))}
+                </select>
+              ) : (
+                <input tabIndex={5} type="text" value={titular} onChange={(e) => setTitular(e.target.value)} className={inputClass} placeholder="Quem comprou?" />
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
               <label className={labelClass}>Membro</label>
-              <input type="text" value={familyMember} onChange={(e) => setFamilyMember(e.target.value)} className={inputClass} placeholder="Eu, Esposa..." />
+              <input tabIndex={6} type="text" value={familyMember} onChange={(e) => setFamilyMember(e.target.value)} className={inputClass} placeholder="Eu, Esposa..." />
+            </div>
+            <div>
+              <label className={labelClass}>Parcelas (total)</label>
+              <input tabIndex={7} type="number" min="2" value={installments} onChange={(e) => setInstallments(e.target.value)} className={inputClass} placeholder="Ex: 10" />
             </div>
           </div>
 
           <div>
             <label className={labelClass}>Tags (separadas por virgula)</label>
-            <input type="text" value={tags} onChange={(e) => setTags(e.target.value)} className={inputClass} placeholder="viagem, reforma..." />
+            <input tabIndex={6} type="text" value={tags} onChange={(e) => setTags(e.target.value)} className={inputClass} placeholder="viagem, reforma..." />
           </div>
 
           <div>

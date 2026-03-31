@@ -22,10 +22,44 @@ export interface Transaction {
   categoryId: string | null;
   account: string;
   familyMember: string;
+  titular: string;
+  installmentNumber: number | null;
+  totalInstallments: number | null;
+  cardNumber: string | null;
+  pluggyTransactionId: string | null;
   tags: string[];
   notes: string;
   importBatch: string | null;
   createdAt: Date;
+}
+
+export interface TitularMapping {
+  id: string;
+  cardLastDigits: string;
+  titularName: string;
+  createdAt: Date;
+}
+
+export interface CategorizationSession {
+  id: string;
+  userId: string;
+  titularName: string;
+  transactionIds: string[];
+  categorizedCount: number;
+  expiresAt: Date;
+  createdAt: Date;
+}
+
+export interface CategorizationTransaction {
+  id: string;
+  transactionId: string;
+  description: string;
+  amount: number;
+  date: Date;
+  installmentNumber: number | null;
+  totalInstallments: number | null;
+  categoryId: string | null;
+  notes: string;
 }
 
 export interface Budget {

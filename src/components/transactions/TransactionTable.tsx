@@ -32,6 +32,8 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
       onUpdate(id, { account: editValue.trim() });
     } else if (field === 'familyMember') {
       onUpdate(id, { familyMember: editValue.trim() });
+    } else if (field === 'titular') {
+      onUpdate(id, { titular: editValue.trim() });
     }
 
     setEditingCell(null);
@@ -93,8 +95,9 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
               <th className="p-2 text-left">Data</th>
               <th className="p-2 text-left">Descricao</th>
               <th className="p-2 text-left">Conta</th>
-              <th className="p-2 text-left">Membro</th>
+              <th className="p-2 text-left">Titular</th>
               <th className="p-2 text-right">Valor</th>
+              <th className="p-2 text-center">Parcelas</th>
               <th className="p-2 text-left">Tags</th>
               <th className="p-2 w-10"></th>
             </tr>
@@ -145,12 +148,12 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
                   )}
                 </td>
 
-                {/* Family member - editable */}
+                {/* Titular - editable */}
                 <td
                   className={`p-2 text-text-secondary ${editableCell}`}
-                  onClick={() => startEdit(t.id, 'familyMember', t.familyMember)}
+                  onClick={() => startEdit(t.id, 'titular', t.titular || '')}
                 >
-                  {editingCell?.id === t.id && editingCell.field === 'familyMember' ? (
+                  {editingCell?.id === t.id && editingCell.field === 'titular' ? (
                     <input
                       autoFocus
                       value={editValue}
@@ -160,7 +163,7 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
                       className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
                     />
                   ) : (
-                    t.familyMember || '—'
+                    t.titular || '—'
                   )}
                 </td>
 
@@ -181,6 +184,15 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
                   ) : (
                     formatBRL(t.amount)
                   )}
+                </td>
+
+                {/* Parcelas */}
+                <td className="p-2 text-center text-text-secondary">
+                  {t.totalInstallments ? (
+                    <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
+                      {t.installmentNumber || '?'}/{t.totalInstallments}
+                    </span>
+                  ) : '—'}
                 </td>
 
                 <td className="p-2">

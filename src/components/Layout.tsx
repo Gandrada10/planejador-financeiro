@@ -7,6 +7,7 @@ import {
   Tags,
   Wallet,
   Users,
+  Settings,
   LogOut,
   Menu,
   X,
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/categorias', icon: Tags, label: 'Categorias' },
   { to: '/orcamento', icon: Wallet, label: 'Orcamento' },
   { to: '/familia', icon: Users, label: 'Familia' },
+  { to: '/configuracoes', icon: Settings, label: 'Configuracoes' },
 ];
 
 export function Layout() {
