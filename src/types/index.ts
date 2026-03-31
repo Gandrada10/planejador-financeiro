@@ -34,6 +34,14 @@ export interface Transaction {
   createdAt: Date;
 }
 
+export interface Account {
+  id: string;
+  name: string;
+  type: 'corrente' | 'cartao' | 'poupanca' | 'investimento' | 'outro';
+  bank: string;
+  createdAt: Date;
+}
+
 export interface TitularMapping {
   id: string;
   cardLastDigits: string;

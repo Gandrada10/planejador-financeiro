@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from 'react';
 import { Upload, Plus, Search, Send, CheckCircle } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
+import { useAccounts } from '../../hooks/useAccounts';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
 import { TransactionTable } from './TransactionTable';
@@ -14,6 +15,7 @@ import type { Transaction } from '../../types';
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch } = useTransactions();
   const { categories, matchCategory } = useCategories();
+  const { accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { sessions, applyCategorizationsFromSession } = useCategorizationSessions();
   const [showForm, setShowForm] = useState(false);
@@ -51,8 +53,7 @@ export function TransactionsPage() {
           t.description.toLowerCase().includes(q) ||
           t.account.toLowerCase().includes(q) ||
           t.familyMember.toLowerCase().includes(q) ||
-          (t.titular || '').toLowerCase().includes(q) ||
-          t.tags.some((tag) => tag.toLowerCase().includes(q))
+          (t.titular || '').toLowerCase().includes(q)
       );
     }
     return list;
@@ -106,7 +107,7 @@ export function TransactionsPage() {
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Buscar por descricao, conta, membro, tag..."
+            placeholder="Buscar por descricao, conta, membro..."
             className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
           />
         </div>
@@ -171,11 +172,13 @@ export function TransactionsPage() {
 
       <TransactionTable
         transactions={filtered}
+        categories={categories}
+        accountNames={accountNames}
         onUpdate={updateTransaction}
         onDelete={deleteTransaction}
       />
 
-      {showForm && <TransactionForm onSubmit={addTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} />}
+      {showForm && <TransactionForm onSubmit={addTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} />}
       {showImport && (
         <ImportModal
           existingTransactions={transactions}

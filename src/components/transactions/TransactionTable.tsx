@@ -1,15 +1,17 @@
 import { useState } from 'react';
-import { Trash2, Tag } from 'lucide-react';
-import type { Transaction } from '../../types';
+import { Trash2 } from 'lucide-react';
+import type { Transaction, Category } from '../../types';
 import { formatBRL, formatDate } from '../../lib/utils';
 
 interface Props {
   transactions: Transaction[];
+  categories: Category[];
+  accountNames: string[];
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
 }
 
-export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
+export function TransactionTable({ transactions, categories, accountNames, onUpdate, onDelete }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -98,7 +100,7 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
               <th className="p-2 text-left">Titular</th>
               <th className="p-2 text-right">Valor</th>
               <th className="p-2 text-center">Parcelas</th>
-              <th className="p-2 text-left">Tags</th>
+              <th className="p-2 text-left">Categoria</th>
               <th className="p-2 w-10"></th>
             </tr>
           </thead>
@@ -129,23 +131,18 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
                   )}
                 </td>
 
-                {/* Account - editable */}
-                <td
-                  className={`p-2 text-text-secondary ${editableCell}`}
-                  onClick={() => startEdit(t.id, 'account', t.account)}
-                >
-                  {editingCell?.id === t.id && editingCell.field === 'account' ? (
-                    <input
-                      autoFocus
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onBlur={commitEdit}
-                      onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
-                    />
-                  ) : (
-                    t.account || '—'
-                  )}
+                {/* Account - select */}
+                <td className="p-2 text-text-secondary">
+                  <select
+                    value={t.account}
+                    onChange={(e) => onUpdate(t.id, { account: e.target.value })}
+                    className="bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
+                  >
+                    <option value="">—</option>
+                    {accountNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
                 </td>
 
                 {/* Titular - editable */}
@@ -202,16 +199,19 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
                   ) : '—'}
                 </td>
 
+                {/* Category - select */}
                 <td className="p-2">
-                  {t.tags.length > 0 && (
-                    <div className="flex gap-1 flex-wrap">
-                      {t.tags.map((tag) => (
-                        <span key={tag} className="inline-flex items-center gap-0.5 px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px]">
-                          <Tag size={8} />{tag}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  <select
+                    value={t.categoryId || ''}
+                    onChange={(e) => onUpdate(t.id, { categoryId: e.target.value || null })}
+                    className="bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary"
+                    style={{ color: categories.find((c) => c.id === t.categoryId)?.color }}
+                  >
+                    <option value="">Sem categoria</option>
+                    {categories.map((cat) => (
+                      <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                    ))}
+                  </select>
                 </td>
 
                 <td className="p-2">
