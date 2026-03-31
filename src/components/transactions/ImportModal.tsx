@@ -82,6 +82,7 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
       const data = await response.json() as {
         transactions: Array<{
           date: string;
+          purchaseDate: string | null;
           description: string;
           amount: number;
           titular: string;
@@ -98,6 +99,7 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
         const date = new Date(t.date + 'T12:00:00');
         const item: ImportItem = {
           date,
+          purchaseDate: t.purchaseDate ? new Date(t.purchaseDate + 'T12:00:00') : null,
           description: t.description,
           amount: t.amount,
           categoryId: null,
@@ -243,6 +245,7 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
                       {aiUsage && <th className="p-2 text-left">Titular</th>}
                       <th className="p-2 text-right">Valor</th>
                       {aiUsage && <th className="p-2 text-center">Parc.</th>}
+                      {aiUsage && <th className="p-2 text-left">Compra em</th>}
                       <th className="p-2 text-center w-12"></th>
                     </tr>
                   </thead>
@@ -261,6 +264,11 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
                         {aiUsage && (
                           <td className="p-2 text-center text-text-secondary text-[10px]">
                             {item.totalInstallments ? `${item.installmentNumber}/${item.totalInstallments}` : '—'}
+                          </td>
+                        )}
+                        {aiUsage && (
+                          <td className="p-2 text-text-secondary text-[10px]">
+                            {item.purchaseDate ? formatDate(item.purchaseDate) : '—'}
                           </td>
                         )}
                         <td className="p-2 text-center">

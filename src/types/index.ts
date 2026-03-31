@@ -17,6 +17,7 @@ export interface CategoryRule {
 export interface Transaction {
   id: string;
   date: Date;
+  purchaseDate: Date | null;
   description: string;
   amount: number;
   categoryId: string | null;

@@ -9,6 +9,7 @@ interface ParseRequest {
 
 interface ParsedTransaction {
   date: string;
+  purchaseDate: string | null;
   description: string;
   amount: number;
   titular: string;
@@ -50,7 +51,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
   const prompt = `Voce e um parser de extratos bancarios brasileiros. Analise o texto abaixo extraido de um arquivo "${fileName}" e retorne APENAS um JSON array com as transacoes encontradas.
 
 Para cada transacao, extraia:
-- "date": data no formato "YYYY-MM-DD" (converter qualquer formato de data para ISO)
+- "date": data do lancamento na fatura no formato "YYYY-MM-DD" (a data que aparece no extrato)
+- "purchaseDate": data original da compra no formato "YYYY-MM-DD", se diferente da data do lancamento (ex: compra parcelada feita em mes anterior). Se for igual a date ou nao identificavel, retorne null
 - "description": descricao da transacao (limpa, sem codigos internos desnecessarios)
 - "amount": valor numerico (negativo para debitos/despesas, positivo para creditos/receitas)
 - "titular": nome do titular do cartao se identificavel no extrato, senao string vazia
@@ -69,7 +71,7 @@ Regras importantes:
 - Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
 
 Responda APENAS com o JSON array, sem markdown, sem explicacao, sem code blocks. Exemplo:
-[{"date":"2026-03-15","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]
+[{"date":"2026-01-15","purchaseDate":"2025-11-15","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]
 
 Texto do extrato (pode estar desformatado, PDFs frequentemente tem quebras estranhas):
 ${truncatedText}`;

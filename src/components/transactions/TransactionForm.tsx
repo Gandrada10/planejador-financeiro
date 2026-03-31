@@ -18,6 +18,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props)
   const [familyMember, setFamilyMember] = useState('');
   const [titular, setTitular] = useState('');
   const [installments, setInstallments] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState('');
   const [tags, setTags] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -28,6 +29,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props)
     const totalInst = installments ? parseInt(installments, 10) : null;
     onSubmit({
       date: new Date(date + 'T12:00:00'),
+      purchaseDate: purchaseDate ? new Date(purchaseDate + 'T12:00:00') : null,
       description,
       amount: type === 'despesa' ? -Math.abs(value) : Math.abs(value),
       account,
@@ -122,6 +124,14 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [] }: Props)
               <input tabIndex={7} type="number" min="2" value={installments} onChange={(e) => setInstallments(e.target.value)} className={inputClass} placeholder="Ex: 10" />
             </div>
           </div>
+
+          {installments && parseInt(installments, 10) >= 2 && (
+            <div>
+              <label className={labelClass}>Data da compra original</label>
+              <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className={inputClass} />
+              <p className="text-[10px] text-text-secondary mt-1">Quando a compra foi feita (se diferente da data da fatura)</p>
+            </div>
+          )}
 
           <div>
             <label className={labelClass}>Tags (separadas por virgula)</label>

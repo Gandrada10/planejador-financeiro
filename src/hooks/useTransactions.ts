@@ -30,6 +30,7 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     account: (data.account as string) || '',
     familyMember: (data.familyMember as string) || '',
     titular: (data.titular as string) || '',
+    purchaseDate: data.purchaseDate ? (data.purchaseDate as Timestamp).toDate() : null,
     installmentNumber: (data.installmentNumber as number) ?? null,
     totalInstallments: (data.totalInstallments as number) ?? null,
     cardNumber: (data.cardNumber as string) || null,
@@ -63,6 +64,7 @@ export function useTransactions() {
     await addDoc(ref, {
       ...data,
       date: Timestamp.fromDate(data.date),
+      purchaseDate: data.purchaseDate ? Timestamp.fromDate(data.purchaseDate) : null,
       createdAt: Timestamp.now(),
     });
   }
@@ -73,6 +75,7 @@ export function useTransactions() {
     const ref = doc(db, 'users', uid, 'transactions', id);
     const updates: Record<string, unknown> = { ...data };
     if (data.date) updates.date = Timestamp.fromDate(data.date);
+    if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
     delete updates.id;
     delete updates.createdAt;
     await updateDoc(ref, updates);
@@ -95,6 +98,7 @@ export function useTransactions() {
       batch.set(newDoc, {
         ...item,
         date: Timestamp.fromDate(item.date),
+        purchaseDate: item.purchaseDate ? Timestamp.fromDate(item.purchaseDate) : null,
         importBatch: batchId,
         createdAt: Timestamp.now(),
       });

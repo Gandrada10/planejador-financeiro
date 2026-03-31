@@ -189,9 +189,16 @@ export function TransactionTable({ transactions, onUpdate, onDelete }: Props) {
                 {/* Parcelas */}
                 <td className="p-2 text-center text-text-secondary">
                   {t.totalInstallments ? (
-                    <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
-                      {t.installmentNumber || '?'}/{t.totalInstallments}
-                    </span>
+                    <div className="flex flex-col items-center gap-0.5">
+                      <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
+                        {t.installmentNumber || '?'}/{t.totalInstallments}
+                      </span>
+                      {t.purchaseDate && (
+                        <span className="text-[9px] text-text-secondary" title="Data da compra original">
+                          {formatDate(t.purchaseDate)}
+                        </span>
+                      )}
+                    </div>
                   ) : '—'}
                 </td>
 
