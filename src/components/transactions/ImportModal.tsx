@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { X, Upload, FileSpreadsheet, AlertTriangle, Check, Settings2 } from 'lucide-react';
+import { X, Upload, FileSpreadsheet, AlertTriangle, Check, Settings2, Sparkles } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import Papa from 'papaparse';
 import * as pdfjsLib from 'pdfjs-dist';
@@ -207,6 +207,8 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
   const [error, setError] = useState('');
   const [importing, setImporting] = useState(false);
   const [fileName, setFileName] = useState('');
+  const [aiParsing, setAiParsing] = useState(false);
+  const [aiUsage, setAiUsage] = useState<{ input_tokens: number; output_tokens: number } | null>(null);
 
   // For manual mapping
   const [rawHeaders, setRawHeaders] = useState<string[]>([]);
@@ -300,6 +302,109 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
     [processWithMapping]
   );
 
+  async function extractRawText(file: File): Promise<string> {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    if (ext === 'csv') {
+      return await file.text();
+    } else if (ext === 'xlsx' || ext === 'xls') {
+      const data = new Uint8Array(await file.arrayBuffer());
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      return XLSX.utils.sheet_to_csv(ws);
+    } else if (ext === 'pdf') {
+      const buffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
+      let text = '';
+      for (let p = 1; p <= pdf.numPages; p++) {
+        const page = await pdf.getPage(p);
+        const content = await page.getTextContent();
+        const lineMap = new Map<number, { x: number; text: string }[]>();
+        for (const item of content.items) {
+          if (!('str' in item)) continue;
+          const y = Math.round(item.transform[5]);
+          if (!lineMap.has(y)) lineMap.set(y, []);
+          lineMap.get(y)!.push({ x: item.transform[4], text: item.str });
+        }
+        const lines = Array.from(lineMap.entries())
+          .sort((a, b) => b[0] - a[0])
+          .map(([, items]) => items.sort((a, b) => a.x - b.x).map((i) => i.text).join('  '));
+        text += lines.join('\n') + '\n';
+      }
+      return text;
+    }
+    throw new Error('Formato nao suportado');
+  }
+
+  async function handleAiParse(file: File) {
+    setError('');
+    setFileName(file.name);
+    setAiParsing(true);
+
+    try {
+      const rawText = await extractRawText(file);
+      const response = await fetch('/api/parse-statement', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText, fileName: file.name }),
+      });
+
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ error: 'Erro de conexao' }));
+        throw new Error((err as { error?: string }).error || `Erro ${response.status}`);
+      }
+
+      const data = await response.json() as {
+        transactions: Array<{
+          date: string;
+          description: string;
+          amount: number;
+          titular: string;
+          installmentNumber: number | null;
+          totalInstallments: number | null;
+          cardNumber: string | null;
+        }>;
+        usage: { input_tokens: number; output_tokens: number };
+      };
+
+      setAiUsage(data.usage);
+
+      const parsed: (ImportItem & { isDuplicate: boolean })[] = data.transactions.map((t) => {
+        const date = new Date(t.date + 'T12:00:00');
+        const item: ImportItem = {
+          date,
+          description: t.description,
+          amount: t.amount,
+          categoryId: null,
+          account: '',
+          familyMember: '',
+          titular: t.titular || '',
+          installmentNumber: t.installmentNumber,
+          totalInstallments: t.totalInstallments,
+          cardNumber: t.cardNumber,
+          pluggyTransactionId: null,
+          tags: [],
+          notes: '',
+          importBatch: null,
+        };
+        return { ...item, isDuplicate: isDuplicate(item, existingTransactions) };
+      });
+
+      if (parsed.length === 0) {
+        setError('A IA nao encontrou transacoes no arquivo. Tente o modo manual.');
+        setAiParsing(false);
+        return;
+      }
+
+      setItems(parsed);
+      setSelected(new Set(parsed.map((_, i) => i).filter((i) => !parsed[i].isDuplicate)));
+      setStep('preview');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao processar com IA');
+    }
+    setAiParsing(false);
+  }
+
   function handleFile(file: File) {
     setError('');
     setFileName(file.name);
@@ -376,24 +481,62 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
         <div className="flex-1 overflow-auto p-4">
           {/* UPLOAD */}
           {step === 'upload' && (
-            <div
-              onDrop={handleDrop}
-              onDragOver={(e) => e.preventDefault()}
-              className="border-2 border-dashed border-border rounded-lg p-12 text-center hover:border-accent transition-colors cursor-pointer"
-              onClick={() => {
-                const input = document.createElement('input');
-                input.type = 'file';
-                input.accept = '.xlsx,.xls,.csv,.pdf';
-                input.onchange = (e) => {
-                  const file = (e.target as HTMLInputElement).files?.[0];
-                  if (file) handleFile(file);
-                };
-                input.click();
-              }}
-            >
-              <Upload size={32} className="mx-auto mb-3 text-text-secondary" />
-              <p className="text-sm text-text-primary mb-1">Arraste seu extrato aqui</p>
-              <p className="text-xs text-text-secondary">.xlsx .xls .csv .pdf</p>
+            <div className="space-y-4">
+              {aiParsing ? (
+                <div className="border-2 border-dashed border-accent rounded-lg p-12 text-center">
+                  <Sparkles size={32} className="mx-auto mb-3 text-accent animate-pulse" />
+                  <p className="text-sm text-text-primary mb-1">Analisando extrato com IA...</p>
+                  <p className="text-xs text-text-secondary">Isso pode levar alguns segundos</p>
+                </div>
+              ) : (
+                <>
+                  <div
+                    onDrop={handleDrop}
+                    onDragOver={(e) => e.preventDefault()}
+                    className="border-2 border-dashed border-border rounded-lg p-8 text-center hover:border-accent transition-colors cursor-pointer"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = '.xlsx,.xls,.csv,.pdf';
+                      input.onchange = (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) handleFile(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    <Upload size={28} className="mx-auto mb-2 text-text-secondary" />
+                    <p className="text-sm text-text-primary mb-1">Importacao manual</p>
+                    <p className="text-xs text-text-secondary">Detecta colunas automaticamente ou mapeie manualmente</p>
+                  </div>
+
+                  <div className="relative flex items-center gap-3">
+                    <div className="flex-1 h-px bg-border" />
+                    <span className="text-[10px] text-text-secondary uppercase tracking-wider">ou</span>
+                    <div className="flex-1 h-px bg-border" />
+                  </div>
+
+                  <div
+                    className="border-2 border-dashed border-accent/50 rounded-lg p-8 text-center hover:border-accent transition-colors cursor-pointer bg-accent/5"
+                    onClick={() => {
+                      const input = document.createElement('input');
+                      input.type = 'file';
+                      input.accept = '.xlsx,.xls,.csv,.pdf';
+                      input.onchange = (e) => {
+                        const file = (e.target as HTMLInputElement).files?.[0];
+                        if (file) handleAiParse(file);
+                      };
+                      input.click();
+                    }}
+                  >
+                    <Sparkles size={28} className="mx-auto mb-2 text-accent" />
+                    <p className="text-sm text-text-primary mb-1">Importar com IA</p>
+                    <p className="text-xs text-text-secondary">A IA le qualquer formato, detecta parcelas e titulares</p>
+                  </div>
+
+                  <p className="text-[10px] text-text-secondary text-center">.xlsx .xls .csv .pdf</p>
+                </>
+              )}
             </div>
           )}
 
@@ -485,15 +628,22 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
                   <span className="text-xs text-text-secondary">— {items.length} transacoes</span>
                 </div>
                 <div className="flex items-center gap-2">
+                  {aiUsage && (
+                    <span className="text-[10px] text-text-secondary flex items-center gap-1">
+                      <Sparkles size={10} /> IA ({aiUsage.input_tokens + aiUsage.output_tokens} tokens)
+                    </span>
+                  )}
                   {duplicateCount > 0 && (
                     <div className="flex items-center gap-1 text-xs text-accent">
                       <AlertTriangle size={14} />
                       {duplicateCount} duplicatas
                     </div>
                   )}
-                  <button onClick={() => setStep('mapping')} className="text-xs text-text-secondary hover:text-accent flex items-center gap-1">
-                    <Settings2 size={12} /> Remapear
-                  </button>
+                  {!aiUsage && (
+                    <button onClick={() => setStep('mapping')} className="text-xs text-text-secondary hover:text-accent flex items-center gap-1">
+                      <Settings2 size={12} /> Remapear
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -506,7 +656,9 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
                       </th>
                       <th className="p-2 text-left">Data</th>
                       <th className="p-2 text-left">Descricao</th>
+                      {aiUsage && <th className="p-2 text-left">Titular</th>}
                       <th className="p-2 text-right">Valor</th>
+                      {aiUsage && <th className="p-2 text-center">Parc.</th>}
                       <th className="p-2 text-center w-12"></th>
                     </tr>
                   </thead>
@@ -518,9 +670,15 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
                         </td>
                         <td className="p-2 text-text-secondary">{formatDate(item.date)}</td>
                         <td className="p-2 text-text-primary truncate max-w-[200px]">{item.description}</td>
+                        {aiUsage && <td className="p-2 text-text-secondary text-xs">{item.titular || '—'}</td>}
                         <td className={`p-2 text-right font-bold ${item.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                           {formatBRL(item.amount)}
                         </td>
+                        {aiUsage && (
+                          <td className="p-2 text-center text-text-secondary text-[10px]">
+                            {item.totalInstallments ? `${item.installmentNumber}/${item.totalInstallments}` : '—'}
+                          </td>
+                        )}
                         <td className="p-2 text-center">
                           {item.isDuplicate && <span title="Possivel duplicata"><AlertTriangle size={14} className="text-accent inline" /></span>}
                         </td>
