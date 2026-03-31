@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import * as XLSX from 'xlsx';
+import Papa from 'papaparse';
 import type { Transaction } from '../../types';
 import { formatBRL, formatDate } from '../../lib/utils';
 
@@ -38,6 +40,25 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
   async function extractRawText(file: File): Promise<string> {
     const ext = file.name.split('.').pop()?.toLowerCase();
 
+    if (ext === 'csv') {
+      const text = await file.text();
+      console.log('[CSV extract] chars:', text.length, '| preview:', text.slice(0, 300));
+      return text;
+    }
+
+    if (ext === 'xlsx' || ext === 'xls') {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      let text = '';
+      for (const sheetName of wb.SheetNames) {
+        const sheet = wb.Sheets[sheetName];
+        const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+        text += csv + '\n';
+      }
+      console.log('[Excel extract] chars:', text.length, '| preview:', text.slice(0, 300));
+      return text;
+    }
+
     if (ext === 'pdf') {
       const buffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
@@ -46,12 +67,10 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
         const page = await pdf.getPage(p);
         const content = await page.getTextContent();
 
-        // Group by Y with tolerance of 3px so same visual line stays together
         const lineMap = new Map<number, { x: number; text: string }[]>();
         for (const item of content.items) {
           if (!('str' in item) || !item.str.trim()) continue;
           const rawY = item.transform[5];
-          // Snap to nearest 3px bucket
           const y = Math.round(rawY / 3) * 3;
           if (!lineMap.has(y)) lineMap.set(y, []);
           lineMap.get(y)!.push({ x: item.transform[4], text: item.str });
@@ -64,7 +83,6 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
         text += lines.join('\n') + '\n\n';
       }
 
-      // Fallback: if spatial extraction produced very little text, try sequential
       if (text.trim().length < 100) {
         text = '';
         for (let p = 1; p <= pdf.numPages; p++) {
@@ -80,6 +98,7 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
       console.log('[PDF extract] chars:', text.length, '| preview:', text.slice(0, 300));
       return text;
     }
+
     throw new Error('Formato nao suportado. Use .xlsx, .xls, .csv ou .pdf');
   }
 
@@ -92,7 +111,7 @@ export function ImportModal({ existingTransactions, onImport, onClose }: Props) 
       const rawText = await extractRawText(file);
 
       if (rawText.trim().length < 50) {
-        setError('Nao foi possivel extrair texto do PDF. O arquivo pode ser baseado em imagem (escaneado). Tente converter para Excel/CSV.');
+        setError('Nao foi possivel extrair dados do arquivo. Se for PDF, pode ser baseado em imagem (escaneado). Tente usar o formato Excel/CSV.');
         setAiParsing(false);
         return;
       }
