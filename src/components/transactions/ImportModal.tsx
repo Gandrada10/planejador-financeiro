@@ -105,8 +105,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [batchCategory, setBatchCategory] = useState('');
   const [batchMember, setBatchMember] = useState('');
 
-  // Installment editor
+  // Installment editor (position tracked for fixed popup outside overflow container)
   const [editingInstallment, setEditingInstallment] = useState<number | null>(null);
+  const [installmentPopupPos, setInstallmentPopupPos] = useState<{ top: number; left: number } | null>(null);
 
   // Member options: only from titular mappings (registered members)
   const memberOptions = titularNames.length > 0 ? titularNames : allTitulars;
@@ -527,7 +528,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       <th className="p-2 text-left w-8">
                         <input type="checkbox" checked={selected.size === items.length && items.length > 0} onChange={toggleAll} className="accent-accent" />
                       </th>
-                      <th className="p-2 text-left whitespace-nowrap">Data fatura</th>
+                      <th className="p-2 text-left whitespace-nowrap">Data</th>
                       <th className="p-2 text-left">Descricao</th>
                       <th className="p-2 text-right whitespace-nowrap">Valor</th>
                       <th className="p-2 text-center whitespace-nowrap">Parc.</th>
@@ -552,9 +553,18 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         <td className={`p-2 text-right font-bold whitespace-nowrap ${item.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                           {formatBRL(item.amount)}
                         </td>
-                        <td className="p-1 text-center relative">
+                        <td className="p-1 text-center">
                           <button
-                            onClick={() => setEditingInstallment(editingInstallment === i ? null : i)}
+                            onClick={(e) => {
+                              if (editingInstallment === i) {
+                                setEditingInstallment(null);
+                                setInstallmentPopupPos(null);
+                              } else {
+                                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                setInstallmentPopupPos({ top: rect.bottom + 4, left: rect.left + rect.width / 2 - 110 });
+                                setEditingInstallment(i);
+                              }
+                            }}
                             className={`px-2 py-1 rounded text-xs border transition-colors ${
                               item.installmentType === 'parcelada'
                                 ? 'bg-accent/10 border-accent/30 text-accent'
@@ -566,98 +576,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               : 'Unica'}
                             <ChevronDown size={10} className="inline ml-1" />
                           </button>
-                          {editingInstallment === i && (
-                            <div className="absolute z-30 top-full left-1/2 -translate-x-1/2 mt-1 bg-bg-card border border-border rounded-lg shadow-lg p-3 min-w-[220px] text-left">
-                              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-2">Tipo de parcela</p>
-                              <div className="flex gap-2 mb-3">
-                                <button
-                                  onClick={() => updateInstallmentConfig(i, {
-                                    installmentType: 'unica',
-                                    installmentNumber: null,
-                                    totalInstallments: null,
-                                    installmentAmount: null,
-                                  })}
-                                  className={`flex-1 px-2 py-1 rounded text-xs border ${
-                                    item.installmentType === 'unica'
-                                      ? 'bg-accent text-bg-primary border-accent'
-                                      : 'bg-bg-secondary text-text-secondary border-border'
-                                  }`}
-                                >
-                                  Unica
-                                </button>
-                                <button
-                                  onClick={() => updateInstallmentConfig(i, {
-                                    installmentType: 'parcelada',
-                                    installmentNumber: item.installmentNumber || 1,
-                                    totalInstallments: item.totalInstallments || 2,
-                                    installmentAmount: item.installmentAmount ?? item.amount,
-                                    periodicity: item.periodicity || 1,
-                                  })}
-                                  className={`flex-1 px-2 py-1 rounded text-xs border ${
-                                    item.installmentType === 'parcelada'
-                                      ? 'bg-accent text-bg-primary border-accent'
-                                      : 'bg-bg-secondary text-text-secondary border-border'
-                                  }`}
-                                >
-                                  Parcelada
-                                </button>
-                              </div>
-                              {item.installmentType === 'parcelada' && (
-                                <div className="space-y-2">
-                                  <div>
-                                    <label className="text-[10px] text-text-secondary">Periodicidade</label>
-                                    <select
-                                      value={item.periodicity}
-                                      onChange={(e) => updateInstallmentConfig(i, { periodicity: Number(e.target.value) })}
-                                      className={inputClass}
-                                    >
-                                      <option value={1}>Mensal</option>
-                                      <option value={2}>Bimestral</option>
-                                      <option value={3}>Trimestral</option>
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="text-[10px] text-text-secondary">Numero de parcelas</label>
-                                    <input
-                                      type="number"
-                                      min={2}
-                                      max={48}
-                                      value={item.totalInstallments || 2}
-                                      onChange={(e) => updateInstallmentConfig(i, { totalInstallments: Number(e.target.value) || 2 })}
-                                      className={inputClass}
-                                    />
-                                  </div>
-                                  <div>
-                                    <label className="text-[10px] text-text-secondary">Valor da parcela</label>
-                                    <input
-                                      type="number"
-                                      step="0.01"
-                                      value={Math.abs(item.installmentAmount ?? item.amount)}
-                                      onChange={(e) => {
-                                        const val = parseFloat(e.target.value) || 0;
-                                        updateInstallmentConfig(i, { installmentAmount: item.amount < 0 ? -val : val });
-                                      }}
-                                      className={inputClass}
-                                    />
-                                  </div>
-                                  <p className="text-[10px] text-text-secondary mt-1">
-                                    Total: {formatBRL((item.installmentAmount ?? item.amount) * (item.totalInstallments || 2))}
-                                    {' — '}Faturas: {billingMonth || getMonthYear(item.date)} a{' '}
-                                    {getMonthYearOffset(
-                                      billingMonth || getMonthYear(item.date),
-                                      ((item.totalInstallments || 2) - 1) * (item.periodicity || 1)
-                                    )}
-                                  </p>
-                                </div>
-                              )}
-                              <button
-                                onClick={() => setEditingInstallment(null)}
-                                className="mt-2 w-full px-2 py-1 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
-                              >
-                                OK
-                              </button>
-                            </div>
-                          )}
                         </td>
                         <td className="p-2 text-text-secondary whitespace-nowrap">
                           {item.purchaseDate ? formatDate(item.purchaseDate) : '—'}
@@ -727,6 +645,110 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   </tbody>
                 </table>
               </div>
+
+              {/* Installment popup — rendered outside table overflow container */}
+              {editingInstallment !== null && installmentPopupPos && items[editingInstallment] && (() => {
+                const item = items[editingInstallment];
+                const idx = editingInstallment;
+                return (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => { setEditingInstallment(null); setInstallmentPopupPos(null); }} />
+                    <div
+                      className="fixed z-50 bg-bg-card border border-border rounded-lg shadow-lg p-3 w-[240px]"
+                      style={{ top: installmentPopupPos.top, left: installmentPopupPos.left }}
+                    >
+                      <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-2">Tipo de parcela</p>
+                      <div className="flex gap-2 mb-3">
+                        <button
+                          onClick={() => updateInstallmentConfig(idx, {
+                            installmentType: 'unica',
+                            installmentNumber: null,
+                            totalInstallments: null,
+                            installmentAmount: null,
+                          })}
+                          className={`flex-1 px-2 py-1 rounded text-xs border ${
+                            item.installmentType === 'unica'
+                              ? 'bg-accent text-bg-primary border-accent'
+                              : 'bg-bg-secondary text-text-secondary border-border'
+                          }`}
+                        >
+                          Unica
+                        </button>
+                        <button
+                          onClick={() => updateInstallmentConfig(idx, {
+                            installmentType: 'parcelada',
+                            installmentNumber: item.installmentNumber || 1,
+                            totalInstallments: item.totalInstallments || 2,
+                            installmentAmount: item.installmentAmount ?? item.amount,
+                            periodicity: item.periodicity || 1,
+                          })}
+                          className={`flex-1 px-2 py-1 rounded text-xs border ${
+                            item.installmentType === 'parcelada'
+                              ? 'bg-accent text-bg-primary border-accent'
+                              : 'bg-bg-secondary text-text-secondary border-border'
+                          }`}
+                        >
+                          Parcelada
+                        </button>
+                      </div>
+                      {item.installmentType === 'parcelada' && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className="text-[10px] text-text-secondary">Periodicidade</label>
+                            <select
+                              value={item.periodicity}
+                              onChange={(e) => updateInstallmentConfig(idx, { periodicity: Number(e.target.value) })}
+                              className={inputClass}
+                            >
+                              <option value={1}>Mensal</option>
+                              <option value={2}>Bimestral</option>
+                              <option value={3}>Trimestral</option>
+                            </select>
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-text-secondary">Numero de parcelas</label>
+                            <input
+                              type="number"
+                              min={2}
+                              max={48}
+                              value={item.totalInstallments || 2}
+                              onChange={(e) => updateInstallmentConfig(idx, { totalInstallments: Number(e.target.value) || 2 })}
+                              className={inputClass}
+                            />
+                          </div>
+                          <div>
+                            <label className="text-[10px] text-text-secondary">Valor da parcela</label>
+                            <input
+                              type="number"
+                              step="0.01"
+                              value={Math.abs(item.installmentAmount ?? item.amount)}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                updateInstallmentConfig(idx, { installmentAmount: item.amount < 0 ? -val : val });
+                              }}
+                              className={inputClass}
+                            />
+                          </div>
+                          <p className="text-[10px] text-text-secondary mt-1">
+                            Total: {formatBRL((item.installmentAmount ?? item.amount) * (item.totalInstallments || 2))}
+                            {' — '}Faturas: {billingMonth || getMonthYear(item.date)} a{' '}
+                            {getMonthYearOffset(
+                              billingMonth || getMonthYear(item.date),
+                              ((item.totalInstallments || 2) - 1) * (item.periodicity || 1)
+                            )}
+                          </p>
+                        </div>
+                      )}
+                      <button
+                        onClick={() => { setEditingInstallment(null); setInstallmentPopupPos(null); }}
+                        className="mt-2 w-full px-2 py-1 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
 
               {error && <p className="text-accent-red text-xs">{error}</p>}
             </div>
