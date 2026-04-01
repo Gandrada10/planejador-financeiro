@@ -556,7 +556,18 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         <td className="p-2">
                           <input type="checkbox" checked={selected.has(i)} onChange={() => toggleItem(i)} className="accent-accent" />
                         </td>
-                        <td className="p-2 text-text-secondary whitespace-nowrap">{formatDate(item.date)}</td>
+                        <td className="p-1 whitespace-nowrap">
+                          <input
+                            type="date"
+                            value={item.date.toISOString().split('T')[0]}
+                            onChange={(e) => {
+                              if (e.target.value) {
+                                updateInstallmentConfig(i, { date: new Date(e.target.value + 'T12:00:00') });
+                              }
+                            }}
+                            className="px-1 py-0.5 bg-bg-secondary border border-border rounded text-text-secondary text-xs focus:outline-none focus:border-accent w-[110px]"
+                          />
+                        </td>
                         <td className="p-2 text-text-primary max-w-[180px] truncate" title={item.description}>{item.description}</td>
                         <td className={`p-2 text-right font-bold whitespace-nowrap ${item.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                           {formatBRL(item.amount)}

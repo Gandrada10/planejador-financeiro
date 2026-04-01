@@ -45,14 +45,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     });
   }
 
-  // Truncate to ~15000 chars to stay within reasonable token limits
-  const truncatedText = rawText.slice(0, 15000);
+  // Truncate to ~60000 chars to handle larger PDF invoices
+  const truncatedText = rawText.slice(0, 60000);
 
-  const prompt = `Voce e um parser de extratos bancarios brasileiros. Analise o texto abaixo extraido de um arquivo "${fileName}" e retorne APENAS um JSON array com as transacoes encontradas.
+  const prompt = `Voce e um parser de extratos bancarios brasileiros. Analise o texto abaixo extraido de um arquivo "${fileName}" e retorne APENAS um JSON com as transacoes encontradas.
 
 Para cada transacao, extraia:
-- "date": data do lancamento na fatura no formato "YYYY-MM-DD" (a data que aparece no extrato)
-- "purchaseDate": data original da compra no formato "YYYY-MM-DD", se diferente da data do lancamento (ex: compra parcelada feita em mes anterior). Se for igual a date ou nao identificavel, retorne null
+- "date": data da compra original no formato "YYYY-MM-DD". Em faturas de cartao, cada lancamento tem uma data ao lado (geralmente DD/MM) que indica QUANDO a compra foi feita. Use essa data. O ano deve ser deduzido do contexto da fatura.
+- "purchaseDate": mesma data da compra (igual a "date"). So use valor diferente se houver explicitamente duas datas distintas no mesmo lancamento.
 - "description": descricao da transacao (limpa, sem codigos internos desnecessarios)
 - "amount": valor numerico (negativo para debitos/despesas, positivo para creditos/receitas)
 - "titular": nome do titular do cartao se identificavel no extrato, senao string vazia
@@ -60,22 +60,29 @@ Para cada transacao, extraia:
 - "totalInstallments": total de parcelas se for compra parcelada (ex: 10 de "PARCELA 3/10"), senao null
 - "cardNumber": ultimos 4 digitos do cartao se visivel no extrato, senao null
 
-Regras importantes:
+Regras CRITICAS sobre datas:
+- A data ao lado de cada lancamento e a DATA DA COMPRA, nao confunda com datas de vencimento da fatura
+- Em faturas de cartao, o mes/ano de vencimento aparece no cabecalho. A data de cada lancamento e quando a compra ocorreu, que pode ser em meses anteriores
+- Se o lancamento mostra apenas DD/MM sem ano, deduza o ano pelo contexto (periodo da fatura, mes anterior ao vencimento, etc.)
+- NUNCA use a data de vencimento da fatura como data da transacao
+- Para compras parceladas (ex: PARCELA 12/12), a data ao lado e quando a compra ORIGINAL foi feita, nao quando a parcela esta sendo cobrada
+
+Regras gerais:
 - Detecte parcelas em qualquer formato: "PARC 3/10", "PARCELA 3 DE 10", "3/10", "(3/10)", "parcelado em 10x", etc.
-- Valores de debito/saida devem ser NEGATIVOS
-- Valores de credito/entrada devem ser POSITIVOS
+- Valores de debito/saida devem ser NEGATIVOS, credito/entrada POSITIVOS
 - Ignore linhas de saldo, totais, cabecalhos, rodapes e linhas em branco
 - Se o extrato for de cartao de credito, todas as compras sao negativas (despesas)
 - Limpe descricoes removendo codigos internos mas mantendo o nome do estabelecimento
-- Detecte datas em formatos: DD/MM/YYYY, YYYY-MM-DD, DD-MM-YYYY, DD.MM.YYYY
+- Detecte datas em formatos: DD/MM/YYYY, DD/MM, YYYY-MM-DD, DD-MM-YYYY, DD.MM.YYYY
 - Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
+- PROCESSE TODAS as transacoes do extrato, mesmo que sejam muitas (100+)
 
 Responda APENAS com um JSON object com dois campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
 - "transactions": array com as transacoes
 
 Sem markdown, sem explicacao, sem code blocks. Exemplo:
-{"isCreditCard":true,"transactions":[{"date":"2026-01-15","purchaseDate":"2025-11-15","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]}
+{"isCreditCard":true,"transactions":[{"date":"2025-01-23","purchaseDate":"2025-01-23","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]}
 
 Texto do extrato (pode estar desformatado, PDFs frequentemente tem quebras estranhas):
 ${truncatedText}`;
@@ -90,7 +97,7 @@ ${truncatedText}`;
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5',
-        max_tokens: 8000,
+        max_tokens: 16000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
