@@ -1,7 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
-import { useAccounts } from '../../hooks/useAccounts';
 import { useBudgets } from '../../hooks/useBudgets';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
@@ -13,7 +12,6 @@ export function DashboardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const { transactions, loading: loadingTx } = useTransactions();
   const { categories } = useCategories();
-  const { accounts } = useAccounts();
   const { getBudgetsForMonth } = useBudgets();
 
   const monthTransactions = useMemo(

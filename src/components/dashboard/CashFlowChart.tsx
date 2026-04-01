@@ -36,10 +36,10 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
           <BarChart data={chartData} barGap={2}>
             <CartesianGrid vertical={false} {...GRID_STYLE} />
             <XAxis dataKey="name" {...AXIS_STYLE} />
-            <YAxis {...AXIS_STYLE} tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
+            <YAxis {...AXIS_STYLE} tickFormatter={(v) => `${(Number(v) / 1000).toFixed(0)}k`} />
             <Tooltip
               {...TOOLTIP_STYLE}
-              formatter={(value: number, name: string) => [formatBRL(value), name]}
+              formatter={(value) => [formatBRL(Number(value)), '']}
             />
             <Bar dataKey="Entradas" radius={[3, 3, 0, 0]}>
               {chartData.map((_, i) => (

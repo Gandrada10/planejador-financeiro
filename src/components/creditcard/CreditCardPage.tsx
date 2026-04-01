@@ -16,7 +16,7 @@ export function CreditCardPage() {
   const { transactions, loading: loadingTx } = useTransactions();
   const { categories } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
-  const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, cycles } = useBillingCycles();
+  const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle } = useBillingCycles();
 
   // Auto-select first card
   const activeCardId = selectedCardId || cardAccounts[0]?.id || '';

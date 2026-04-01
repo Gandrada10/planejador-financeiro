@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Lock, LockOpen, DollarSign } from 'lucide-react';
-import { formatBRL, formatDate } from '../../lib/utils';
+import { formatBRL } from '../../lib/utils';
 import type { BillingCycle, Account } from '../../types';
 
 interface TitularTotal {

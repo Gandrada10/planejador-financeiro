@@ -43,7 +43,7 @@ export function ExpensesByCategoryChart({ data }: Props) {
                 </Pie>
                 <Tooltip
                   {...TOOLTIP_STYLE}
-                  formatter={(value: number) => [formatBRL(value), 'Valor']}
+                  formatter={(value) => [formatBRL(Number(value)), 'Valor']}
                 />
               </PieChart>
             </ResponsiveContainer>
