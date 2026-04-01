@@ -541,7 +541,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       <th className="p-2 text-left">Descricao</th>
                       <th className="p-2 text-right whitespace-nowrap">Valor</th>
                       <th className="p-2 text-center whitespace-nowrap">Parc.</th>
-                      <th className="p-2 text-left whitespace-nowrap">Compra em</th>
                       <th className="p-2 text-left min-w-[110px]">Conta</th>
                       <th className="p-2 text-left min-w-[120px]">Categoria</th>
                       <th className="p-2 text-left min-w-[100px]">Membro</th>
@@ -570,7 +569,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                 setInstallmentPopupPos(null);
                               } else {
                                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                setInstallmentPopupPos({ top: rect.bottom + 4, left: rect.left + rect.width / 2 - 110 });
+                                const popupH = 320;
+                                const popupW = 240;
+                                const top = rect.bottom + 4 + popupH > window.innerHeight
+                                  ? Math.max(8, rect.top - popupH - 4)
+                                  : rect.bottom + 4;
+                                const left = Math.min(rect.left + rect.width / 2 - popupW / 2, window.innerWidth - popupW - 8);
+                                setInstallmentPopupPos({ top, left: Math.max(8, left) });
                                 setEditingInstallment(i);
                               }
                             }}
@@ -585,9 +590,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               : 'Unica'}
                             <ChevronDown size={10} className="inline ml-1" />
                           </button>
-                        </td>
-                        <td className="p-2 text-text-secondary whitespace-nowrap">
-                          {item.purchaseDate ? formatDate(item.purchaseDate) : '—'}
                         </td>
                         {/* Editable: account */}
                         <td className="p-1">
@@ -661,9 +663,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 const idx = editingInstallment;
                 return (
                   <>
-                    <div className="fixed inset-0 z-40" onClick={() => { setEditingInstallment(null); setInstallmentPopupPos(null); }} />
+                    <div className="fixed inset-0 z-[60]" onClick={() => { setEditingInstallment(null); setInstallmentPopupPos(null); }} />
                     <div
-                      className="fixed z-50 bg-bg-card border border-border rounded-lg shadow-lg p-3 w-[240px]"
+                      className="fixed z-[70] bg-bg-card border border-border rounded-lg shadow-lg p-3 w-[240px] max-h-[80vh] overflow-y-auto"
                       style={{ top: installmentPopupPos.top, left: installmentPopupPos.left }}
                     >
                       <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-2">Tipo de parcela</p>

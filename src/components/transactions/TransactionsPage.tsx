@@ -4,6 +4,7 @@ import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
+import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { TransactionTable } from './TransactionTable';
@@ -18,6 +19,7 @@ export function TransactionsPage() {
   const { categories, matchCategory } = useCategories();
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
+  const { memberNames: familyMemberNames } = useFamilyMembers();
   const { sessions, applyCategorizationsFromSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const [showForm, setShowForm] = useState(false);
@@ -79,8 +81,28 @@ export function TransactionsPage() {
       if (!reopen) return;
       await reopenCycle(closed.cycleId);
     }
-    await addTransaction(item);
-  }, [accounts, addTransaction, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // If installment purchase, create future installment transactions
+    if (item.totalInstallments && item.totalInstallments >= 2) {
+      const items: Omit<Transaction, 'id' | 'createdAt'>[] = [];
+      const purchaseDate = item.purchaseDate || item.date;
+      for (let inst = 1; inst <= item.totalInstallments; inst++) {
+        const futureDate = new Date(item.date);
+        futureDate.setMonth(futureDate.getMonth() + (inst - 1));
+        items.push({
+          ...item,
+          date: futureDate,
+          purchaseDate,
+          installmentNumber: inst,
+          totalInstallments: item.totalInstallments,
+          categoryId: item.categoryId || matchCategory(item.description),
+        });
+      }
+      await importBatch(items);
+    } else {
+      await addTransaction(item);
+    }
+  }, [accounts, addTransaction, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleImport = useCallback(async (items: Omit<Transaction, 'id' | 'createdAt'>[]) => {
     // Check for any closed cycles in the batch
@@ -218,7 +240,7 @@ export function TransactionsPage() {
           accounts={accounts}
           categories={categories}
           allTitulars={allTitulars}
-          titularNames={titularNames}
+          titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
         />
       )}
       {showShareModal && (

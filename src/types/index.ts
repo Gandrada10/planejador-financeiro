@@ -49,7 +49,7 @@ export interface Transaction {
 export interface Account {
   id: string;
   name: string;
-  type: 'corrente' | 'cartao' | 'poupanca' | 'investimento' | 'outro';
+  type: 'corrente' | 'cartao' | 'beneficio' | 'poupanca' | 'investimento' | 'outro';
   bank: string;
   closingDay?: number;
   dueDay?: number;

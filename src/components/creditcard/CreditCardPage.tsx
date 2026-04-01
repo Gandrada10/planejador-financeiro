@@ -132,23 +132,28 @@ export function CreditCardPage() {
             className="px-3 py-1.5 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
           >
             {cardAccounts.map((a) => (
-              <option key={a.id} value={a.id}>{a.name}</option>
+              <option key={a.id} value={a.id}>{a.name}{a.dueDay ? ` (venc. dia ${a.dueDay})` : ''}</option>
             ))}
           </select>
           <MonthSelector value={monthYear} onChange={setMonthYear} />
         </div>
       </div>
 
-      {/* Cycle status badge */}
-      {currentCycle && (
-        <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold ${
-          currentCycle.status === 'closed'
-            ? 'bg-accent-red/10 text-accent-red'
-            : 'bg-accent-green/10 text-accent-green'
-        }`}>
-          {currentCycle.status === 'closed' ? 'Fatura encerrada' : 'Fatura aberta'}
-        </div>
-      )}
+      {/* Cycle status badge + due date */}
+      <div className="flex items-center gap-3 flex-wrap">
+        {currentCycle && (
+          <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-[10px] font-bold ${
+            currentCycle.status === 'closed'
+              ? 'bg-accent-red/10 text-accent-red'
+              : 'bg-accent-green/10 text-accent-green'
+          }`}>
+            {currentCycle.status === 'closed' ? 'Fatura encerrada' : 'Fatura aberta'}
+          </div>
+        )}
+        {activeCard?.dueDay && (
+          <span className="text-[10px] text-text-secondary">Vencimento: dia {activeCard.dueDay}</span>
+        )}
+      </div>
 
       {/* Main layout */}
       <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">

@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X, Users } from 'lucide-react';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
+import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
 import type { Account } from '../../types';
@@ -9,6 +10,7 @@ import { getMonthLabel } from '../../lib/utils';
 const ACCOUNT_TYPES: { value: Account['type']; label: string }[] = [
   { value: 'corrente', label: 'Conta Corrente' },
   { value: 'cartao', label: 'Cartao de Credito' },
+  { value: 'beneficio', label: 'Cartao de Beneficio' },
   { value: 'poupanca', label: 'Poupanca' },
   { value: 'investimento', label: 'Investimento' },
   { value: 'outro', label: 'Outro' },
@@ -28,9 +30,11 @@ function monthYearOptions(): string[] {
 
 export function SettingsPage() {
   const { mappings, loading, addMapping, deleteMapping } = useTitularMappings();
+  const { members, memberNames, loading: loadingMembers, addMember, deleteMember } = useFamilyMembers();
   const { accounts, loading: loadingAccounts, addAccount, updateAccount, deleteAccount } = useAccounts();
   const { cycles, loading: loadingCycles, createCycle, closeCycle, reopenCycle, deleteCycle } = useBillingCycles();
 
+  const [newMemberName, setNewMemberName] = useState('');
   const [cardDigits, setCardDigits] = useState('');
   const [titularName, setTitularName] = useState('');
   const [accountName, setAccountName] = useState('');
@@ -98,7 +102,7 @@ export function SettingsPage() {
     setCycleAccountId(''); setCycleMonth('');
   }
 
-  if (loading || loadingAccounts || loadingCycles) {
+  if (loading || loadingMembers || loadingAccounts || loadingCycles) {
     return <div className="text-accent text-sm animate-pulse">Carregando configuracoes...</div>;
   }
 
@@ -108,6 +112,45 @@ export function SettingsPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-bold text-text-primary">Configuracoes</h2>
+
+      {/* Family Members */}
+      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <Users size={16} className="text-accent" /> Familia
+          </h3>
+          <p className="text-[10px] text-text-secondary mt-1">
+            Cadastre os membros da familia. Esses nomes serao usados no mapeamento de titulares e na atribuicao de transacoes.
+          </p>
+        </div>
+        <form onSubmit={async (e) => {
+          e.preventDefault();
+          if (!newMemberName.trim()) return;
+          await addMember(newMemberName);
+          setNewMemberName('');
+        }} className="flex gap-2 flex-wrap">
+          <input type="text" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)}
+            placeholder="Nome completo do membro" className={`${inputClass} flex-1 min-w-[200px]`} />
+          <button type="submit" disabled={!newMemberName.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
+            <Plus size={14} /> Adicionar
+          </button>
+        </form>
+        {members.length === 0 ? (
+          <p className="text-xs text-text-secondary">Nenhum membro cadastrado.</p>
+        ) : (
+          <div className="space-y-1">
+            {members.map((m) => (
+              <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
+                <span className="text-text-primary font-bold">{m.name}</span>
+                <button onClick={() => deleteMember(m.id)} className="text-text-secondary hover:text-accent-red">
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Accounts */}
       <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
@@ -286,8 +329,15 @@ export function SettingsPage() {
         <form onSubmit={handleAdd} className="flex gap-2 flex-wrap">
           <input type="text" value={cardDigits} onChange={(e) => setCardDigits(e.target.value.replace(/\D/g, '').slice(0, 4))}
             placeholder="4 digitos do cartao" className={`${inputClass} w-40`} maxLength={4} />
-          <input type="text" value={titularName} onChange={(e) => setTitularName(e.target.value)}
-            placeholder="Nome do titular" className={`${inputClass} flex-1 min-w-[150px]`} />
+          {memberNames.length > 0 ? (
+            <select value={titularName} onChange={(e) => setTitularName(e.target.value)} className={`${inputClass} flex-1 min-w-[150px]`}>
+              <option value="">Selecione o membro...</option>
+              {memberNames.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          ) : (
+            <input type="text" value={titularName} onChange={(e) => setTitularName(e.target.value)}
+              placeholder="Cadastre membros na secao Familia primeiro" className={`${inputClass} flex-1 min-w-[150px]`} disabled />
+          )}
           <button type="submit" disabled={cardDigits.length !== 4 || !titularName.trim()}
             className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
             <Plus size={14} /> Adicionar
