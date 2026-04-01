@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Plus, Trash2, Zap, X, ChevronRight } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import type { Category } from '../../types';
+import { CategoryIcon, ICON_KEYS } from '../shared/CategoryIcon';
 
 const PRESET_COLORS = ['#f59e0b', '#22c55e', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
-const PRESET_ICONS = ['🏠', '🍔', '🚗', '💊', '📚', '🎮', '📺', '💳', '✈️', '👕', '🛒', '💰', '📱', '🏋️', '🎵', '🐕', '👶', '🔧', '⚡', '💼'];
 
 export function CategoriesPage() {
   const { categories, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule } = useCategories();
@@ -14,7 +14,7 @@ export function CategoriesPage() {
 
   // Category form
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState('🏷️');
+  const [icon, setIcon] = useState('tag');
   const [color, setColor] = useState('#f59e0b');
   const [type, setType] = useState<Category['type']>('despesa');
   const [parentId, setParentId] = useState<string>('');
@@ -24,7 +24,7 @@ export function CategoriesPage() {
   const [ruleCategoryId, setRuleCategoryId] = useState('');
 
   function resetForm() {
-    setName(''); setIcon('🏷️'); setColor('#f59e0b'); setType('despesa'); setParentId('');
+    setName(''); setIcon('tag'); setColor('#f59e0b'); setType('despesa'); setParentId('');
     setEditingId(null); setShowForm(false);
   }
 
@@ -95,7 +95,7 @@ export function CategoriesPage() {
                 className="flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
                 onClick={() => startEdit(cat)}
               >
-                <span className="text-2xl">{cat.icon}</span>
+                <CategoryIcon icon={cat.icon} size={24} className="text-text-primary" />
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
@@ -130,7 +130,7 @@ export function CategoriesPage() {
                   onClick={() => startEdit(sub)}
                 >
                   <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
-                  <span className="text-lg">{sub.icon}</span>
+                  <CategoryIcon icon={sub.icon} size={18} className="text-text-primary" />
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
@@ -170,8 +170,8 @@ export function CategoriesPage() {
                   <span className="text-text-secondary">→</span>
                   {cat && (
                     <span className="flex items-center gap-1 text-text-primary">
-                      {parent && <><span>{parent.icon}</span><span className="text-text-secondary">{parent.name}</span><ChevronRight size={10} className="text-text-secondary" /></>}
-                      <span>{cat.icon}</span>
+                      {parent && <><CategoryIcon icon={parent.icon} size={12} className="text-text-secondary" /><span className="text-text-secondary">{parent.name}</span><ChevronRight size={10} className="text-text-secondary" /></>}
+                      <CategoryIcon icon={cat.icon} size={12} className="text-text-primary" />
                       <span>{cat.name}</span>
                     </span>
                   )}
@@ -214,7 +214,7 @@ export function CategoriesPage() {
                 >
                   <option value="">— Nenhuma (categoria raiz) —</option>
                   {rootCategories.filter((c) => c.id !== editingId).map((c) => (
-                    <option key={c.id} value={c.id}>{c.icon} {c.name}</option>
+                    <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </div>
@@ -231,11 +231,11 @@ export function CategoriesPage() {
               </div>
               <div>
                 <label className={labelClass}>Icone</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {PRESET_ICONS.map((ic) => (
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {ICON_KEYS.map((ic) => (
                     <button key={ic} tabIndex={4} type="button" onClick={() => setIcon(ic)}
-                      className={`w-8 h-8 rounded text-lg flex items-center justify-center ${icon === ic ? 'bg-accent/20 ring-1 ring-accent' : 'bg-bg-secondary hover:bg-bg-secondary/80'}`}>
-                      {ic}
+                      className={`w-8 h-8 rounded flex items-center justify-center ${icon === ic ? 'bg-accent/20 ring-1 ring-accent' : 'bg-bg-secondary hover:bg-bg-secondary/80'}`}>
+                      <CategoryIcon icon={ic} size={16} className="text-text-primary" />
                     </button>
                   ))}
                 </div>
@@ -280,10 +280,10 @@ export function CategoriesPage() {
                   {rootCategories.map((cat) => {
                     const subs = subCategories(cat.id);
                     return (
-                      <optgroup key={cat.id} label={`${cat.icon} ${cat.name}`}>
-                        <option value={cat.id}>{cat.icon} {cat.name}</option>
+                      <optgroup key={cat.id} label={cat.name}>
+                        <option value={cat.id}>{cat.name}</option>
                         {subs.map((sub) => (
-                          <option key={sub.id} value={sub.id}>  ↳ {sub.icon} {sub.name}</option>
+                          <option key={sub.id} value={sub.id}>  ↳ {sub.name}</option>
                         ))}
                       </optgroup>
                     );

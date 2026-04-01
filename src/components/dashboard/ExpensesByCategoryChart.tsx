@@ -1,6 +1,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { TOOLTIP_STYLE, CHART_COLORS } from '../../lib/chartTheme';
 import { formatBRL } from '../../lib/utils';
+import { CategoryIcon } from '../shared/CategoryIcon';
 
 interface CategoryExpense {
   name: string;
@@ -16,7 +17,7 @@ interface Props {
 
 export function ExpensesByCategoryChart({ data }: Props) {
   const chartData = data.map((d) => ({
-    name: `${d.icon} ${d.name}`,
+    name: d.name,
     value: Math.abs(d.amount),
   }));
 
@@ -54,7 +55,7 @@ export function ExpensesByCategoryChart({ data }: Props) {
               <div key={i} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-2">
                   <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color || CHART_COLORS[i % CHART_COLORS.length] }} />
-                  <span className="text-text-primary">{d.icon} {d.name}</span>
+                  <span className="text-text-primary flex items-center gap-1"><CategoryIcon icon={d.icon} size={12} className="text-text-primary" /> {d.name}</span>
                   <span className="text-text-secondary">{d.percentage.toFixed(1)}%</span>
                 </div>
                 <span className="text-accent-red font-bold">{formatBRL(d.amount)}</span>

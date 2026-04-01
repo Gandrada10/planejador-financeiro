@@ -2,6 +2,7 @@ import { useState, useRef, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, MessageSquare, Search, X } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate } from '../../lib/utils';
+import { CategoryIcon } from '../shared/CategoryIcon';
 
 interface Props {
   transaction: CategorizationTransaction;
@@ -104,7 +105,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
         disabled={saving}
         className={`w-full flex items-center gap-3 px-4 py-3.5 bg-bg-secondary border border-border rounded-xl hover:border-accent hover:bg-accent/5 active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'ml-6' : ''}`}
       >
-        <span className="text-lg flex-shrink-0">{cat.icon}</span>
+        <CategoryIcon icon={cat.icon} size={18} className="text-text-primary flex-shrink-0" />
         <span className="text-sm text-text-primary text-left">{cat.name}</span>
       </button>
     );
@@ -170,7 +171,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
                 <div key={group.parent.id} className="flex flex-col gap-1.5">
                   {/* Parent label */}
                   <div className={`flex items-center gap-2 px-2 pt-2 pb-1 ${silver} text-[11px] uppercase tracking-wider font-bold`}>
-                    <span className="text-sm">{group.parent.icon}</span>
+                    <CategoryIcon icon={group.parent.icon} size={14} className={silver} />
                     <span>{group.parent.name}</span>
                   </div>
                   {/* Subcategories */}

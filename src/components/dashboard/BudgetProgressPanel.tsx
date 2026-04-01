@@ -1,4 +1,5 @@
 import { formatBRL } from '../../lib/utils';
+import { CategoryIcon } from '../shared/CategoryIcon';
 
 interface BudgetItem {
   categoryName: string;
@@ -29,7 +30,7 @@ export function BudgetProgressPanel({ data, totalLimit, totalActual, totalRemain
               return (
                 <div key={i} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <span className="text-text-primary">{b.icon} {b.categoryName}</span>
+                    <span className="text-text-primary flex items-center gap-1"><CategoryIcon icon={b.icon} size={12} className="text-text-primary" /> {b.categoryName}</span>
                   </div>
                   <div className="w-full h-2 bg-bg-secondary rounded-full overflow-hidden">
                     <div

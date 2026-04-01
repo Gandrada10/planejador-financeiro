@@ -140,7 +140,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
               {categories
                 .filter((c) => c.type === 'ambos' || c.type === type)
                 .map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.icon} {cat.name}</option>
+                  <option key={cat.id} value={cat.id}>{cat.name}</option>
                 ))}
             </select>
           </div>

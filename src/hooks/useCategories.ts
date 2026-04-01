@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   collection,
   query,
@@ -12,6 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { Category, CategoryRule } from '../types';
+import { ICON_MAP, suggestIconForCategory } from '../components/shared/CategoryIcon';
 
 function docToCategory(id: string, data: Record<string, unknown>): Category {
   return {
@@ -47,7 +48,8 @@ export function useCategories() {
     const rulesRef = collection(db, 'users', uid, 'categoryRules');
 
     const unsub1 = onSnapshot(query(catRef, orderBy('name')), (snap) => {
-      setCategories(snap.docs.map((d) => docToCategory(d.id, d.data())));
+      const cats = snap.docs.map((d) => docToCategory(d.id, d.data()));
+      setCategories(cats);
       setLoading(false);
     });
 
@@ -57,6 +59,21 @@ export function useCategories() {
 
     return () => { unsub1(); unsub2(); };
   }, []);
+
+  // Auto-migrate emoji icons to Lucide icon keys (runs once)
+  const migrated = useRef(false);
+  useEffect(() => {
+    if (migrated.current || loading || categories.length === 0) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const toMigrate = categories.filter((c) => !ICON_MAP[c.icon]);
+    if (toMigrate.length === 0) { migrated.current = true; return; }
+    migrated.current = true;
+    for (const cat of toMigrate) {
+      const suggested = suggestIconForCategory(cat.name);
+      updateDoc(doc(db, 'users', uid, 'categories', cat.id), { icon: suggested });
+    }
+  }, [loading, categories]);
 
   async function addCategory(data: Omit<Category, 'id' | 'createdAt'>) {
     const uid = auth.currentUser?.uid;

@@ -78,7 +78,7 @@ export function useCategorizationSessions() {
     const catBatch = writeBatch(db);
     for (const cat of categories) {
       const catRef = doc(db, 'categorizationSessions', token, 'categories', cat.id);
-      catBatch.set(catRef, { name: cat.name, icon: cat.icon, color: cat.color, type: cat.type });
+      catBatch.set(catRef, { name: cat.name, icon: cat.icon, color: cat.color, type: cat.type, parentId: cat.parentId ?? null });
     }
     await catBatch.commit();
 

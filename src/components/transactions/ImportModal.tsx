@@ -501,9 +501,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         {rootCats.map((cat) => {
                           const subs = subCats(cat.id);
                           return (
-                            <optgroup key={cat.id} label={`${cat.icon} ${cat.name}`}>
-                              <option value={cat.id}>{cat.icon} {cat.name}</option>
-                              {subs.map((s) => <option key={s.id} value={s.id}>  ↳ {s.icon} {s.name}</option>)}
+                            <optgroup key={cat.id} label={cat.name}>
+                              <option value={cat.id}>{cat.name}</option>
+                              {subs.map((s) => <option key={s.id} value={s.id}>  ↳ {s.name}</option>)}
                             </optgroup>
                           );
                         })}
@@ -628,8 +628,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               {rootCats.map((cat) => {
                                 const subs = subCats(cat.id);
                                 return (
-                                  <optgroup key={cat.id} label={`${cat.icon} ${cat.name}`}>
-                                    <option value={cat.id}>{cat.icon} {cat.name}</option>
+                                  <optgroup key={cat.id} label={cat.name}>
+                                    <option value={cat.id}>{cat.name}</option>
                                     {subs.map((s) => <option key={s.id} value={s.id}>  ↳ {s.name}</option>)}
                                   </optgroup>
                                 );

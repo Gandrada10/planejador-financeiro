@@ -29,7 +29,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions }
     const cat = categories.find((c) => c.id === catId);
     if (!cat) return '';
     const parent = cat.parentId ? categories.find((c) => c.id === cat.parentId) : null;
-    return parent ? `${parent.icon} ${parent.name}/${cat.name}` : `${cat.icon} ${cat.name}`;
+    return parent ? `${parent.name}/${cat.name}` : cat.name;
   }
 
   return (
