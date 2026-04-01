@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Zap, X, ChevronRight } from 'lucide-react';
+import { Plus, Trash2, Zap, X, ChevronRight, RefreshCw } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
 import type { Category } from '../../types';
 import { CategoryIcon, ICON_KEYS } from '../shared/CategoryIcon';
@@ -7,7 +7,8 @@ import { CategoryIcon, ICON_KEYS } from '../shared/CategoryIcon';
 const PRESET_COLORS = ['#f59e0b', '#22c55e', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
 
 export function CategoriesPage() {
-  const { categories, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule } = useCategories();
+  const { categories, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule, syncCategories } = useCategories();
+  const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showRuleForm, setShowRuleForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -70,6 +71,18 @@ export function CategoriesPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-text-primary">Categorias</h2>
         <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              setSyncing(true);
+              const result = await syncCategories();
+              setSyncing(false);
+              if (result) alert(`Sincronizado! ${result.added} adicionadas, ${result.updated} atualizadas.`);
+            }}
+            disabled={syncing}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-50"
+          >
+            <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
+          </button>
           <button onClick={() => setShowRuleForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent">
             <Zap size={14} /> Nova Regra
           </button>

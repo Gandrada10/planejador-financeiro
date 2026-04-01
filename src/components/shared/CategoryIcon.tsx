@@ -59,6 +59,25 @@ import {
   Moon,
   Star,
   Tag,
+  Droplets,
+  Flame,
+  Lightbulb,
+  Building2,
+  Shield,
+  CarFront,
+  TicketCheck,
+  Sparkle,
+  BadgeDollarSign,
+  TrendingUp,
+  CircleDollarSign,
+  RefreshCw,
+  Award,
+  Sofa,
+  Monitor,
+  ToyBrick,
+  Backpack,
+  BabyIcon,
+  Bath,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -124,6 +143,25 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   moon: Moon,
   star: Star,
   tag: Tag,
+  droplets: Droplets,
+  flame: Flame,
+  lightbulb: Lightbulb,
+  building: Building2,
+  shield: Shield,
+  'car-front': CarFront,
+  'ticket-check': TicketCheck,
+  sparkle: Sparkle,
+  'badge-dollar': BadgeDollarSign,
+  'trending-up': TrendingUp,
+  'circle-dollar': CircleDollarSign,
+  'refresh-cw': RefreshCw,
+  award: Award,
+  sofa: Sofa,
+  monitor: Monitor,
+  'toy-brick': ToyBrick,
+  backpack: Backpack,
+  'baby-icon': BabyIcon,
+  bath: Bath,
 };
 
 // All available icon keys for the picker
@@ -143,53 +181,106 @@ export function CategoryIcon({ icon, size = 16, className = '' }: { icon: string
 export function suggestIconForCategory(name: string): string {
   const n = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const rules: [string[], string][] = [
-    // Transport
-    [['transporte', 'uber', 'taxi', '99', 'cabify', 'pedagio'], 'car'],
+    // Transport - subcategories first (more specific)
+    [['aplicativo', 'uber', 'taxi', '99', 'cabify'], 'car'],
     [['combustivel', 'gasolina', 'etanol', 'posto'], 'fuel'],
     [['estacionamento', 'parking'], 'parking-circle'],
-    [['onibus', 'metro', 'trem', 'bilhete unico'], 'bus'],
+    [['metro', 'onibus', 'bilhete unico'], 'bus'],
+    [['ipva', 'licenciamento'], 'receipt'],
+    [['lavagem'], 'bath'],
+    [['manutencao carro'], 'wrench'],
+    [['multa'], 'receipt'],
+    [['prestacao'], 'banknote'],
+    [['seguro'], 'shield'],
+    [['transporte', 'pedagio'], 'car'],
     [['bicicleta', 'bike'], 'bike'],
-    // Food
-    [['alimentacao', 'alimento'], 'apple'],
-    [['restaurante', 'networking'], 'utensils-crossed'],
+    // Food - subcategories
+    [['restaurante delivery', 'delivery', 'ifood', 'rappi'], 'truck'],
+    [['restaurante networking'], 'users'],
+    [['restaurante'], 'utensils-crossed'],
     [['padaria', 'confeitaria', 'bolo'], 'croissant'],
-    [['mercado', 'hortifruti', 'feira', 'supermercado', 'hortifruit'], 'shopping-cart'],
-    [['delivery', 'ifood', 'rappi'], 'truck'],
+    [['mercado', 'hortifruti', 'feira', 'supermercado'], 'shopping-cart'],
     [['lanchinho', 'cafe', 'lanche', 'snack'], 'coffee'],
     [['pizza', 'pizzaria'], 'pizza'],
     [['bar', 'cerveja', 'happy hour', 'boteco'], 'beer'],
-    // Home
-    [['aluguel', 'condominio'], 'home'],
+    [['alimentacao', 'alimento'], 'apple'],
+    // Home - subcategories
+    [['agua'], 'droplets'],
+    [['aluguel'], 'home'],
+    [['celular'], 'smartphone'],
+    [['condominio'], 'building'],
+    [['empregada', 'diarista'], 'sparkles'],
+    [['gas'], 'flame'],
+    [['internet'], 'wifi'],
+    [['iptu'], 'receipt'],
+    [['luz'], 'lightbulb'],
+    [['manutencoes', 'obras'], 'wrench'],
+    [['seguro residencial'], 'shield'],
     [['moradia', 'casa', 'apartamento'], 'house'],
-    [['melhoria', 'imovel', 'reforma', 'manutencao'], 'wrench'],
-    // Finance
-    [['plataforma financeira', 'banco', 'investimento', 'corretora'], 'landmark'],
-    [['desp. financeira', 'despesa financeira', 'tarifa', 'taxa', 'iof', 'juros', 'anuidade'], 'credit-card'],
-    // Health
-    [['saude', 'medico', 'hospital', 'clinica', 'exame', 'consulta'], 'heart-pulse'],
+    [['melhoria', 'imovel', 'reforma'], 'wrench'],
+    // Finance - subcategories
+    [['impostos', 'tarifa'], 'receipt'],
+    [['iof'], 'receipt'],
+    [['ir'], 'receipt'],
+    [['pacote servico', 'anuidade'], 'credit-card'],
+    [['perdas', 'juros'], 'banknote'],
+    [['plataforma financeira', 'banco', 'corretora'], 'landmark'],
+    [['desp. financeira', 'despesa financeira'], 'credit-card'],
+    // Health - subcategories
+    [['dentista'], 'stethoscope'],
+    [['exame'], 'stethoscope'],
     [['farmacia', 'remedio', 'medicamento'], 'pill'],
-    // Education
-    [['educacao', 'curso', 'escola', 'faculdade', 'livro', 'material escolar'], 'graduation-cap'],
-    // Shopping
+    [['medico'], 'heart-pulse'],
+    [['terapeuta', 'psiq'], 'heart-pulse'],
+    [['saude', 'hospital', 'clinica'], 'heart-pulse'],
+    // Education - subcategories
+    [['escola'], 'graduation-cap'],
+    [['curso', 'aulas'], 'book-open'],
+    [['materiais', 'material escolar'], 'pencil'],
+    [['educacao'], 'graduation-cap'],
+    // Shopping - subcategories
+    [['utensilios', 'decoracao', 'casa:'], 'sofa'],
+    [['eletronico', 'aparelho'], 'monitor'],
+    [['vestuario', 'calcado', 'sapato', 'roupa'], 'shirt'],
+    [['lazer familiar', 'uso coletivo'], 'users'],
+    [['brinquedo', 'jogos'], 'toy-brick'],
+    [['itens escolares'], 'backpack'],
+    [['presente'], 'gift'],
     [['compra', 'shopping', 'loja'], 'shopping-bag'],
-    [['roupa', 'vestuario', 'calcado', 'sapato'], 'shirt'],
-    // Personal care
-    [['cuidado pessoal', 'cuidados pessoais', 'higiene', 'beleza', 'cosmetico', 'cabelo', 'estetica'], 'sparkles'],
-    // Leisure
-    [['lazer', 'diversao', 'entretenimento', 'cinema', 'teatro'], 'gamepad'],
-    [['viagem', 'viagens', 'passagem', 'hotel', 'hospedagem'], 'plane'],
-    [['comemoracao', 'comemoracoes', 'festa', 'aniversario', 'presente'], 'gift'],
-    // Tech
+    // Personal care - subcategories
+    [['academia', 'aulas'], 'dumbbell'],
+    [['procedimento estetico', 'estetica'], 'sparkle'],
+    [['salao', 'cabelo', 'beleza'], 'scissors'],
+    [['cuidado pessoal', 'cuidados pessoais', 'higiene', 'cosmetico'], 'sparkles'],
+    // Leisure - subcategories
     [['assinatura', 'streaming', 'netflix', 'spotify', 'disney'], 'tv'],
-    [['internet', 'telefone', 'celular', 'plano'], 'smartphone'],
+    [['baba'], 'baby'],
+    [['clube'], 'dumbbell'],
+    [['passeio', 'ingresso'], 'ticket-check'],
+    [['lazer', 'diversao', 'entretenimento', 'cinema', 'teatro'], 'gamepad'],
+    // Travel - subcategories
+    [['hotel', 'hospedagem'], 'home'],
+    [['passagem', 'transporte/ passagens'], 'plane'],
+    [['viagem', 'viagens'], 'plane'],
+    // Celebrations
+    [['comemoracao', 'comemoracoes', 'festa', 'aniversario'], 'gift'],
+    // Revenue categories
+    [['bonus'], 'award'],
+    [['investimento', 'rendimento'], 'trending-up'],
+    [['reembolso'], 'refresh-cw'],
+    [['salario', '13', 'beneficio'], 'badge-dollar'],
+    [['outras receita'], 'circle-dollar'],
+    // Other
+    [['categorizar'], 'tag'],
+    [['outras despesa', 'outros', 'diversos'], 'circle-ellipsis'],
+    // Tech
+    [['telefone', 'plano'], 'smartphone'],
     // Work
-    [['trabalho', 'escritorio', 'material'], 'briefcase'],
+    [['trabalho', 'escritorio'], 'briefcase'],
     // Pets
     [['pet', 'animal', 'veterinario', 'racao', 'cachorro', 'gato'], 'dog'],
     // Kids
     [['filho', 'bebe', 'crianca', 'fralda', 'infantil'], 'baby'],
-    // Other
-    [['outras despesa', 'outros', 'diversos'], 'circle-ellipsis'],
   ];
 
   for (const [keywords, iconKey] of rules) {
@@ -197,3 +288,119 @@ export function suggestIconForCategory(name: string): string {
   }
   return 'tag';
 }
+
+// The full desired category tree from the user's spreadsheet
+export interface SeedCategory {
+  name: string;
+  type: 'despesa' | 'receita';
+  icon: string;
+  subs: { name: string; icon: string }[];
+}
+
+export const SEED_CATEGORIES: SeedCategory[] = [
+  // DESPESA
+  { name: 'Alimentação', type: 'despesa', icon: 'apple', subs: [
+    { name: 'Lanchinhos/ café', icon: 'coffee' },
+    { name: 'Mercado/ Hortifruti/ Feira', icon: 'shopping-cart' },
+    { name: 'Padaria', icon: 'croissant' },
+    { name: 'Restaurante', icon: 'utensils-crossed' },
+    { name: 'Restaurante Delivery', icon: 'truck' },
+    { name: 'Restaurante Networking JULIANA', icon: 'users' },
+  ]},
+  { name: 'Comemorações', type: 'despesa', icon: 'gift', subs: [] },
+  { name: 'Compras', type: 'despesa', icon: 'shopping-bag', subs: [
+    { name: 'Casa: Utensílios e Decoração', icon: 'sofa' },
+    { name: 'Eletrônicos e Aparelhos', icon: 'monitor' },
+    { name: 'Guiga: Vestuário e calçados', icon: 'shirt' },
+    { name: 'Itens de Lazer Familiar / Uso Coletivo', icon: 'users' },
+    { name: 'Ju: Vestuário e calçados', icon: 'shirt' },
+    { name: 'Martina: Brinquedos e jogos', icon: 'toy-brick' },
+    { name: 'Martina: Itens escolares', icon: 'backpack' },
+    { name: 'Martina: Vestuário e calçados', icon: 'shirt' },
+    { name: 'Presentes', icon: 'gift' },
+  ]},
+  { name: 'Cuidados pessoais', type: 'despesa', icon: 'sparkles', subs: [
+    { name: 'Academia, aulas', icon: 'dumbbell' },
+    { name: 'Procedimentos estéticos', icon: 'sparkle' },
+    { name: 'Salão', icon: 'scissors' },
+  ]},
+  { name: 'Desp. financeiras', type: 'despesa', icon: 'credit-card', subs: [
+    { name: 'Impostos e Tarifas', icon: 'receipt' },
+    { name: 'IOF', icon: 'receipt' },
+    { name: 'IR', icon: 'receipt' },
+    { name: 'Pacote serviços e anuidades', icon: 'credit-card' },
+    { name: 'Perdas e Juros', icon: 'banknote' },
+  ]},
+  { name: 'Educação', type: 'despesa', icon: 'graduation-cap', subs: [
+    { name: 'Cursos/Aulas', icon: 'book-open' },
+    { name: 'Escola', icon: 'graduation-cap' },
+    { name: 'Materiais', icon: 'pencil' },
+    { name: 'Outros', icon: 'circle-ellipsis' },
+  ]},
+  { name: 'Lazer', type: 'despesa', icon: 'gamepad', subs: [
+    { name: 'Assinaturas/ Streaming', icon: 'tv' },
+    { name: 'Aulas', icon: 'book-open' },
+    { name: 'Babá', icon: 'baby' },
+    { name: 'Clube', icon: 'dumbbell' },
+    { name: 'Passeios e ingressos', icon: 'ticket-check' },
+  ]},
+  { name: 'Melhoria no imóvel alugado.(não essencial)', type: 'despesa', icon: 'wrench', subs: [] },
+  { name: 'Moradia', type: 'despesa', icon: 'house', subs: [
+    { name: 'Água', icon: 'droplets' },
+    { name: 'Aluguel', icon: 'home' },
+    { name: 'Celular', icon: 'smartphone' },
+    { name: 'Condomínio', icon: 'building' },
+    { name: 'Empregada/ Diarista', icon: 'sparkles' },
+    { name: 'Gás', icon: 'flame' },
+    { name: 'Internet', icon: 'wifi' },
+    { name: 'IPTU', icon: 'receipt' },
+    { name: 'Luz', icon: 'lightbulb' },
+    { name: 'Manutenções e obras', icon: 'wrench' },
+    { name: 'Seguro residencial', icon: 'shield' },
+  ]},
+  { name: 'Outras Despesas', type: 'despesa', icon: 'circle-ellipsis', subs: [
+    { name: 'Categorizar', icon: 'tag' },
+  ]},
+  { name: 'Plataformas financeiras', type: 'despesa', icon: 'landmark', subs: [] },
+  { name: 'Saúde', type: 'despesa', icon: 'heart-pulse', subs: [
+    { name: 'Dentista', icon: 'stethoscope' },
+    { name: 'Exames', icon: 'stethoscope' },
+    { name: 'Farmácia', icon: 'pill' },
+    { name: 'Médico', icon: 'heart-pulse' },
+    { name: 'Terapeuta/ Psiq', icon: 'heart-pulse' },
+  ]},
+  { name: 'Transporte', type: 'despesa', icon: 'car', subs: [
+    { name: 'Aplicativo/ Uber/ Taxi', icon: 'car' },
+    { name: 'Combustível', icon: 'fuel' },
+    { name: 'Estacionamento', icon: 'parking-circle' },
+    { name: 'IPVA/Licenciamento', icon: 'receipt' },
+    { name: 'Lavagem', icon: 'bath' },
+    { name: 'Manutenção carro', icon: 'wrench' },
+    { name: 'Metrô/ônibus', icon: 'bus' },
+    { name: 'Multa', icon: 'receipt' },
+    { name: 'Outros', icon: 'circle-ellipsis' },
+    { name: 'Prestação', icon: 'banknote' },
+    { name: 'Seguro', icon: 'shield' },
+  ]},
+  { name: 'Viagens', type: 'despesa', icon: 'plane', subs: [
+    { name: 'Alimentação', icon: 'utensils-crossed' },
+    { name: 'Hotel', icon: 'home' },
+    { name: 'Ingressos', icon: 'ticket-check' },
+    { name: 'Outras despesas', icon: 'circle-ellipsis' },
+    { name: 'Transporte/ passagens', icon: 'plane' },
+  ]},
+  // RECEITA
+  { name: 'Bônus', type: 'receita', icon: 'award', subs: [] },
+  { name: 'Investimentos', type: 'receita', icon: 'trending-up', subs: [
+    { name: 'Juros', icon: 'banknote' },
+    { name: 'Rendimentos', icon: 'trending-up' },
+  ]},
+  { name: 'Outras Receitas', type: 'receita', icon: 'circle-dollar', subs: [
+    { name: 'Categorizar', icon: 'tag' },
+  ]},
+  { name: 'Reembolsos', type: 'receita', icon: 'refresh-cw', subs: [] },
+  { name: 'Salário', type: 'receita', icon: 'badge-dollar', subs: [
+    { name: '13º', icon: 'badge-dollar' },
+    { name: 'Benefícios', icon: 'wallet' },
+  ]},
+];

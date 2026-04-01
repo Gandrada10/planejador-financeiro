@@ -12,7 +12,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { Category, CategoryRule } from '../types';
-import { ICON_MAP, suggestIconForCategory } from '../components/shared/CategoryIcon';
+import { ICON_MAP, suggestIconForCategory, SEED_CATEGORIES } from '../components/shared/CategoryIcon';
 
 function docToCategory(id: string, data: Record<string, unknown>): Category {
   return {
@@ -148,5 +148,59 @@ export function useCategories() {
     }
   }
 
-  return { categories, categoriesOrdered, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule, matchCategory };
+  // Sync categories with the desired seed data (add missing, update icons)
+  async function syncCategories() {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return { added: 0, updated: 0 };
+
+    const normalize = (s: string) => s.trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    let added = 0;
+    let updated = 0;
+
+    for (const seed of SEED_CATEGORIES) {
+      // Find or create the root category
+      let root = categories.find((c) => !c.parentId && normalize(c.name) === normalize(seed.name));
+
+      if (!root) {
+        const ref = await addDoc(collection(db, 'users', uid, 'categories'), {
+          name: seed.name,
+          icon: seed.icon,
+          color: '#f59e0b',
+          type: seed.type,
+          parentId: null,
+          createdAt: Timestamp.now(),
+        });
+        root = { id: ref.id, name: seed.name, icon: seed.icon, color: '#f59e0b', type: seed.type, parentId: null, createdAt: new Date() };
+        added++;
+      } else if (root.icon !== seed.icon) {
+        await updateDoc(doc(db, 'users', uid, 'categories', root.id), { icon: seed.icon });
+        updated++;
+      }
+
+      // Find or create subcategories
+      for (const sub of seed.subs) {
+        const existing = categories.find(
+          (c) => c.parentId === root!.id && normalize(c.name) === normalize(sub.name)
+        );
+        if (!existing) {
+          await addDoc(collection(db, 'users', uid, 'categories'), {
+            name: sub.name,
+            icon: sub.icon,
+            color: '#f59e0b',
+            type: seed.type,
+            parentId: root.id,
+            createdAt: Timestamp.now(),
+          });
+          added++;
+        } else if (existing.icon !== sub.icon) {
+          await updateDoc(doc(db, 'users', uid, 'categories', existing.id), { icon: sub.icon });
+          updated++;
+        }
+      }
+    }
+
+    return { added, updated };
+  }
+
+  return { categories, categoriesOrdered, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule, matchCategory, syncCategories };
 }
