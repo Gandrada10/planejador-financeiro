@@ -93,9 +93,10 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 <input type="checkbox" checked={selectedIds.size === transactions.length && transactions.length > 0} onChange={toggleAll} className="accent-accent" />
               </th>
               <th className="p-2 text-left">Data</th>
+              <th className="p-2 text-left">Data compra</th>
               <th className="p-2 text-left">Descricao</th>
               <th className="p-2 text-left">Conta</th>
-              <th className="p-2 text-left">Titular</th>
+              <th className="p-2 text-left">Membro</th>
               <th className="p-2 text-right">Valor</th>
               <th className="p-2 text-center">Parcelas</th>
               <th className="p-2 text-left">Categoria</th>
@@ -109,6 +110,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} className="accent-accent" />
                 </td>
                 <td className="p-2 text-text-secondary whitespace-nowrap">{formatDate(t.date)}</td>
+                <td className="p-2 text-text-secondary whitespace-nowrap">{t.purchaseDate ? formatDate(t.purchaseDate) : '—'}</td>
 
                 {/* Description - editable */}
                 <td
@@ -143,12 +145,12 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   </select>
                 </td>
 
-                {/* Titular - editable */}
+                {/* Membro - editable */}
                 <td
                   className={`p-2 text-text-secondary ${editableCell}`}
-                  onClick={() => startEdit(t.id, 'titular', t.titular || '')}
+                  onClick={() => startEdit(t.id, 'familyMember', t.familyMember || '')}
                 >
-                  {editingCell?.id === t.id && editingCell.field === 'titular' ? (
+                  {editingCell?.id === t.id && editingCell.field === 'familyMember' ? (
                     <input
                       autoFocus
                       value={editValue}
@@ -158,7 +160,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
                     />
                   ) : (
-                    t.titular || '—'
+                    t.familyMember || '—'
                   )}
                 </td>
 

@@ -19,7 +19,6 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
   const [account, setAccount] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [familyMember, setFamilyMember] = useState('');
-  const [titular, setTitular] = useState('');
   const [installments, setInstallments] = useState('');
   const [purchaseDate, setPurchaseDate] = useState('');
   const [notes, setNotes] = useState('');
@@ -36,7 +35,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
       amount: type === 'despesa' ? -Math.abs(value) : Math.abs(value),
       account,
       familyMember,
-      titular,
+      titular: '',
       installmentNumber: totalInst ? 1 : null,
       totalInstallments: totalInst || null,
       cardNumber: null,
@@ -107,29 +106,23 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
               </select>
             </div>
             <div>
-              <label className={labelClass}>Titular</label>
+              <label className={labelClass}>Membro</label>
               {titularNames.length > 0 ? (
-                <select tabIndex={5} value={titular} onChange={(e) => setTitular(e.target.value)} className={inputClass}>
+                <select tabIndex={5} value={familyMember} onChange={(e) => setFamilyMember(e.target.value)} className={inputClass}>
                   <option value="">Selecione...</option>
                   {titularNames.map((name) => (
                     <option key={name} value={name}>{name}</option>
                   ))}
                 </select>
               ) : (
-                <input tabIndex={5} type="text" value={titular} onChange={(e) => setTitular(e.target.value)} className={inputClass} placeholder="Quem comprou?" />
+                <input tabIndex={5} type="text" value={familyMember} onChange={(e) => setFamilyMember(e.target.value)} className={inputClass} placeholder="Quem comprou?" />
               )}
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelClass}>Membro</label>
-              <input tabIndex={6} type="text" value={familyMember} onChange={(e) => setFamilyMember(e.target.value)} className={inputClass} placeholder="Eu, Esposa..." />
-            </div>
-            <div>
-              <label className={labelClass}>Parcelas (total)</label>
-              <input tabIndex={7} type="number" min="2" value={installments} onChange={(e) => setInstallments(e.target.value)} className={inputClass} placeholder="Ex: 10" />
-            </div>
+          <div>
+            <label className={labelClass}>Parcelas (total)</label>
+            <input tabIndex={6} type="number" min="2" value={installments} onChange={(e) => setInstallments(e.target.value)} className={inputClass} placeholder="Ex: 10" />
           </div>
 
           {installments && parseInt(installments, 10) >= 2 && (

@@ -569,11 +569,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                 setInstallmentPopupPos(null);
                               } else {
                                 const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                const popupH = 320;
+                                const popupH = 380;
                                 const popupW = 240;
-                                const top = rect.bottom + 4 + popupH > window.innerHeight
-                                  ? Math.max(8, rect.top - popupH - 4)
-                                  : rect.bottom + 4;
+                                // Always open upward to avoid going below viewport
+                                const top = Math.max(8, rect.top - popupH - 4);
                                 const left = Math.min(rect.left + rect.width / 2 - popupW / 2, window.innerWidth - popupW - 8);
                                 setInstallmentPopupPos({ top, left: Math.max(8, left) });
                                 setEditingInstallment(i);

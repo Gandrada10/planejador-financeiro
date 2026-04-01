@@ -7,7 +7,6 @@ import {
   CreditCard,
   Tags,
   Wallet,
-  Users,
   Settings,
   LogOut,
   Menu,
@@ -21,7 +20,6 @@ const navItems = [
   { to: '/cartoes', icon: CreditCard, label: 'Cartoes' },
   { to: '/categorias', icon: Tags, label: 'Categorias' },
   { to: '/orcamento', icon: Wallet, label: 'Orcamento' },
-  { to: '/familia', icon: Users, label: 'Familia' },
   { to: '/configuracoes', icon: Settings, label: 'Configuracoes' },
 ];
 

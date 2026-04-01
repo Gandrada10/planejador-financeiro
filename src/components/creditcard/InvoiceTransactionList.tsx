@@ -73,9 +73,9 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions }
                           <span className={`w-2 h-2 rounded-full inline-block ${t.amount >= 0 ? 'bg-accent-green' : 'bg-accent'}`} />
                         </div>
 
-                        {/* Date */}
+                        {/* Purchase date */}
                         <span className="text-xs text-text-secondary w-[70px] flex-shrink-0">
-                          {formatDate(t.date)}
+                          {formatDate(t.purchaseDate || t.date)}
                         </span>
 
                         {/* Description + category */}
