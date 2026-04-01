@@ -218,6 +218,7 @@ export function TransactionsPage() {
           accounts={accounts}
           categories={categories}
           allTitulars={allTitulars}
+          titularNames={titularNames}
         />
       )}
       {showShareModal && (

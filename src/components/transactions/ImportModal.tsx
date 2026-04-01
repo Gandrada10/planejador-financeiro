@@ -1,15 +1,20 @@
 import { useState } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard } from 'lucide-react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account } from '../../types';
-import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel, getMonthYearOffset } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
 type ImportItem = Omit<Transaction, 'id' | 'createdAt'>;
-type ImportRow = ImportItem & { isDuplicate: boolean };
+type ImportRow = ImportItem & {
+  isDuplicate: boolean;
+  installmentType: 'unica' | 'parcelada';
+  periodicity: number; // months between installments
+  installmentAmount: number | null;
+};
 
 function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
   return existing.some(
@@ -28,6 +33,44 @@ interface Props {
   accounts?: Account[];
   categories?: Category[];
   allTitulars?: string[];
+  titularNames?: string[];
+}
+
+/** Fuzzy match a statement titular name to a registered member name */
+function fuzzyMatchMember(statementName: string, memberNames: string[]): string {
+  if (!statementName || memberNames.length === 0) return '';
+  const normalized = statementName.toLowerCase().trim();
+
+  // Exact match
+  const exact = memberNames.find((n) => n.toLowerCase() === normalized);
+  if (exact) return exact;
+
+  // Statement name contains member name or vice versa
+  for (const name of memberNames) {
+    const nameLower = name.toLowerCase();
+    if (normalized.includes(nameLower) || nameLower.includes(normalized)) return name;
+  }
+
+  // All parts of member name appear in statement name (handles abbreviations like "K" matching "Kuhn")
+  for (const name of memberNames) {
+    const parts = name.toLowerCase().split(/\s+/);
+    const statementParts = normalized.split(/\s+/);
+    const allMatch = parts.every((part) =>
+      part.length === 1
+        ? statementParts.some((w) => w.startsWith(part))
+        : statementParts.some((w) => w.startsWith(part) || part.startsWith(w))
+    );
+    if (allMatch) return name;
+  }
+
+  // First name match (min 3 chars)
+  for (const name of memberNames) {
+    const firstName = name.toLowerCase().split(/\s+/)[0];
+    const statementFirst = normalized.split(/\s+/)[0];
+    if (firstName.length >= 3 && firstName === statementFirst) return name;
+  }
+
+  return '';
 }
 
 /** Generate month options: 6 months back + current + 3 months forward */
@@ -41,7 +84,7 @@ function generateMonthOptions(): string[] {
   return options;
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [] }: Props) {
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [] }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -61,6 +104,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [batchAccount, setBatchAccount] = useState('');
   const [batchCategory, setBatchCategory] = useState('');
   const [batchMember, setBatchMember] = useState('');
+
+  // Installment editor
+  const [editingInstallment, setEditingInstallment] = useState<number | null>(null);
+
+  // Member options: only from titular mappings (registered members)
+  const memberOptions = titularNames.length > 0 ? titularNames : allTitulars;
 
   // ─── Text extraction ────────────────────────────────────────────────────────
 
@@ -168,6 +217,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
       const parsed: ImportRow[] = data.transactions.map((t) => {
         const date = new Date(t.date + 'T12:00:00');
+        const matchedMember = fuzzyMatchMember(t.titular || '', memberOptions);
+        const hasInstallments = t.totalInstallments != null && t.totalInstallments > 1;
         const item: ImportItem = {
           date,
           purchaseDate: t.purchaseDate ? new Date(t.purchaseDate + 'T12:00:00') : null,
@@ -175,7 +226,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           amount: t.amount,
           categoryId: null,
           account: accountNames[0] ?? '',
-          familyMember: '',
+          familyMember: matchedMember,
           titular: t.titular || '',
           installmentNumber: t.installmentNumber,
           totalInstallments: t.totalInstallments,
@@ -185,7 +236,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           notes: '',
           importBatch: null,
         };
-        return { ...item, isDuplicate: isDuplicate(item, existingTransactions) };
+        return {
+          ...item,
+          isDuplicate: isDuplicate(item, existingTransactions),
+          installmentType: hasInstallments ? 'parcelada' as const : 'unica' as const,
+          periodicity: 1,
+          installmentAmount: hasInstallments ? t.amount : null,
+        };
       });
 
       if (parsed.length === 0) {
@@ -236,7 +293,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   }
 
   function updateRow(index: number, field: keyof ImportItem, value: string) {
-    setItems((prev) => prev.map((item, i) => i === index ? { ...item, [field]: value || null } : item));
+    // Keep string fields as empty string, only use null for ID fields like categoryId
+    const nullableFields: (keyof ImportItem)[] = ['categoryId'];
+    const finalValue = nullableFields.includes(field) ? (value || null) : value;
+    setItems((prev) => prev.map((item, i) => i === index ? { ...item, [field]: finalValue } : item));
+  }
+
+  function updateInstallmentConfig(index: number, updates: Partial<ImportRow>) {
+    setItems((prev) => prev.map((item, i) => i === index ? { ...item, ...updates } : item));
   }
 
   // ─── Selection ──────────────────────────────────────────────────────────────
@@ -260,14 +324,36 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
   async function handleImport() {
     setImporting(true);
-    const toImport = items.filter((_, i) => selected.has(i)).map(({ isDuplicate: _, ...rest }) => {
-      // Ensure billing month is applied for credit card imports
+    const toImport: ImportItem[] = [];
+
+    for (const [i, row] of items.entries()) {
+      if (!selected.has(i)) continue;
+      const { isDuplicate: _, installmentType, periodicity, installmentAmount, ...rest } = row;
+
+      let baseDate = rest.date;
       if (isCreditCard && billingMonth) {
         const [year, month] = billingMonth.split('-').map(Number);
-        return { ...rest, date: new Date(year, month - 1, 1, 12, 0, 0) };
+        baseDate = new Date(year, month - 1, 1, 12, 0, 0);
       }
-      return rest;
-    });
+
+      if (installmentType === 'parcelada' && rest.totalInstallments && rest.totalInstallments > 1) {
+        const amount = installmentAmount ?? rest.amount;
+        for (let inst = 1; inst <= rest.totalInstallments; inst++) {
+          const futureDate = new Date(baseDate);
+          futureDate.setMonth(futureDate.getMonth() + (inst - 1) * (periodicity || 1));
+          toImport.push({
+            ...rest,
+            date: futureDate,
+            amount,
+            installmentNumber: inst,
+            totalInstallments: rest.totalInstallments,
+          });
+        }
+      } else {
+        toImport.push({ ...rest, date: baseDate });
+      }
+    }
+
     await onImport(toImport);
     setStep('done');
     setImporting(false);
@@ -414,12 +500,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       </select>
                     </div>
                   )}
-                  {allTitulars.length > 0 && (
+                  {memberOptions.length > 0 && (
                     <div className="flex-1 min-w-[120px]">
                       <p className="text-[10px] text-text-secondary mb-1">Membro</p>
                       <select value={batchMember} onChange={(e) => setBatchMember(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
-                        {allTitulars.map((t) => <option key={t} value={t}>{t}</option>)}
+                        {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
                     </div>
                   )}
@@ -466,8 +552,112 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         <td className={`p-2 text-right font-bold whitespace-nowrap ${item.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                           {formatBRL(item.amount)}
                         </td>
-                        <td className="p-2 text-center text-text-secondary">
-                          {item.totalInstallments ? `${item.installmentNumber}/${item.totalInstallments}` : '—'}
+                        <td className="p-1 text-center relative">
+                          <button
+                            onClick={() => setEditingInstallment(editingInstallment === i ? null : i)}
+                            className={`px-2 py-1 rounded text-xs border transition-colors ${
+                              item.installmentType === 'parcelada'
+                                ? 'bg-accent/10 border-accent/30 text-accent'
+                                : 'bg-bg-secondary border-border text-text-secondary hover:border-accent/30'
+                            }`}
+                          >
+                            {item.installmentType === 'parcelada'
+                              ? `${item.installmentNumber || 1}/${item.totalInstallments}`
+                              : 'Unica'}
+                            <ChevronDown size={10} className="inline ml-1" />
+                          </button>
+                          {editingInstallment === i && (
+                            <div className="absolute z-30 top-full left-1/2 -translate-x-1/2 mt-1 bg-bg-card border border-border rounded-lg shadow-lg p-3 min-w-[220px] text-left">
+                              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-2">Tipo de parcela</p>
+                              <div className="flex gap-2 mb-3">
+                                <button
+                                  onClick={() => updateInstallmentConfig(i, {
+                                    installmentType: 'unica',
+                                    installmentNumber: null,
+                                    totalInstallments: null,
+                                    installmentAmount: null,
+                                  })}
+                                  className={`flex-1 px-2 py-1 rounded text-xs border ${
+                                    item.installmentType === 'unica'
+                                      ? 'bg-accent text-bg-primary border-accent'
+                                      : 'bg-bg-secondary text-text-secondary border-border'
+                                  }`}
+                                >
+                                  Unica
+                                </button>
+                                <button
+                                  onClick={() => updateInstallmentConfig(i, {
+                                    installmentType: 'parcelada',
+                                    installmentNumber: item.installmentNumber || 1,
+                                    totalInstallments: item.totalInstallments || 2,
+                                    installmentAmount: item.installmentAmount ?? item.amount,
+                                    periodicity: item.periodicity || 1,
+                                  })}
+                                  className={`flex-1 px-2 py-1 rounded text-xs border ${
+                                    item.installmentType === 'parcelada'
+                                      ? 'bg-accent text-bg-primary border-accent'
+                                      : 'bg-bg-secondary text-text-secondary border-border'
+                                  }`}
+                                >
+                                  Parcelada
+                                </button>
+                              </div>
+                              {item.installmentType === 'parcelada' && (
+                                <div className="space-y-2">
+                                  <div>
+                                    <label className="text-[10px] text-text-secondary">Periodicidade</label>
+                                    <select
+                                      value={item.periodicity}
+                                      onChange={(e) => updateInstallmentConfig(i, { periodicity: Number(e.target.value) })}
+                                      className={inputClass}
+                                    >
+                                      <option value={1}>Mensal</option>
+                                      <option value={2}>Bimestral</option>
+                                      <option value={3}>Trimestral</option>
+                                    </select>
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-text-secondary">Numero de parcelas</label>
+                                    <input
+                                      type="number"
+                                      min={2}
+                                      max={48}
+                                      value={item.totalInstallments || 2}
+                                      onChange={(e) => updateInstallmentConfig(i, { totalInstallments: Number(e.target.value) || 2 })}
+                                      className={inputClass}
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="text-[10px] text-text-secondary">Valor da parcela</label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={Math.abs(item.installmentAmount ?? item.amount)}
+                                      onChange={(e) => {
+                                        const val = parseFloat(e.target.value) || 0;
+                                        updateInstallmentConfig(i, { installmentAmount: item.amount < 0 ? -val : val });
+                                      }}
+                                      className={inputClass}
+                                    />
+                                  </div>
+                                  <p className="text-[10px] text-text-secondary mt-1">
+                                    Total: {formatBRL((item.installmentAmount ?? item.amount) * (item.totalInstallments || 2))}
+                                    {' — '}Faturas: {billingMonth || getMonthYear(item.date)} a{' '}
+                                    {getMonthYearOffset(
+                                      billingMonth || getMonthYear(item.date),
+                                      ((item.totalInstallments || 2) - 1) * (item.periodicity || 1)
+                                    )}
+                                  </p>
+                                </div>
+                              )}
+                              <button
+                                onClick={() => setEditingInstallment(null)}
+                                className="mt-2 w-full px-2 py-1 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+                              >
+                                OK
+                              </button>
+                            </div>
+                          )}
                         </td>
                         <td className="p-2 text-text-secondary whitespace-nowrap">
                           {item.purchaseDate ? formatDate(item.purchaseDate) : '—'}
@@ -512,14 +702,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         </td>
                         {/* Editable: family member */}
                         <td className="p-1">
-                          {allTitulars.length > 0 ? (
+                          {memberOptions.length > 0 ? (
                             <select
                               value={item.familyMember}
                               onChange={(e) => updateRow(i, 'familyMember', e.target.value)}
                               className={inputClass}
                             >
                               <option value="">—</option>
-                              {allTitulars.map((t) => <option key={t} value={t}>{t}</option>)}
+                              {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
                             </select>
                           ) : (
                             <span className="text-text-secondary">{item.familyMember || '—'}</span>
