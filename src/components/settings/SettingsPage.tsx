@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X } from 'lucide-react';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
@@ -28,7 +28,7 @@ function monthYearOptions(): string[] {
 
 export function SettingsPage() {
   const { mappings, loading, addMapping, deleteMapping } = useTitularMappings();
-  const { accounts, loading: loadingAccounts, addAccount, deleteAccount } = useAccounts();
+  const { accounts, loading: loadingAccounts, addAccount, updateAccount, deleteAccount } = useAccounts();
   const { cycles, loading: loadingCycles, createCycle, closeCycle, reopenCycle, deleteCycle } = useBillingCycles();
 
   const [cardDigits, setCardDigits] = useState('');
@@ -36,6 +36,15 @@ export function SettingsPage() {
   const [accountName, setAccountName] = useState('');
   const [accountType, setAccountType] = useState<Account['type']>('corrente');
   const [accountBank, setAccountBank] = useState('');
+  const [accountClosingDay, setAccountClosingDay] = useState('');
+  const [accountDueDay, setAccountDueDay] = useState('');
+  const [accountCreditLimit, setAccountCreditLimit] = useState('');
+
+  // Edit card fields
+  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  const [editClosingDay, setEditClosingDay] = useState('');
+  const [editDueDay, setEditDueDay] = useState('');
+  const [editCreditLimit, setEditCreditLimit] = useState('');
 
   // Billing cycle form
   const [cycleAccountId, setCycleAccountId] = useState('');
@@ -51,8 +60,35 @@ export function SettingsPage() {
   async function handleAddAccount(e: React.FormEvent) {
     e.preventDefault();
     if (!accountName.trim()) return;
-    await addAccount({ name: accountName.trim(), type: accountType, bank: accountBank.trim() });
+    const data: Omit<Account, 'id' | 'createdAt'> = {
+      name: accountName.trim(),
+      type: accountType,
+      bank: accountBank.trim(),
+    };
+    if (accountType === 'cartao') {
+      if (accountClosingDay) data.closingDay = parseInt(accountClosingDay);
+      if (accountDueDay) data.dueDay = parseInt(accountDueDay);
+      if (accountCreditLimit) data.creditLimit = parseFloat(accountCreditLimit.replace(',', '.'));
+    }
+    await addAccount(data);
     setAccountName(''); setAccountType('corrente'); setAccountBank('');
+    setAccountClosingDay(''); setAccountDueDay(''); setAccountCreditLimit('');
+  }
+
+  function startEditCard(a: Account) {
+    setEditingCardId(a.id);
+    setEditClosingDay(a.closingDay?.toString() || '');
+    setEditDueDay(a.dueDay?.toString() || '');
+    setEditCreditLimit(a.creditLimit?.toString() || '');
+  }
+
+  async function saveEditCard(id: string) {
+    await updateAccount(id, {
+      closingDay: editClosingDay ? parseInt(editClosingDay) : undefined,
+      dueDay: editDueDay ? parseInt(editDueDay) : undefined,
+      creditLimit: editCreditLimit ? parseFloat(editCreditLimit.replace(',', '.')) : undefined,
+    });
+    setEditingCardId(null);
   }
 
   async function handleCreateCycle(e: React.FormEvent) {
@@ -83,33 +119,69 @@ export function SettingsPage() {
             Cadastre suas contas bancarias e cartoes. Elas aparecerao como opcoes ao registrar transacoes.
           </p>
         </div>
-        <form onSubmit={handleAddAccount} className="flex gap-2 flex-wrap">
-          <input type="text" value={accountName} onChange={(e) => setAccountName(e.target.value)}
-            placeholder="Nome (ex: Nubank, Itau CC)" className={`${inputClass} flex-1 min-w-[150px]`} required />
-          <select value={accountType} onChange={(e) => setAccountType(e.target.value as Account['type'])} className={`${inputClass} w-44`}>
-            {ACCOUNT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-          </select>
-          <input type="text" value={accountBank} onChange={(e) => setAccountBank(e.target.value)}
-            placeholder="Banco (opcional)" className={`${inputClass} w-36`} />
-          <button type="submit" disabled={!accountName.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
-            <Plus size={14} /> Adicionar
-          </button>
+        <form onSubmit={handleAddAccount} className="space-y-2">
+          <div className="flex gap-2 flex-wrap">
+            <input type="text" value={accountName} onChange={(e) => setAccountName(e.target.value)}
+              placeholder="Nome (ex: Nubank, Itau CC)" className={`${inputClass} flex-1 min-w-[150px]`} required />
+            <select value={accountType} onChange={(e) => setAccountType(e.target.value as Account['type'])} className={`${inputClass} w-44`}>
+              {ACCOUNT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <input type="text" value={accountBank} onChange={(e) => setAccountBank(e.target.value)}
+              placeholder="Banco (opcional)" className={`${inputClass} w-36`} />
+            <button type="submit" disabled={!accountName.trim()}
+              className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
+              <Plus size={14} /> Adicionar
+            </button>
+          </div>
+          {accountType === 'cartao' && (
+            <div className="flex gap-2 flex-wrap pl-1">
+              <input type="number" value={accountClosingDay} onChange={(e) => setAccountClosingDay(e.target.value)}
+                placeholder="Dia fechamento" min={1} max={28} className={`${inputClass} w-36`} />
+              <input type="number" value={accountDueDay} onChange={(e) => setAccountDueDay(e.target.value)}
+                placeholder="Dia vencimento" min={1} max={28} className={`${inputClass} w-36`} />
+              <input type="text" value={accountCreditLimit} onChange={(e) => setAccountCreditLimit(e.target.value)}
+                placeholder="Limite (R$)" className={`${inputClass} w-36`} />
+            </div>
+          )}
         </form>
         {accounts.length === 0 ? (
           <p className="text-xs text-text-secondary">Nenhuma conta cadastrada.</p>
         ) : (
           <div className="space-y-1">
             {accounts.map((a) => (
-              <div key={a.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
-                <div className="flex items-center gap-3">
-                  <span className="text-text-primary font-bold">{a.name}</span>
-                  <span className="text-[10px] text-text-secondary uppercase">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
-                  {a.bank && <span className="text-text-secondary">({a.bank})</span>}
+              <div key={a.id} className="px-3 py-2 bg-bg-secondary rounded text-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <span className="text-text-primary font-bold">{a.name}</span>
+                    <span className="text-[10px] text-text-secondary uppercase">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
+                    {a.bank && <span className="text-text-secondary">({a.bank})</span>}
+                    {a.type === 'cartao' && a.closingDay && (
+                      <span className="text-[10px] text-text-secondary">Fech. dia {a.closingDay} | Venc. dia {a.dueDay || '—'}</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    {a.type === 'cartao' && editingCardId !== a.id && (
+                      <button onClick={() => startEditCard(a)} className="text-text-secondary hover:text-accent p-1">
+                        <Pencil size={13} />
+                      </button>
+                    )}
+                    <button onClick={() => deleteAccount(a.id)} className="text-text-secondary hover:text-accent-red p-1">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
                 </div>
-                <button onClick={() => deleteAccount(a.id)} className="text-text-secondary hover:text-accent-red">
-                  <Trash2 size={14} />
-                </button>
+                {editingCardId === a.id && (
+                  <div className="flex gap-2 flex-wrap items-center pt-1 border-t border-border/40">
+                    <input type="number" value={editClosingDay} onChange={(e) => setEditClosingDay(e.target.value)}
+                      placeholder="Dia fech." min={1} max={28} className={`${inputClass} w-28 !py-1 !text-xs`} />
+                    <input type="number" value={editDueDay} onChange={(e) => setEditDueDay(e.target.value)}
+                      placeholder="Dia venc." min={1} max={28} className={`${inputClass} w-28 !py-1 !text-xs`} />
+                    <input type="text" value={editCreditLimit} onChange={(e) => setEditCreditLimit(e.target.value)}
+                      placeholder="Limite (R$)" className={`${inputClass} w-32 !py-1 !text-xs`} />
+                    <button onClick={() => saveEditCard(a.id)} className="text-accent-green hover:opacity-80 p-1"><Check size={14} /></button>
+                    <button onClick={() => setEditingCardId(null)} className="text-text-secondary hover:text-accent-red p-1"><X size={14} /></button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

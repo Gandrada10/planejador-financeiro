@@ -14,6 +14,8 @@ export interface BillingCycle {
   monthYear: string; // "YYYY-MM"
   status: 'open' | 'closed';
   closedAt: Date | null;
+  paidAmount?: number;
+  paymentDate?: Date | null;
   createdAt: Date;
 }
 
@@ -49,6 +51,9 @@ export interface Account {
   name: string;
   type: 'corrente' | 'cartao' | 'poupanca' | 'investimento' | 'outro';
   bank: string;
+  closingDay?: number;
+  dueDay?: number;
+  creditLimit?: number;
   createdAt: Date;
 }
 

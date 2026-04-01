@@ -5,6 +5,7 @@ import {
   orderBy,
   onSnapshot,
   addDoc,
+  updateDoc,
   deleteDoc,
   doc,
   Timestamp,
@@ -18,6 +19,9 @@ function docToAccount(id: string, data: Record<string, unknown>): Account {
     name: (data.name as string) || '',
     type: (data.type as Account['type']) || 'corrente',
     bank: (data.bank as string) || '',
+    closingDay: (data.closingDay as number) || undefined,
+    dueDay: (data.dueDay as number) || undefined,
+    creditLimit: (data.creditLimit as number) || undefined,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
   };
 }
@@ -46,6 +50,13 @@ export function useAccounts() {
     });
   }
 
+  async function updateAccount(id: string, data: Partial<Account>) {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const { id: _, createdAt: __, ...update } = data;
+    await updateDoc(doc(db, 'users', uid, 'accounts', id), update);
+  }
+
   async function deleteAccount(id: string) {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
@@ -53,6 +64,7 @@ export function useAccounts() {
   }
 
   const accountNames = accounts.map((a) => a.name);
+  const cardAccounts = accounts.filter((a) => a.type === 'cartao');
 
-  return { accounts, accountNames, loading, addAccount, deleteAccount };
+  return { accounts, accountNames, cardAccounts, loading, addAccount, updateAccount, deleteAccount };
 }

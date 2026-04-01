@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import {
   LayoutDashboard,
   ArrowLeftRight,
+  CreditCard,
   Tags,
   Wallet,
   Users,
@@ -17,6 +18,7 @@ import { cn } from '../lib/utils';
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/transacoes', icon: ArrowLeftRight, label: 'Transacoes' },
+  { to: '/cartoes', icon: CreditCard, label: 'Cartoes' },
   { to: '/categorias', icon: Tags, label: 'Categorias' },
   { to: '/orcamento', icon: Wallet, label: 'Orcamento' },
   { to: '/familia', icon: Users, label: 'Familia' },

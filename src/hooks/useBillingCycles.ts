@@ -21,6 +21,8 @@ function docToCycle(id: string, data: Record<string, unknown>): BillingCycle {
     monthYear: (data.monthYear as string) || '',
     status: (data.status as BillingCycle['status']) || 'open',
     closedAt: (data.closedAt as Timestamp)?.toDate() || null,
+    paidAmount: (data.paidAmount as number) || undefined,
+    paymentDate: (data.paymentDate as Timestamp)?.toDate() || undefined,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
   };
 }
@@ -77,6 +79,19 @@ export function useBillingCycles() {
     await deleteDoc(doc(db, 'users', uid, 'billingCycles', id));
   }
 
+  async function registerPayment(cycleId: string, amount: number, date: Date) {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    await updateDoc(doc(db, 'users', uid, 'billingCycles', cycleId), {
+      paidAmount: amount,
+      paymentDate: Timestamp.fromDate(date),
+    });
+  }
+
+  function getCycleForCard(accountId: string, monthYear: string): BillingCycle | undefined {
+    return cycles.find((c) => c.accountId === accountId && c.monthYear === monthYear);
+  }
+
   /** Returns the cycle for a given account + date, if it exists and is closed */
   function getClosedCycle(accountId: string, date: Date): BillingCycle | null {
     const monthYear = getMonthYear(date);
@@ -93,5 +108,5 @@ export function useBillingCycles() {
     }
   }
 
-  return { cycles, loading, createCycle, closeCycle, reopenCycle, deleteCycle, getClosedCycle, ensureCycle };
+  return { cycles, loading, createCycle, closeCycle, reopenCycle, deleteCycle, registerPayment, getCycleForCard, getClosedCycle, ensureCycle };
 }

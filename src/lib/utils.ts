@@ -19,6 +19,12 @@ export function getMonthLabel(monthYear: string): string {
   return new Intl.DateTimeFormat('pt-BR', { month: 'long', year: 'numeric' }).format(date);
 }
 
+export function getMonthYearOffset(monthYear: string, offset: number): string {
+  const [year, month] = monthYear.split('-').map(Number);
+  const d = new Date(year, month - 1 + offset, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }

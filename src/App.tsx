@@ -7,6 +7,7 @@ import { CategoriesPage } from './components/categories/CategoriesPage';
 import { BudgetPage } from './components/budget/BudgetPage';
 import { FamilyView } from './components/family/FamilyView';
 import { SettingsPage } from './components/settings/SettingsPage';
+import { CreditCardPage } from './components/creditcard/CreditCardPage';
 import { CategorizationPage } from './components/categorization/CategorizationPage';
 
 export default function App() {
@@ -20,6 +21,7 @@ export default function App() {
         <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
           <Route path="/" element={<DashboardPage />} />
           <Route path="/transacoes" element={<TransactionsPage />} />
+          <Route path="/cartoes" element={<CreditCardPage />} />
           <Route path="/categorias" element={<CategoriesPage />} />
           <Route path="/orcamento" element={<BudgetPage />} />
           <Route path="/familia" element={<FamilyView />} />
