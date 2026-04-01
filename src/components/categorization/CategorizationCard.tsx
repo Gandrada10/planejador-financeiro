@@ -38,7 +38,6 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
     const roots = expenseCategories.filter((c) => !c.parentId);
     const children = expenseCategories.filter((c) => c.parentId);
 
-    // Build groups: root categories that have children
     const groups: { parent: Category; subs: Category[] }[] = [];
     const standalone: Category[] = [];
 
@@ -51,7 +50,6 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
       }
     }
 
-    // Orphan subcategories (parentId doesn't match any root in this list)
     const groupedChildIds = new Set(groups.flatMap((g) => g.subs.map((s) => s.id)));
     const orphans = children.filter((c) => !groupedChildIds.has(c.id));
     standalone.push(...orphans);
@@ -69,7 +67,6 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
       .map((g) => {
         const parentMatch = match(g.parent);
         const filteredSubs = g.subs.filter(match);
-        // Show group if parent matches (show all subs) or if any sub matches
         if (parentMatch) return g;
         if (filteredSubs.length > 0) return { parent: g.parent, subs: filteredSubs };
         return null;
@@ -158,8 +155,8 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
           </div>
         </div>
 
-        {/* Category list — vertical, grouped */}
-        <div className="p-3 max-h-[50vh] overflow-y-auto overscroll-contain">
+        {/* Category list — vertical, grouped, no horizontal scroll */}
+        <div className="p-3 max-h-[50vh] overflow-y-auto overflow-x-hidden overscroll-contain">
           {!hasResults ? (
             <p className={`${silver} text-xs text-center py-4`}>
               Nenhuma categoria encontrada
@@ -172,7 +169,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
                   {/* Parent label */}
                   <div className={`flex items-center gap-2 px-2 pt-2 pb-1 ${silver} text-[11px] uppercase tracking-wider font-bold`}>
                     <CategoryIcon icon={group.parent.icon} size={14} className={silver} />
-                    <span>{group.parent.name}</span>
+                    <span className="truncate">{group.parent.name}</span>
                   </div>
                   {/* Subcategories */}
                   {group.subs.map((sub) => (

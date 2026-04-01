@@ -8,7 +8,8 @@ export function CategorizationPage() {
   const { token } = useParams<{ token: string }>();
   const { session, transactions, categories, loading, error, categorizeTransaction } =
     usePublicCategorizationSession(token || '');
-  const [currentIndex, setCurrentIndex] = useState(0);
+  // Track position in the FULL list (including already categorized) using a cursor
+  const [cursor, setCursor] = useState(0);
 
   if (loading) {
     return (
@@ -45,26 +46,54 @@ export function CategorizationPage() {
   const categorizedCount = transactions.length - uncategorized.length;
   const allDone = uncategorized.length === 0;
 
-  // Navigate through uncategorized transactions
-  const currentTx = uncategorized[currentIndex % uncategorized.length];
+  // Find the next uncategorized transaction starting from cursor position
+  function findNextUncategorized(from: number): number {
+    // Search forward from cursor
+    for (let i = from; i < transactions.length; i++) {
+      if (!transactions[i].categoryId) return i;
+    }
+    // Wrap around
+    for (let i = 0; i < from; i++) {
+      if (!transactions[i].categoryId) return i;
+    }
+    return -1;
+  }
+
+  const currentFullIndex = findNextUncategorized(cursor);
+  const currentTx = currentFullIndex >= 0 ? transactions[currentFullIndex] : null;
 
   async function handleCategorize(categoryId: string, notes: string) {
     if (!currentTx) return;
     await categorizeTransaction(currentTx.id, categoryId, notes);
-    // After categorizing, the transaction is removed from uncategorized list
-    // so currentIndex automatically points to the next one
-    if (currentIndex >= uncategorized.length - 1) {
-      setCurrentIndex(0);
-    }
+    // Move cursor forward to find the next uncategorized
+    setCursor(currentFullIndex + 1);
   }
 
   function handleSkip() {
-    setCurrentIndex((prev) => (prev + 1) % uncategorized.length);
+    // Find the next uncategorized AFTER the current one
+    const next = findNextUncategorized(currentFullIndex + 1);
+    if (next >= 0) setCursor(next);
   }
 
   function handleBack() {
-    setCurrentIndex((prev) => (prev - 1 + uncategorized.length) % uncategorized.length);
+    // Find the previous uncategorized BEFORE the current one
+    for (let i = currentFullIndex - 1; i >= 0; i--) {
+      if (!transactions[i].categoryId) {
+        setCursor(i);
+        return;
+      }
+    }
+    // Wrap around from end
+    for (let i = transactions.length - 1; i > currentFullIndex; i--) {
+      if (!transactions[i].categoryId) {
+        setCursor(i);
+        return;
+      }
+    }
   }
+
+  // Can go back if there's more than 1 uncategorized
+  const canGoBack = uncategorized.length > 1;
 
   if (allDone) {
     return (
@@ -83,8 +112,10 @@ export function CategorizationPage() {
     );
   }
 
+  if (!currentTx) return null;
+
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col">
+    <div className="min-h-screen bg-bg-primary flex flex-col overflow-x-hidden">
       {/* Header */}
       <header className="bg-bg-secondary border-b border-border px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
@@ -116,14 +147,14 @@ export function CategorizationPage() {
       </div>
 
       {/* Card */}
-      <div className="flex-1 flex items-start justify-center p-4 pt-6">
+      <div className="flex-1 flex items-start justify-center p-4 pt-6 overflow-x-hidden">
         <div className="w-full max-w-lg">
           <CategorizationCard
             transaction={currentTx}
             categories={categories}
             onCategorize={handleCategorize}
             onSkip={handleSkip}
-            onBack={currentIndex > 0 ? handleBack : undefined}
+            onBack={canGoBack ? handleBack : undefined}
             remaining={uncategorized.length}
           />
         </div>

@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { Upload, Plus, Search, Send, CheckCircle } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
@@ -27,8 +27,25 @@ export function TransactionsPage() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [filterMonth, setFilterMonth] = useState(getMonthYear());
   const [filterTitular, setFilterTitular] = useState('all');
+  const [filterCategory, setFilterCategory] = useState('all');
+  const [filterAccount, setFilterAccount] = useState('all');
+  const [filterInstallment, setFilterInstallment] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
+  const autoApplied = useRef(new Set<string>());
+
+  // Auto-apply categorizations from sessions that have categorized items
+  useEffect(() => {
+    const pending = sessions.filter(
+      (s) => s.categorizedCount > 0 && s.expiresAt > new Date() && !autoApplied.current.has(s.id)
+    );
+    if (pending.length === 0) return;
+
+    for (const s of pending) {
+      autoApplied.current.add(s.id);
+      applyCategorizationsFromSession(s.id);
+    }
+  }, [sessions, applyCategorizationsFromSession]);
 
   const months = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));
@@ -50,6 +67,19 @@ export function TransactionsPage() {
     if (filterTitular !== 'all') {
       list = list.filter((t) => t.titular === filterTitular);
     }
+    if (filterCategory === 'uncategorized') {
+      list = list.filter((t) => !t.categoryId);
+    } else if (filterCategory !== 'all') {
+      list = list.filter((t) => t.categoryId === filterCategory);
+    }
+    if (filterAccount !== 'all') {
+      list = list.filter((t) => t.account === filterAccount);
+    }
+    if (filterInstallment === 'installments') {
+      list = list.filter((t) => t.totalInstallments && t.totalInstallments >= 2);
+    } else if (filterInstallment === 'single') {
+      list = list.filter((t) => !t.totalInstallments || t.totalInstallments < 2);
+    }
     if (searchText) {
       const q = searchText.toLowerCase();
       list = list.filter(
@@ -61,7 +91,7 @@ export function TransactionsPage() {
       );
     }
     return list;
-  }, [transactions, filterMonth, filterTitular, searchText]);
+  }, [transactions, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -168,6 +198,16 @@ export function TransactionsPage() {
           />
         </div>
         <select
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(e.target.value)}
+          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todos os meses</option>
+          {months.map((m) => (
+            <option key={m} value={m}>{getMonthLabel(m)}</option>
+          ))}
+        </select>
+        <select
           value={filterTitular}
           onChange={(e) => setFilterTitular(e.target.value)}
           className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
@@ -178,14 +218,34 @@ export function TransactionsPage() {
           ))}
         </select>
         <select
-          value={filterMonth}
-          onChange={(e) => setFilterMonth(e.target.value)}
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
           className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
         >
-          <option value="all">Todos os meses</option>
-          {months.map((m) => (
-            <option key={m} value={m}>{getMonthLabel(m)}</option>
+          <option value="all">Todas as categorias</option>
+          <option value="uncategorized">Sem categoria</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
           ))}
+        </select>
+        <select
+          value={filterAccount}
+          onChange={(e) => setFilterAccount(e.target.value)}
+          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todas as contas</option>
+          {accountNames.map((a) => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+        <select
+          value={filterInstallment}
+          onChange={(e) => setFilterInstallment(e.target.value)}
+          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todos os tipos</option>
+          <option value="installments">Parcelados</option>
+          <option value="single">Avulsos</option>
         </select>
       </div>
 
