@@ -327,31 +327,51 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     setImporting(true);
     const toImport: ImportItem[] = [];
 
+    // Billing month date (for credit card invoice assignment)
+    let billingDate: Date | null = null;
+    if (isCreditCard && billingMonth) {
+      const [year, month] = billingMonth.split('-').map(Number);
+      billingDate = new Date(year, month - 1, 1, 12, 0, 0);
+    }
+
     for (const [i, row] of items.entries()) {
       if (!selected.has(i)) continue;
       const { isDuplicate: _, installmentType, periodicity, installmentAmount, ...rest } = row;
 
-      let baseDate = rest.date;
-      if (isCreditCard && billingMonth) {
-        const [year, month] = billingMonth.split('-').map(Number);
-        baseDate = new Date(year, month - 1, 1, 12, 0, 0);
-      }
+      // Original date is purchase date; billing date is for invoice assignment
+      const purchaseDate = rest.purchaseDate || rest.date;
+      const invoiceDate = billingDate || rest.date;
 
       if (installmentType === 'parcelada' && rest.totalInstallments && rest.totalInstallments > 1) {
         const amount = installmentAmount ?? rest.amount;
-        for (let inst = 1; inst <= rest.totalInstallments; inst++) {
-          const futureDate = new Date(baseDate);
-          futureDate.setMonth(futureDate.getMonth() + (inst - 1) * (periodicity || 1));
+        const currentInst = rest.installmentNumber || 1;
+        const remaining = rest.totalInstallments - currentInst;
+
+        // Current installment (the one in this invoice)
+        toImport.push({
+          ...rest,
+          date: invoiceDate,
+          purchaseDate,
+          amount,
+          installmentNumber: currentInst,
+          totalInstallments: rest.totalInstallments,
+        });
+
+        // Future installments
+        for (let offset = 1; offset <= remaining; offset++) {
+          const futureDate = new Date(invoiceDate);
+          futureDate.setMonth(futureDate.getMonth() + offset * (periodicity || 1));
           toImport.push({
             ...rest,
             date: futureDate,
+            purchaseDate,
             amount,
-            installmentNumber: inst,
+            installmentNumber: currentInst + offset,
             totalInstallments: rest.totalInstallments,
           });
         }
       } else {
-        toImport.push({ ...rest, date: baseDate });
+        toImport.push({ ...rest, date: invoiceDate, purchaseDate });
       }
     }
 
@@ -449,18 +469,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     <label className="text-xs text-text-secondary whitespace-nowrap">Lancar na fatura de:</label>
                     <select
                       value={billingMonth}
-                      onChange={(e) => {
-                        const newMonth = e.target.value;
-                        setBillingMonth(newMonth);
-                        // Update all transaction dates to 1st of selected month
-                        if (newMonth) {
-                          const [year, month] = newMonth.split('-').map(Number);
-                          setItems((prev) => prev.map((item) => ({
-                            ...item,
-                            date: new Date(year, month - 1, 1, 12, 0, 0),
-                          })));
-                        }
-                      }}
+                      onChange={(e) => setBillingMonth(e.target.value)}
                       className={inputClass + ' !w-auto'}
                     >
                       {monthOptions.map((m) => (
@@ -691,54 +700,72 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                           Parcelada
                         </button>
                       </div>
-                      {item.installmentType === 'parcelada' && (
-                        <div className="space-y-2">
-                          <div>
-                            <label className="text-[10px] text-text-secondary">Periodicidade</label>
-                            <select
-                              value={item.periodicity}
-                              onChange={(e) => updateInstallmentConfig(idx, { periodicity: Number(e.target.value) })}
-                              className={inputClass}
-                            >
-                              <option value={1}>Mensal</option>
-                              <option value={2}>Bimestral</option>
-                              <option value={3}>Trimestral</option>
-                            </select>
+                      {item.installmentType === 'parcelada' && (() => {
+                        const currentInst = item.installmentNumber || 1;
+                        const totalInst = item.totalInstallments || 2;
+                        const remaining = totalInst - currentInst;
+                        return (
+                          <div className="space-y-2">
+                            <div>
+                              <label className="text-[10px] text-text-secondary">Periodicidade</label>
+                              <select
+                                value={item.periodicity}
+                                onChange={(e) => updateInstallmentConfig(idx, { periodicity: Number(e.target.value) })}
+                                className={inputClass}
+                              >
+                                <option value={1}>Mensal</option>
+                                <option value={2}>Bimestral</option>
+                                <option value={3}>Trimestral</option>
+                              </select>
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-text-secondary">Numero total de parcelas</label>
+                              <input
+                                type="number"
+                                min={2}
+                                max={48}
+                                value={totalInst}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value) || 2;
+                                  updateInstallmentConfig(idx, {
+                                    totalInstallments: val,
+                                    installmentNumber: Math.min(currentInst, val),
+                                  });
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-text-secondary">Parcela atual</label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={totalInst}
+                                value={currentInst}
+                                onChange={(e) => updateInstallmentConfig(idx, { installmentNumber: Number(e.target.value) || 1 })}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div>
+                              <label className="text-[10px] text-text-secondary">Valor da parcela</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={Math.abs(item.installmentAmount ?? item.amount)}
+                                onChange={(e) => {
+                                  const val = parseFloat(e.target.value) || 0;
+                                  updateInstallmentConfig(idx, { installmentAmount: item.amount < 0 ? -val : val });
+                                }}
+                                className={inputClass}
+                              />
+                            </div>
+                            <div className="text-[10px] text-text-secondary mt-1 space-y-0.5">
+                              <p>Parcela {currentInst}/{totalInst} — {remaining > 0 ? `${remaining} parcelas futuras serao criadas` : 'ultima parcela'}</p>
+                              <p>Total: {formatBRL((item.installmentAmount ?? item.amount) * totalInst)}</p>
+                            </div>
                           </div>
-                          <div>
-                            <label className="text-[10px] text-text-secondary">Numero de parcelas</label>
-                            <input
-                              type="number"
-                              min={2}
-                              max={48}
-                              value={item.totalInstallments || 2}
-                              onChange={(e) => updateInstallmentConfig(idx, { totalInstallments: Number(e.target.value) || 2 })}
-                              className={inputClass}
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-text-secondary">Valor da parcela</label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={Math.abs(item.installmentAmount ?? item.amount)}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                updateInstallmentConfig(idx, { installmentAmount: item.amount < 0 ? -val : val });
-                              }}
-                              className={inputClass}
-                            />
-                          </div>
-                          <p className="text-[10px] text-text-secondary mt-1">
-                            Total: {formatBRL((item.installmentAmount ?? item.amount) * (item.totalInstallments || 2))}
-                            {' — '}Faturas: {billingMonth || getMonthYear(item.date)} a{' '}
-                            {getMonthYearOffset(
-                              billingMonth || getMonthYear(item.date),
-                              ((item.totalInstallments || 2) - 1) * (item.periodicity || 1)
-                            )}
-                          </p>
-                        </div>
-                      )}
+                        );
+                      })()}
                       <button
                         onClick={() => { setEditingInstallment(null); setInstallmentPopupPos(null); }}
                         className="mt-2 w-full px-2 py-1 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
