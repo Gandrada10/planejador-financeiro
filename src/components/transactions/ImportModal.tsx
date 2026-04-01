@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account } from '../../types';
-import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
