@@ -19,9 +19,10 @@ interface ParsedTransaction {
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const apiKey = context.env.ANTHROPIC_API_KEY;
+  // Accept key from env var (Cloudflare Pages dashboard) OR from request header (user-configured in app settings)
+  const apiKey = context.env.ANTHROPIC_API_KEY || context.request.headers.get('x-anthropic-api-key') || '';
   if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key not configured' }), {
+    return new Response(JSON.stringify({ error: 'API key not configured. Configure sua chave Anthropic em Configuracoes > Chave API.' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     });

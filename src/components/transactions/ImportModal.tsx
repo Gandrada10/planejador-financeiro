@@ -186,9 +186,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         return;
       }
 
+      const localKey = localStorage.getItem('anthropic_api_key') || '';
       const response = await fetch('/api/parse-statement', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(localKey ? { 'x-anthropic-api-key': localKey } : {}),
+        },
         body: JSON.stringify({ rawText, fileName: file.name }),
       });
 
