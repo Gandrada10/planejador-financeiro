@@ -20,7 +20,7 @@ export function TransactionsPage() {
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
-  const { sessions, applyCategorizationsFromSession, applyAllPendingSessions, deleteSession } = useCategorizationSessions();
+  const { sessions, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -263,7 +263,7 @@ export function TransactionsPage() {
               <div className="flex justify-end">
                 <button
                   onClick={async () => {
-                    for (const s of activeSessions) await deleteSession(s.id);
+                    for (const s of activeSessions) await dismissSession(s.id);
                   }}
                   className="text-[10px] text-text-secondary hover:text-accent-red"
                 >
@@ -288,7 +288,7 @@ export function TransactionsPage() {
                       if (count > 0) {
                         alert(`${count} categorias aplicadas com sucesso!`);
                       }
-                      await deleteSession(s.id);
+                      await dismissSession(s.id);
                     }}
                     disabled={applyingSession === s.id}
                     className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
@@ -296,7 +296,7 @@ export function TransactionsPage() {
                     {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
                   </button>
                   <button
-                    onClick={() => deleteSession(s.id)}
+                    onClick={() => dismissSession(s.id)}
                     className="p-1 text-text-secondary hover:text-accent-red"
                     title="Remover"
                   >

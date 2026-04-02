@@ -161,22 +161,17 @@ export function useCategorizationSessions() {
     return totalApplied;
   }, [sessions, applyCategorizationsFromSession]);
 
-  const deleteSession = useCallback(async (token: string) => {
+  const dismissSession = useCallback(async (token: string) => {
     try {
-      // Delete sub-collections first
-      const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
-      const catSnap = await getDocs(collection(db, 'categorizationSessions', token, 'categories'));
-      const batch = writeBatch(db);
-      txSnap.docs.forEach((d) => batch.delete(d.ref));
-      catSnap.docs.forEach((d) => batch.delete(d.ref));
-      batch.delete(doc(db, 'categorizationSessions', token));
-      await batch.commit();
+      // Mark session as expired so it disappears from the UI
+      const sessionRef = doc(db, 'categorizationSessions', token);
+      await updateDoc(sessionRef, { expiresAt: Timestamp.fromDate(new Date(0)) });
     } catch (err) {
-      console.error('Erro ao deletar sessao:', err);
+      console.error('Erro ao dispensar sessao:', err);
     }
   }, []);
 
-  return { sessions, createSession, applyCategorizationsFromSession, applyAllPendingSessions, deleteSession };
+  return { sessions, createSession, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession };
 }
 
 // Hook for the PUBLIC page (no auth required) to load and update a session
