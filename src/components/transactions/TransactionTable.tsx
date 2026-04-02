@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, CheckCircle2 } from 'lucide-react';
 import type { Transaction, Category } from '../../types';
 import { formatBRL, formatDate } from '../../lib/utils';
 
@@ -9,12 +9,13 @@ interface Props {
   accountNames: string[];
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
+  onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
   /** Optional: check if editing needs to reopen a closed billing cycle */
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function TransactionTable({ transactions, categories, accountNames, onUpdate, onDelete, checkClosedCycle, reopenCycle }: Props) {
+export function TransactionTable({ transactions, categories, accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -105,6 +106,12 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
     setSelectedIds(new Set());
   }
 
+  function reconcileSelected() {
+    if (!onBatchReconcile) return;
+    onBatchReconcile([...selectedIds], true);
+    setSelectedIds(new Set());
+  }
+
   if (transactions.length === 0) {
     return (
       <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
@@ -114,12 +121,18 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
   }
 
   const editableCell = 'cursor-pointer hover:bg-bg-secondary/50 transition-colors';
+  const allSelected = selectedIds.size === transactions.length && transactions.length > 0;
 
   return (
     <div className="space-y-2">
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 p-2 bg-bg-secondary rounded text-xs">
           <span className="text-text-secondary">{selectedIds.size} selecionadas</span>
+          {onBatchReconcile && (
+            <button onClick={reconcileSelected} className="text-accent-green hover:underline flex items-center gap-1">
+              <CheckCircle2 size={12} /> Conciliar
+            </button>
+          )}
           <button onClick={deleteSelected} className="text-accent-red hover:underline flex items-center gap-1">
             <Trash2 size={12} /> Excluir
           </button>
@@ -130,8 +143,15 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
-              <th className="p-2 w-8">
-                <input type="checkbox" checked={selectedIds.size === transactions.length && transactions.length > 0} onChange={toggleAll} className="accent-accent" />
+              <th className="p-2 w-8 text-center">
+                {/* Select-all dot */}
+                <div
+                  className={`w-3 h-3 rounded-full border mx-auto cursor-pointer transition-colors ${
+                    allSelected ? 'bg-accent border-accent' : 'border-border hover:border-accent'
+                  }`}
+                  onClick={toggleAll}
+                  title={allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+                />
               </th>
               <th className="p-2 text-left">Data</th>
               <th className="p-2 text-left">Data compra</th>
@@ -147,8 +167,19 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
           <tbody>
             {transactions.map((t) => (
               <tr key={t.id} className="border-b border-border/30 hover:bg-bg-secondary/30">
-                <td className="p-2">
-                  <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} className="accent-accent" />
+                {/* Status/select dot */}
+                <td className="p-2 w-8">
+                  <div
+                    className={`w-3.5 h-3.5 rounded-full border mx-auto cursor-pointer transition-colors ${
+                      selectedIds.has(t.id)
+                        ? 'bg-accent border-accent'
+                        : t.reconciled
+                        ? 'bg-accent-green border-accent-green'
+                        : 'border-border hover:border-accent hover:bg-accent/20'
+                    }`}
+                    onClick={() => toggleSelect(t.id)}
+                    title={t.reconciled ? 'Conciliado – clique para selecionar' : 'Clique para selecionar'}
+                  />
                 </td>
                 {/* Date - editable */}
                 <td

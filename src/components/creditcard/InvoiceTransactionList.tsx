@@ -1,5 +1,5 @@
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
 import { formatBRL, formatDate } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
@@ -15,20 +15,31 @@ interface Props {
   totalTransactions: number;
   onUpdate?: (id: string, data: Partial<Transaction>) => void;
   onDelete?: (id: string) => void;
+  onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
   /** If provided, guard edits behind closed-cycle confirmation */
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function InvoiceTransactionList({ groups, categories, totalTransactions, onUpdate, onDelete, checkClosedCycle, reopenCycle }: Props) {
+export function InvoiceTransactionList({ groups, categories, totalTransactions, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  const allTransactions = useMemo(() => groups.flatMap((g) => g.transactions), [groups]);
+  const pendingCount = useMemo(() => allTransactions.filter((t) => !t.reconciled).length, [allTransactions]);
 
   function toggleGroup(titular: string) {
     const next = new Set(collapsed);
     if (next.has(titular)) next.delete(titular); else next.add(titular);
     setCollapsed(next);
+  }
+
+  function toggleSelect(id: string) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
   }
 
   function getCategoryLabel(catId: string | null): string {
@@ -102,8 +113,33 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
   return (
     <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <span className="text-xs font-bold text-text-primary">{totalTransactions} lancamentos</span>
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold text-text-primary">{totalTransactions} lancamentos</span>
+          {pendingCount > 0 && (
+            <span className="text-[10px] text-accent">{pendingCount} pendentes conciliacao</span>
+          )}
+        </div>
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2">
+            {onBatchReconcile && (
+              <button
+                onClick={() => { onBatchReconcile([...selectedIds], true); setSelectedIds(new Set()); }}
+                className="flex items-center gap-1 text-xs text-accent-green hover:underline"
+              >
+                <CheckCircle2 size={12} /> Conciliar ({selectedIds.size})
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => { selectedIds.forEach((id) => onDelete(id)); setSelectedIds(new Set()); }}
+                className="flex items-center gap-1 text-xs text-accent-red hover:underline"
+              >
+                <Trash2 size={12} /> Excluir ({selectedIds.size})
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {groups.length === 0 ? (
@@ -142,9 +178,19 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                   <div className="divide-y divide-border/30">
                     {group.transactions.map((t) => (
                       <div key={t.id} className="flex items-center px-4 py-2 hover:bg-bg-secondary/30 transition-colors">
-                        {/* Status dot */}
-                        <div className="w-6 flex-shrink-0">
-                          <span className={`w-2 h-2 rounded-full inline-block ${t.amount >= 0 ? 'bg-accent-green' : 'bg-accent'}`} />
+                        {/* Status / select dot */}
+                        <div className="w-6 flex-shrink-0 flex justify-center">
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full border cursor-pointer transition-colors ${
+                              selectedIds.has(t.id)
+                                ? 'bg-accent border-accent'
+                                : t.reconciled
+                                ? 'bg-accent-green border-accent-green'
+                                : 'border-border hover:border-accent hover:bg-accent/20'
+                            }`}
+                            onClick={(e) => { e.stopPropagation(); toggleSelect(t.id); }}
+                            title={t.reconciled ? 'Conciliado – clique para selecionar' : 'Clique para selecionar'}
+                          />
                         </div>
 
                         {/* Purchase date - editable */}

@@ -15,7 +15,7 @@ import { getMonthYear, getMonthLabel } from '../../lib/utils';
 import type { Transaction } from '../../types';
 
 export function TransactionsPage() {
-  const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch } = useTransactions();
+  const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
   const { categories, matchCategory } = useCategories();
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
@@ -244,7 +244,7 @@ export function TransactionsPage() {
         </div>
       </div>
 
-      <div className="flex gap-4 text-xs text-text-secondary">
+      <div className="flex gap-4 text-xs text-text-secondary flex-wrap">
         <span>{filtered.length} transacoes</span>
         <span className="text-accent-green">
           Receitas: R$ {filtered.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -252,6 +252,11 @@ export function TransactionsPage() {
         <span className="text-accent-red">
           Despesas: R$ {Math.abs(filtered.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </span>
+        {transactions.filter((t) => !t.reconciled).length > 0 && (
+          <span className="text-accent">
+            {transactions.filter((t) => !t.reconciled).length} pendentes conciliacao
+          </span>
+        )}
       </div>
 
       {(() => {
@@ -320,6 +325,7 @@ export function TransactionsPage() {
         accountNames={accountNames}
         onUpdate={updateTransaction}
         onDelete={deleteTransaction}
+        onBatchReconcile={batchUpdateReconciled}
         checkClosedCycle={checkClosedCycle}
         reopenCycle={reopenCycle}
       />
