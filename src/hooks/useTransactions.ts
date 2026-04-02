@@ -39,6 +39,8 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     tags: (data.tags as string[]) || [],
     notes: (data.notes as string) || '',
     importBatch: (data.importBatch as string) || null,
+    reconciled: (data.reconciled as boolean) || false,
+    reconciledAt: data.reconciledAt ? (data.reconciledAt as Timestamp).toDate() : null,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
   };
 }
@@ -79,6 +81,9 @@ export function useTransactions() {
     if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
+    if (data.reconciledAt !== undefined) {
+      updates.reconciledAt = data.reconciledAt ? Timestamp.fromDate(data.reconciledAt) : null;
+    }
     delete updates.id;
     delete updates.createdAt;
     await updateDoc(ref, updates);
@@ -110,5 +115,17 @@ export function useTransactions() {
     await batch.commit();
   }
 
-  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch };
+  async function batchUpdateReconciled(ids: string[], reconciled: boolean) {
+    const uid = auth.currentUser?.uid;
+    if (!uid || ids.length === 0) return;
+    const batch = writeBatch(db);
+    const now = reconciled ? Timestamp.now() : null;
+    for (const id of ids) {
+      const ref = doc(db, 'users', uid, 'transactions', id);
+      batch.update(ref, { reconciled, reconciledAt: now });
+    }
+    await batch.commit();
+  }
+
+  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled };
 }

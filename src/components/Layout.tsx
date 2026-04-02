@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   FileBarChart,
+  ClipboardCheck,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -21,6 +22,7 @@ const navItems = [
   { to: '/cartoes', icon: CreditCard, label: 'Cartoes' },
   { to: '/categorias', icon: Tags, label: 'Categorias' },
   { to: '/relatorios', icon: FileBarChart, label: 'Relatorios' },
+  { to: '/conciliacao', icon: ClipboardCheck, label: 'Conciliacao' },
   { to: '/orcamento', icon: Wallet, label: 'Orcamento' },
   { to: '/configuracoes', icon: Settings, label: 'Configuracoes' },
 ];

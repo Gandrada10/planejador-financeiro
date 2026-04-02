@@ -44,6 +44,8 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
       notes,
       categoryId: categoryId || null,
       importBatch: null,
+      reconciled: false,
+      reconciledAt: null,
     });
     onClose();
   }

@@ -43,6 +43,8 @@ export interface Transaction {
   tags: string[];
   notes: string;
   importBatch: string | null;
+  reconciled: boolean;
+  reconciledAt: Date | null;
   createdAt: Date;
 }
 

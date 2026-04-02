@@ -236,6 +236,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           tags: [],
           notes: '',
           importBatch: null,
+          reconciled: false,
+          reconciledAt: null,
         };
         return {
           ...item,

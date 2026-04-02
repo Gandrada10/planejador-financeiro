@@ -10,6 +10,7 @@ import { SettingsPage } from './components/settings/SettingsPage';
 import { CreditCardPage } from './components/creditcard/CreditCardPage';
 import { CategorizationPage } from './components/categorization/CategorizationPage';
 import { ReportsPage } from './components/reports/ReportsPage';
+import { ReconciliationPage } from './components/reconciliation/ReconciliationPage';
 
 export default function App() {
   return (
@@ -25,6 +26,7 @@ export default function App() {
           <Route path="/cartoes" element={<CreditCardPage />} />
           <Route path="/categorias" element={<CategoriesPage />} />
           <Route path="/relatorios" element={<ReportsPage />} />
+          <Route path="/conciliacao" element={<ReconciliationPage />} />
           <Route path="/orcamento" element={<BudgetPage />} />
           <Route path="/configuracoes" element={<SettingsPage />} />
         </Route>
