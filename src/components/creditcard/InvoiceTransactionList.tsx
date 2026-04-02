@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Trash2, CheckCircle2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
@@ -26,6 +26,20 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<'purchaseDate' | 'date'>('purchaseDate');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  function toggleSort(field: 'purchaseDate' | 'date') {
+    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortField(field); setSortDir('asc'); }
+  }
+
+  function SortIcon({ field }: { field: 'purchaseDate' | 'date' }) {
+    if (sortField !== field) return <ArrowUpDown size={9} className="inline ml-0.5 opacity-40" />;
+    return sortDir === 'asc'
+      ? <ArrowUp size={9} className="inline ml-0.5 text-accent" />
+      : <ArrowDown size={9} className="inline ml-0.5 text-accent" />;
+  }
 
   const allTransactions = useMemo(() => groups.flatMap((g) => g.transactions), [groups]);
   const pendingCount = useMemo(() => allTransactions.filter((t) => !t.reconciled).length, [allTransactions]);
@@ -119,6 +133,16 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
           {pendingCount > 0 && (
             <span className="text-[10px] text-accent">{pendingCount} pendentes conciliacao</span>
           )}
+          <span className="text-[10px] text-text-secondary">
+            Ordenar:
+            <button onClick={() => toggleSort('purchaseDate')} className="ml-1 hover:text-text-primary">
+              Data <SortIcon field="purchaseDate" />
+            </button>
+            <span className="mx-1">·</span>
+            <button onClick={() => toggleSort('date')} className="hover:text-text-primary">
+              Competencia <SortIcon field="date" />
+            </button>
+          </span>
         </div>
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-2">
@@ -176,7 +200,12 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                 {/* Transactions */}
                 {!isCollapsed && (
                   <div className="divide-y divide-border/30">
-                    {group.transactions.map((t) => (
+                    {[...group.transactions].sort((a, b) => {
+                      const av = sortField === 'date' ? a.date : (a.purchaseDate || a.date);
+                      const bv = sortField === 'date' ? b.date : (b.purchaseDate || b.date);
+                      const diff = av.getTime() - bv.getTime();
+                      return sortDir === 'asc' ? diff : -diff;
+                    }).map((t) => (
                       <div key={t.id} className="flex items-center px-4 py-2 hover:bg-bg-secondary/30 transition-colors">
                         {/* Status / select dot */}
                         <div className="w-6 flex-shrink-0 flex justify-center">

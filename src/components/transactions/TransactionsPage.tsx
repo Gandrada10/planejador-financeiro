@@ -330,7 +330,7 @@ export function TransactionsPage() {
         reopenCycle={reopenCycle}
       />
 
-      {showForm && <TransactionForm onSubmit={handleAddTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} />}
+      {showForm && <TransactionForm onSubmit={handleAddTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} accounts={accounts} />}
       {showImport && (
         <ImportModal
           existingTransactions={transactions}

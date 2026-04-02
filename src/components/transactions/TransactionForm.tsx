@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Plus, X } from 'lucide-react';
 
-import type { Transaction, Category } from '../../types';
+import type { Transaction, Category, Account } from '../../types';
+import { getMonthYear, getMonthLabel } from '../../lib/utils';
+import { filterCategoriesByAmount } from '../../lib/utils';
 
 interface Props {
   onSubmit: (data: Omit<Transaction, 'id' | 'createdAt'>) => void;
@@ -9,9 +11,20 @@ interface Props {
   titularNames?: string[];
   categories?: Category[];
   accountNames?: string[];
+  accounts?: Account[];
 }
 
-export function TransactionForm({ onSubmit, onClose, titularNames = [], categories = [], accountNames = [] }: Props) {
+function invoiceMonthOptions(): string[] {
+  const opts: string[] = [];
+  const now = new Date();
+  for (let i = -2; i <= 4; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    opts.push(getMonthYear(d));
+  }
+  return opts;
+}
+
+export function TransactionForm({ onSubmit, onClose, titularNames = [], categories = [], accountNames = [], accounts = [] }: Props) {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
@@ -20,17 +33,33 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
   const [categoryId, setCategoryId] = useState('');
   const [familyMember, setFamilyMember] = useState('');
   const [installments, setInstallments] = useState('');
-  const [purchaseDate, setPurchaseDate] = useState('');
   const [notes, setNotes] = useState('');
+  const [invoiceMonth, setInvoiceMonth] = useState(getMonthYear());
+
+  const selectedAccount = useMemo(
+    () => accounts.find((a) => a.name === account),
+    [accounts, account]
+  );
+  const isCard = selectedAccount?.type === 'cartao';
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const value = parseFloat(amount.replace(',', '.'));
     if (!value || !description) return;
     const totalInst = installments ? parseInt(installments, 10) : null;
+
+    // For credit cards: date = first day of invoice month (competência), purchaseDate = actual purchase date
+    // For other accounts: date = entered date, purchaseDate = null
+    const txDate = isCard
+      ? new Date(invoiceMonth + '-01T12:00:00')
+      : new Date(date + 'T12:00:00');
+    const txPurchaseDate = isCard
+      ? new Date(date + 'T12:00:00')
+      : null;
+
     onSubmit({
-      date: new Date(date + 'T12:00:00'),
-      purchaseDate: purchaseDate ? new Date(purchaseDate + 'T12:00:00') : null,
+      date: txDate,
+      purchaseDate: txPurchaseDate,
       description,
       amount: type === 'despesa' ? -Math.abs(value) : Math.abs(value),
       account,
@@ -52,6 +81,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
 
   const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent';
   const labelClass = 'block text-[10px] text-text-secondary mb-1 uppercase tracking-wider';
+  const filteredCategories = filterCategoriesByAmount(categories, type === 'despesa' ? -1 : 1);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
@@ -83,7 +113,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className={labelClass}>Data</label>
+              <label className={labelClass}>{isCard ? 'Data da compra' : 'Data'}</label>
               <input tabIndex={1} type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} required autoFocus />
             </div>
             <div>
@@ -122,28 +152,33 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
             </div>
           </div>
 
+          {/* Invoice month selector — only for credit cards */}
+          {isCard && (
+            <div>
+              <label className={labelClass}>Lancar na fatura de</label>
+              <select value={invoiceMonth} onChange={(e) => setInvoiceMonth(e.target.value)} className={inputClass}>
+                {invoiceMonthOptions().map((m) => (
+                  <option key={m} value={m}>{getMonthLabel(m)}</option>
+                ))}
+              </select>
+              <p className="text-[10px] text-text-secondary mt-1">
+                Mes da fatura em que este lancamento deve aparecer
+              </p>
+            </div>
+          )}
+
           <div>
             <label className={labelClass}>Parcelas (total)</label>
             <input tabIndex={6} type="number" min="2" value={installments} onChange={(e) => setInstallments(e.target.value)} className={inputClass} placeholder="Ex: 10" />
           </div>
 
-          {installments && parseInt(installments, 10) >= 2 && (
-            <div>
-              <label className={labelClass}>Data da compra original</label>
-              <input type="date" value={purchaseDate} onChange={(e) => setPurchaseDate(e.target.value)} className={inputClass} />
-              <p className="text-[10px] text-text-secondary mt-1">Quando a compra foi feita (se diferente da data da fatura)</p>
-            </div>
-          )}
-
           <div>
             <label className={labelClass}>Categoria</label>
             <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={inputClass}>
               <option value="">Sem categoria</option>
-              {categories
-                .filter((c) => c.type === 'ambos' || c.type === type)
-                .map((cat) => (
-                  <option key={cat.id} value={cat.id}>{cat.name}</option>
-                ))}
+              {filteredCategories.map((cat) => (
+                <option key={cat.id} value={cat.id}>{cat.name}</option>
+              ))}
             </select>
           </div>
 

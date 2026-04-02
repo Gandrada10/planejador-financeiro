@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Trash2, CheckCircle2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import type { Transaction, Category } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 
@@ -19,6 +19,29 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<'date' | 'purchaseDate'>('date');
+  const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+
+  function toggleSort(field: 'date' | 'purchaseDate') {
+    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortField(field); setSortDir('desc'); }
+  }
+
+  const sorted = useMemo(() => {
+    return [...transactions].sort((a, b) => {
+      const av = sortField === 'date' ? a.date : (a.purchaseDate || a.date);
+      const bv = sortField === 'date' ? b.date : (b.purchaseDate || b.date);
+      const diff = av.getTime() - bv.getTime();
+      return sortDir === 'asc' ? diff : -diff;
+    });
+  }, [transactions, sortField, sortDir]);
+
+  function SortIcon({ field }: { field: 'date' | 'purchaseDate' }) {
+    if (sortField !== field) return <ArrowUpDown size={10} className="inline ml-1 opacity-40" />;
+    return sortDir === 'asc'
+      ? <ArrowUp size={10} className="inline ml-1 text-accent" />
+      : <ArrowDown size={10} className="inline ml-1 text-accent" />;
+  }
 
   /** If the transaction is in a closed cycle, ask to reopen. Returns true if we can proceed. */
   async function guardClosedCycle(t: Transaction): Promise<boolean> {
@@ -41,7 +64,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
   async function commitEdit() {
     if (!editingCell) return;
     const { id, field } = editingCell;
-    const t = transactions.find((tx) => tx.id === id);
+    const t = sorted.find((tx) => tx.id === id);
 
     if (t) {
       const canProceed = await guardClosedCycle(t);
@@ -94,10 +117,10 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
   }
 
   function toggleAll() {
-    if (selectedIds.size === transactions.length) {
+    if (selectedIds.size === sorted.length) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(transactions.map((t) => t.id)));
+      setSelectedIds(new Set(sorted.map((t) => t.id)));
     }
   }
 
@@ -112,7 +135,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
     setSelectedIds(new Set());
   }
 
-  if (transactions.length === 0) {
+  if (sorted.length === 0) {
     return (
       <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
         Nenhuma transacao ainda. Importe um extrato ou adicione manualmente.
@@ -121,7 +144,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
   }
 
   const editableCell = 'cursor-pointer hover:bg-bg-secondary/50 transition-colors';
-  const allSelected = selectedIds.size === transactions.length && transactions.length > 0;
+  const allSelected = selectedIds.size === sorted.length && sorted.length > 0;
 
   return (
     <div className="space-y-2">
@@ -153,8 +176,12 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   title={allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
                 />
               </th>
-              <th className="p-2 text-left">Data</th>
-              <th className="p-2 text-left">Data compra</th>
+              <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('date')}>
+                Competencia <SortIcon field="date" />
+              </th>
+              <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('purchaseDate')}>
+                Data <SortIcon field="purchaseDate" />
+              </th>
               <th className="p-2 text-left">Descricao</th>
               <th className="p-2 text-left">Conta</th>
               <th className="p-2 text-left">Membro</th>
@@ -165,7 +192,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
             </tr>
           </thead>
           <tbody>
-            {transactions.map((t) => (
+            {sorted.map((t) => (
               <tr key={t.id} className="border-b border-border/30 hover:bg-bg-secondary/30">
                 {/* Status/select dot */}
                 <td className="p-2 w-8">
