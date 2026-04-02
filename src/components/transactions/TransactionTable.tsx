@@ -56,6 +56,25 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
       onUpdate(id, { familyMember: editValue.trim() });
     } else if (field === 'titular') {
       onUpdate(id, { titular: editValue.trim() });
+    } else if (field === 'date' && editValue) {
+      const d = new Date(editValue + 'T12:00:00');
+      if (!isNaN(d.getTime())) onUpdate(id, { date: d });
+    } else if (field === 'purchaseDate') {
+      if (!editValue) {
+        onUpdate(id, { purchaseDate: null });
+      } else {
+        const d = new Date(editValue + 'T12:00:00');
+        if (!isNaN(d.getTime())) onUpdate(id, { purchaseDate: d });
+      }
+    } else if (field === 'installments') {
+      const parts = editValue.split('/');
+      const num = parseInt(parts[0]);
+      const total = parseInt(parts[1]);
+      if (!isNaN(num) && !isNaN(total)) {
+        onUpdate(id, { installmentNumber: num, totalInstallments: total });
+      } else if (!editValue.trim()) {
+        onUpdate(id, { installmentNumber: null, totalInstallments: null });
+      }
     }
 
     setEditingCell(null);
@@ -131,8 +150,41 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 <td className="p-2">
                   <input type="checkbox" checked={selectedIds.has(t.id)} onChange={() => toggleSelect(t.id)} className="accent-accent" />
                 </td>
-                <td className="p-2 text-text-secondary whitespace-nowrap">{formatDate(t.date)}</td>
-                <td className="p-2 text-text-secondary whitespace-nowrap">{t.purchaseDate ? formatDate(t.purchaseDate) : '—'}</td>
+                {/* Date - editable */}
+                <td
+                  className={`p-2 text-text-secondary whitespace-nowrap ${editableCell}`}
+                  onClick={() => startEdit(t.id, 'date', t.date.toISOString().split('T')[0])}
+                >
+                  {editingCell?.id === t.id && editingCell.field === 'date' ? (
+                    <input
+                      autoFocus
+                      type="date"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={commitEdit}
+                      onKeyDown={handleKeyDown}
+                      className="bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                    />
+                  ) : formatDate(t.date)}
+                </td>
+
+                {/* Purchase date - editable */}
+                <td
+                  className={`p-2 text-text-secondary whitespace-nowrap ${editableCell}`}
+                  onClick={() => startEdit(t.id, 'purchaseDate', t.purchaseDate ? t.purchaseDate.toISOString().split('T')[0] : '')}
+                >
+                  {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
+                    <input
+                      autoFocus
+                      type="date"
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={commitEdit}
+                      onKeyDown={handleKeyDown}
+                      className="bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                    />
+                  ) : t.purchaseDate ? formatDate(t.purchaseDate) : '—'}
+                </td>
 
                 {/* Description - editable */}
                 <td
@@ -210,40 +262,62 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   )}
                 </td>
 
-                {/* Parcelas */}
-                <td className="p-2 text-center text-text-secondary">
-                  {t.totalInstallments ? (
-                    <div className="flex flex-col items-center gap-0.5">
-                      <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
-                        {t.installmentNumber || '?'}/{t.totalInstallments}
-                      </span>
-                      {t.purchaseDate && (
-                        <span className="text-[9px] text-text-secondary" title="Data da compra original">
-                          {formatDate(t.purchaseDate)}
-                        </span>
-                      )}
-                    </div>
+                {/* Parcelas - editable */}
+                <td
+                  className={`p-2 text-center text-text-secondary ${editableCell}`}
+                  onClick={() => startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
+                >
+                  {editingCell?.id === t.id && editingCell.field === 'installments' ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={commitEdit}
+                      onKeyDown={handleKeyDown}
+                      placeholder="1/12"
+                      className="w-16 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-center focus:outline-none"
+                    />
+                  ) : t.totalInstallments ? (
+                    <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
+                      {t.installmentNumber ?? '?'}/{t.totalInstallments}
+                    </span>
                   ) : '—'}
                 </td>
 
                 {/* Category - select */}
                 <td className="p-2">
-                  <select
-                    value={t.categoryId || ''}
-                    onChange={async (e) => {
-                      const val = e.target.value || null;
-                      const ok = await guardClosedCycle(t);
-                      if (!ok) { e.target.value = t.categoryId || ''; return; }
-                      onUpdate(t.id, { categoryId: val });
-                    }}
-                    className="bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary"
-                    style={{ color: categories.find((c) => c.id === t.categoryId)?.color }}
-                  >
-                    <option value="">Sem categoria</option>
-                    {categories.map((cat) => (
-                      <option key={cat.id} value={cat.id}>{cat.name}</option>
-                    ))}
-                  </select>
+                  {(() => {
+                    const rootCats = categories.filter((c) => !c.parentId);
+                    return (
+                      <select
+                        value={t.categoryId || ''}
+                        onChange={async (e) => {
+                          const val = e.target.value || null;
+                          const ok = await guardClosedCycle(t);
+                          if (!ok) { e.target.value = t.categoryId || ''; return; }
+                          onUpdate(t.id, { categoryId: val });
+                        }}
+                        className="bg-bg-secondary border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary rounded px-1"
+                        style={{ color: categories.find((c) => c.id === t.categoryId)?.color || 'var(--color-text-secondary)' }}
+                      >
+                        <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>Sem categoria</option>
+                        {rootCats.map((cat) => {
+                          const subs = categories.filter((c) => c.parentId === cat.id);
+                          if (subs.length > 0) {
+                            return (
+                              <optgroup key={cat.id} label={cat.name} style={{ backgroundColor: '#111111', color: '#737373' }}>
+                                <option value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>
+                                {subs.map((sub) => (
+                                  <option key={sub.id} value={sub.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>↳ {sub.name}</option>
+                                ))}
+                              </optgroup>
+                            );
+                          }
+                          return <option key={cat.id} value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>;
+                        })}
+                      </select>
+                    );
+                  })()}
                 </td>
 
                 <td className="p-2">

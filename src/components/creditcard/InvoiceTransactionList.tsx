@@ -68,6 +68,25 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
     } else if (field === 'amount') {
       const val = parseFloat(editValue.replace(',', '.'));
       if (!isNaN(val)) onUpdate(t.id, { amount: val });
+    } else if (field === 'date' && editValue) {
+      const d = new Date(editValue + 'T12:00:00');
+      if (!isNaN(d.getTime())) onUpdate(t.id, { date: d });
+    } else if (field === 'purchaseDate') {
+      if (!editValue) {
+        onUpdate(t.id, { purchaseDate: null });
+      } else {
+        const d = new Date(editValue + 'T12:00:00');
+        if (!isNaN(d.getTime())) onUpdate(t.id, { purchaseDate: d });
+      }
+    } else if (field === 'installments') {
+      const parts = editValue.split('/');
+      const num = parseInt(parts[0]);
+      const total = parseInt(parts[1]);
+      if (!isNaN(num) && !isNaN(total)) {
+        onUpdate(t.id, { installmentNumber: num, totalInstallments: total });
+      } else if (!editValue.trim()) {
+        onUpdate(t.id, { installmentNumber: null, totalInstallments: null });
+      }
     }
 
     setEditingCell(null);
@@ -107,6 +126,13 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                     <span className="text-xs font-bold text-text-primary">
                       {group.titular || 'Sem titular'}
                     </span>
+                    {(() => {
+                      const cardNum = group.transactions[0]?.cardNumber;
+                      const last4 = cardNum ? cardNum.replace(/\D/g, '').slice(-4) : null;
+                      return last4 ? (
+                        <span className="text-[10px] text-text-secondary font-mono">**** {last4}</span>
+                      ) : null;
+                    })()}
                   </div>
                   <span className="text-xs font-bold text-accent-red">{formatBRL(group.total)}</span>
                 </button>
@@ -121,10 +147,23 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                           <span className={`w-2 h-2 rounded-full inline-block ${t.amount >= 0 ? 'bg-accent-green' : 'bg-accent'}`} />
                         </div>
 
-                        {/* Purchase date */}
-                        <span className="text-xs text-text-secondary w-[70px] flex-shrink-0">
-                          {formatDate(t.purchaseDate || t.date)}
-                        </span>
+                        {/* Purchase date - editable */}
+                        <div
+                          className={`text-xs text-text-secondary w-[70px] flex-shrink-0 ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'purchaseDate', (t.purchaseDate || t.date).toISOString().split('T')[0])}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
+                            <input
+                              autoFocus
+                              type="date"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-[90px] bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                            />
+                          ) : formatDate(t.purchaseDate || t.date)}
+                        </div>
 
                         {/* Description - editable */}
                         <div
@@ -142,13 +181,27 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                             />
                           ) : (
                             <>
-                              <div className="text-xs text-text-primary truncate">
+                              <div className="text-xs text-text-primary truncate flex items-center gap-1">
                                 {t.description}
-                                {t.totalInstallments && (
-                                  <span className="ml-1.5 text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+                                {editingCell?.id === t.id && editingCell.field === 'installments' ? (
+                                  <input
+                                    autoFocus
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onBlur={() => commitEdit(t)}
+                                    onKeyDown={(e) => handleKeyDown(e, t)}
+                                    placeholder="1/12"
+                                    className="ml-1 w-14 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-[10px] text-center focus:outline-none"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                ) : t.totalInstallments ? (
+                                  <span
+                                    className={`ml-1.5 text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded flex-shrink-0 ${editable}`}
+                                    onClick={(e) => { e.stopPropagation(); onUpdate && startEdit(t.id, 'installments', `${t.installmentNumber ?? 1}/${t.totalInstallments}`); }}
+                                  >
                                     {t.installmentNumber}/{t.totalInstallments}
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                               {t.categoryId && (
                                 <p className="text-[10px] text-text-secondary truncate">
@@ -161,23 +214,39 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
 
                         {/* Category - select */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[120px] mr-2">
-                            <select
-                              value={t.categoryId || ''}
-                              onChange={async (e) => {
-                                const val = e.target.value || null;
-                                const ok = await guardClosedCycle(t);
-                                if (!ok) { e.target.value = t.categoryId || ''; return; }
-                                onUpdate(t.id, { categoryId: val });
-                              }}
-                              className="w-full bg-transparent border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary"
-                              style={{ color: categories.find((c) => c.id === t.categoryId)?.color || undefined }}
-                            >
-                              <option value="">Sem cat.</option>
-                              {categories.map((cat) => (
-                                <option key={cat.id} value={cat.id}>{cat.name}</option>
-                              ))}
-                            </select>
+                          <div className="flex-shrink-0 w-[130px] mr-2">
+                            {(() => {
+                              const rootCats = categories.filter((c) => !c.parentId);
+                              return (
+                                <select
+                                  value={t.categoryId || ''}
+                                  onChange={async (e) => {
+                                    const val = e.target.value || null;
+                                    const ok = await guardClosedCycle(t);
+                                    if (!ok) { e.target.value = t.categoryId || ''; return; }
+                                    onUpdate(t.id, { categoryId: val });
+                                  }}
+                                  className="w-full bg-bg-secondary border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary rounded px-1"
+                                  style={{ color: categories.find((c) => c.id === t.categoryId)?.color || 'var(--color-text-secondary)' }}
+                                >
+                                  <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>Sem cat.</option>
+                                  {rootCats.map((cat) => {
+                                    const subs = categories.filter((c) => c.parentId === cat.id);
+                                    if (subs.length > 0) {
+                                      return (
+                                        <optgroup key={cat.id} label={cat.name} style={{ backgroundColor: '#111111', color: '#737373' }}>
+                                          <option value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>
+                                          {subs.map((sub) => (
+                                            <option key={sub.id} value={sub.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>↳ {sub.name}</option>
+                                          ))}
+                                        </optgroup>
+                                      );
+                                    }
+                                    return <option key={cat.id} value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>;
+                                  })}
+                                </select>
+                              );
+                            })()}
                           </div>
                         ) : null}
 
