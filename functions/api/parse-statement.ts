@@ -5,6 +5,7 @@ interface Env {
 interface ParseRequest {
   rawText: string;
   fileName: string;
+  apiKey?: string;
 }
 
 interface ParsedTransaction {
@@ -19,21 +20,21 @@ interface ParsedTransaction {
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  // Accept key from env var (Cloudflare Pages dashboard) OR from request header (user-configured in app settings)
-  const apiKey = context.env.ANTHROPIC_API_KEY || context.request.headers.get('x-anthropic-api-key') || '';
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key not configured. Configure sua chave Anthropic em Configuracoes > Chave API.' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   let body: ParseRequest;
   try {
     body = await context.request.json();
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid request body' }), {
       status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Accept key from: request body (user-configured in app) > env var (Cloudflare dashboard)
+  const apiKey = body.apiKey || context.env.ANTHROPIC_API_KEY || '';
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'API key not configured. Configure sua chave Anthropic em Configuracoes > Chave API.' }), {
+      status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
   }

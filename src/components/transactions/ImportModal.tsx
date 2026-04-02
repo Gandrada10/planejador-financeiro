@@ -187,13 +187,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       }
 
       const localKey = localStorage.getItem('anthropic_api_key') || '';
+      if (!localKey) {
+        setError('Chave API nao configurada. Va em Configuracoes > Chave API e insira sua chave Anthropic.');
+        setAiParsing(false);
+        return;
+      }
       const response = await fetch('/api/parse-statement', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(localKey ? { 'x-anthropic-api-key': localKey } : {}),
-        },
-        body: JSON.stringify({ rawText, fileName: file.name }),
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rawText, fileName: file.name, apiKey: localKey }),
       });
 
       if (!response.ok) {
