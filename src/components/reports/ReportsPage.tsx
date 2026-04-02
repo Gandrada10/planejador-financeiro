@@ -301,32 +301,7 @@ export function ReportsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
-        {activeTab === 'categorias' && (
-        <div className="flex items-center gap-3">
-          <MonthSelector value={monthYear} onChange={setMonthYear} />
-          <div className="flex gap-1">
-            <button
-              onClick={exportExcel}
-              disabled={filteredTransactions.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
-              title="Exportar Excel"
-            >
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button
-              onClick={exportPDF}
-              disabled={filteredTransactions.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
-              title="Exportar PDF"
-            >
-              <Download size={14} /> PDF
-            </button>
-          </div>
-        </div>
-        )}
-      </div>
+      <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
 
       {/* Tab navigation */}
       <div className="flex gap-1 border-b border-border pb-0">
@@ -358,6 +333,32 @@ export function ReportsPage() {
 
       {/* Por Categoria - existing report */}
       {activeTab === 'categorias' && <>
+
+      {/* Range bar */}
+      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-lg">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-text-secondary">Mes:</span>
+          <MonthSelector value={monthYear} onChange={setMonthYear} />
+        </div>
+        <div className="ml-auto flex gap-1">
+          <button
+            onClick={exportExcel}
+            disabled={filteredTransactions.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            title="Exportar Excel"
+          >
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+          <button
+            onClick={exportPDF}
+            disabled={filteredTransactions.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            title="Exportar PDF"
+          >
+            <Download size={13} /> PDF
+          </button>
+        </div>
+      </div>
 
       {/* Summary + filters */}
       <div className="flex gap-4 flex-wrap items-start">
