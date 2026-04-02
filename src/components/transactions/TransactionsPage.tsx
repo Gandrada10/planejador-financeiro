@@ -20,7 +20,7 @@ export function TransactionsPage() {
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
-  const { sessions, applyCategorizationsFromSession, applyAllPendingSessions } = useCategorizationSessions();
+  const { sessions, applyCategorizationsFromSession, applyAllPendingSessions, deleteSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -32,7 +32,6 @@ export function TransactionsPage() {
   const [filterInstallment, setFilterInstallment] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
-  const [dismissedSessions, setDismissedSessions] = useState<Set<string>>(new Set());
   const autoApplied = useRef(false);
 
   // Auto-apply ALL pending categorizations when page loads and sessions are available
@@ -256,17 +255,19 @@ export function TransactionsPage() {
       </div>
 
       {(() => {
-        const activeSessions = sessions.filter((s) => s.expiresAt > new Date() && !dismissedSessions.has(s.id));
+        const activeSessions = sessions.filter((s) => s.expiresAt > new Date());
         if (activeSessions.length === 0) return null;
         return (
           <div className="space-y-2">
             {activeSessions.length > 1 && (
               <div className="flex justify-end">
                 <button
-                  onClick={() => setDismissedSessions(new Set(activeSessions.map((s) => s.id)))}
+                  onClick={async () => {
+                    for (const s of activeSessions) await deleteSession(s.id);
+                  }}
                   className="text-[10px] text-text-secondary hover:text-accent-red"
                 >
-                  Dispensar todas ({activeSessions.length})
+                  Remover todas ({activeSessions.length})
                 </button>
               </div>
             )}
@@ -287,7 +288,7 @@ export function TransactionsPage() {
                       if (count > 0) {
                         alert(`${count} categorias aplicadas com sucesso!`);
                       }
-                      setDismissedSessions((prev) => new Set([...prev, s.id]));
+                      await deleteSession(s.id);
                     }}
                     disabled={applyingSession === s.id}
                     className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
@@ -295,9 +296,9 @@ export function TransactionsPage() {
                     {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
                   </button>
                   <button
-                    onClick={() => setDismissedSessions((prev) => new Set([...prev, s.id]))}
+                    onClick={() => deleteSession(s.id)}
                     className="p-1 text-text-secondary hover:text-accent-red"
-                    title="Dispensar"
+                    title="Remover"
                   >
                     <X size={14} />
                   </button>
