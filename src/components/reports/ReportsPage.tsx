@@ -2,10 +2,12 @@ import { useState, useMemo } from 'react';
 import { Download, FileSpreadsheet, ChevronDown, ChevronRight, TrendingUp, BarChart2, Tags } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
+import { useBudgets } from '../../hooks/useBudgets';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CategoryIcon } from '../shared/CategoryIcon';
 import { CashFlowReport } from './CashFlowReport';
 import { CategoryEvolutionReport } from './CategoryEvolutionReport';
+import { FinancialChat } from './FinancialChat';
 import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
@@ -32,6 +34,7 @@ interface SubCategoryGroup {
 export function ReportsPage() {
   const { transactions, loading } = useTransactions();
   const { categories, rootCategories, subCategories } = useCategories();
+  const { budgets } = useBudgets();
   const [activeTab, setActiveTab] = useState<ReportTab>('categorias');
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
@@ -499,6 +502,8 @@ export function ReportsPage() {
         </div>
       )}
       </>}
+
+      <FinancialChat transactions={transactions} categories={categories} budgets={budgets} />
     </div>
   );
 }
