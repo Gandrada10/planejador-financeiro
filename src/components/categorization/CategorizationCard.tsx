@@ -1,7 +1,7 @@
 import { useState, useRef, useMemo, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, MessageSquare, Search, X } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
-import { formatBRL, formatDate } from '../../lib/utils';
+import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
 
 interface Props {
@@ -29,8 +29,8 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
   const searchRef = useRef<HTMLInputElement>(null);
 
   const expenseCategories = useMemo(
-    () => categories.filter((c) => c.type === 'despesa' || c.type === 'ambos'),
-    [categories]
+    () => filterCategoriesByAmount(categories, transaction.amount),
+    [categories, transaction.amount]
   );
 
   // Group by parent/child hierarchy

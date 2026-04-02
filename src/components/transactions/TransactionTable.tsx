@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Trash2, CheckCircle2 } from 'lucide-react';
 import type { Transaction, Category } from '../../types';
-import { formatBRL, formatDate } from '../../lib/utils';
+import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 
 interface Props {
   transactions: Transaction[];
@@ -318,7 +318,8 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Category - select */}
                 <td className="p-2">
                   {(() => {
-                    const rootCats = categories.filter((c) => !c.parentId);
+                    const relevantCats = filterCategoriesByAmount(categories, t.amount);
+                    const rootCats = relevantCats.filter((c) => !c.parentId);
                     return (
                       <select
                         value={t.categoryId || ''}
@@ -333,7 +334,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       >
                         <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>Sem categoria</option>
                         {rootCats.map((cat) => {
-                          const subs = categories.filter((c) => c.parentId === cat.id);
+                          const subs = relevantCats.filter((c) => c.parentId === cat.id);
                           if (subs.length > 0) {
                             return (
                               <optgroup key={cat.id} label={cat.name} style={{ backgroundColor: '#111111', color: '#737373' }}>

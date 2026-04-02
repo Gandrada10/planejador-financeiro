@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2 } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { formatBRL, formatDate } from '../../lib/utils';
+import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 interface TitularGroup {
@@ -262,7 +262,8 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                         {onUpdate ? (
                           <div className="flex-shrink-0 w-[130px] mr-2">
                             {(() => {
-                              const rootCats = categories.filter((c) => !c.parentId);
+                              const relevantCats = filterCategoriesByAmount(categories, t.amount);
+                              const rootCats = relevantCats.filter((c) => !c.parentId);
                               return (
                                 <select
                                   value={t.categoryId || ''}
@@ -277,7 +278,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                                 >
                                   <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>Sem cat.</option>
                                   {rootCats.map((cat) => {
-                                    const subs = categories.filter((c) => c.parentId === cat.id);
+                                    const subs = relevantCats.filter((c) => c.parentId === cat.id);
                                     if (subs.length > 0) {
                                       return (
                                         <optgroup key={cat.id} label={cat.name} style={{ backgroundColor: '#111111', color: '#737373' }}>
