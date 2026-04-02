@@ -28,3 +28,12 @@ export function getMonthYearOffset(monthYear: string, offset: number): string {
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }
+
+/** Normalize titular name to Title Case so "JULIANA KUHN" and "juliana kuhn" are treated as the same person */
+export function normalizeTitular(name: string): string {
+  if (!name) return '';
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/(?:^|\s)\S/g, (ch) => ch.toUpperCase());
+}

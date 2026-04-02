@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { Transaction } from '../types';
+import { normalizeTitular } from '../lib/utils';
 
 function getUserTransactionsRef() {
   const uid = auth.currentUser?.uid;
@@ -29,7 +30,7 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     categoryId: (data.categoryId as string) || null,
     account: (data.account as string) || '',
     familyMember: (data.familyMember as string) || '',
-    titular: (data.titular as string) || '',
+    titular: normalizeTitular((data.titular as string) || ''),
     purchaseDate: data.purchaseDate ? (data.purchaseDate as Timestamp).toDate() : null,
     installmentNumber: (data.installmentNumber as number) ?? null,
     totalInstallments: (data.totalInstallments as number) ?? null,
@@ -63,6 +64,7 @@ export function useTransactions() {
     const ref = getUserTransactionsRef();
     await addDoc(ref, {
       ...data,
+      titular: normalizeTitular(data.titular),
       date: Timestamp.fromDate(data.date),
       purchaseDate: data.purchaseDate ? Timestamp.fromDate(data.purchaseDate) : null,
       createdAt: Timestamp.now(),
@@ -74,6 +76,7 @@ export function useTransactions() {
     if (!uid) return;
     const ref = doc(db, 'users', uid, 'transactions', id);
     const updates: Record<string, unknown> = { ...data };
+    if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
     delete updates.id;
@@ -97,6 +100,7 @@ export function useTransactions() {
       const newDoc = doc(ref);
       batch.set(newDoc, {
         ...item,
+        titular: normalizeTitular(item.titular),
         date: Timestamp.fromDate(item.date),
         purchaseDate: item.purchaseDate ? Timestamp.fromDate(item.purchaseDate) : null,
         importBatch: batchId,
