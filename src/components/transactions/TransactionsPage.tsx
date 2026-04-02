@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -32,6 +32,7 @@ export function TransactionsPage() {
   const [filterInstallment, setFilterInstallment] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
+  const [dismissedSessions, setDismissedSessions] = useState<Set<string>>(new Set());
   const autoApplied = useRef(false);
 
   // Auto-apply ALL pending categorizations when page loads and sessions are available
@@ -254,32 +255,63 @@ export function TransactionsPage() {
         </span>
       </div>
 
-      {sessions.filter((s) => s.expiresAt > new Date()).map((s) => (
-        <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
-          <div className="flex items-center gap-2">
-            <CheckCircle size={14} className="text-accent" />
-            <span className="text-text-primary">
-              <strong>{s.titularName}</strong> — {s.categorizedCount}/{s.transactionIds.length} categorizadas
-            </span>
+      {(() => {
+        const activeSessions = sessions.filter((s) => s.expiresAt > new Date() && !dismissedSessions.has(s.id));
+        if (activeSessions.length === 0) return null;
+        return (
+          <div className="space-y-2">
+            {activeSessions.length > 1 && (
+              <div className="flex justify-end">
+                <button
+                  onClick={() => setDismissedSessions(new Set(activeSessions.map((s) => s.id)))}
+                  className="text-[10px] text-text-secondary hover:text-accent-red"
+                >
+                  Dispensar todas ({activeSessions.length})
+                </button>
+              </div>
+            )}
+            {activeSessions.slice(0, 3).map((s) => (
+              <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
+                <div className="flex items-center gap-2">
+                  <CheckCircle size={14} className="text-accent" />
+                  <span className="text-text-primary">
+                    <strong>{s.titularName}</strong> — {s.categorizedCount}/{s.transactionIds.length} categorizadas
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={async () => {
+                      setApplyingSession(s.id);
+                      const count = await applyCategorizationsFromSession(s.id);
+                      setApplyingSession(null);
+                      if (count > 0) {
+                        alert(`${count} categorias aplicadas com sucesso!`);
+                      }
+                      setDismissedSessions((prev) => new Set([...prev, s.id]));
+                    }}
+                    disabled={applyingSession === s.id}
+                    className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
+                  >
+                    {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
+                  </button>
+                  <button
+                    onClick={() => setDismissedSessions((prev) => new Set([...prev, s.id]))}
+                    className="p-1 text-text-secondary hover:text-accent-red"
+                    title="Dispensar"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            ))}
+            {activeSessions.length > 3 && (
+              <p className="text-[10px] text-text-secondary text-center">
+                + {activeSessions.length - 3} sessoes ocultas
+              </p>
+            )}
           </div>
-          <button
-            onClick={async () => {
-              setApplyingSession(s.id);
-              const count = await applyCategorizationsFromSession(s.id);
-              setApplyingSession(null);
-              if (count > 0) {
-                alert(`${count} categorias aplicadas com sucesso!`);
-              } else {
-                alert('Nenhuma categorizacao pendente encontrada nesta sessao.');
-              }
-            }}
-            disabled={applyingSession === s.id}
-            className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
-          >
-            {applyingSession === s.id ? 'Aplicando...' : 'Aplicar Categorizacoes'}
-          </button>
-        </div>
-      ))}
+        );
+      })()}
 
       <TransactionTable
         transactions={filtered}
