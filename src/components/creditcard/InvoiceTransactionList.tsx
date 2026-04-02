@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { formatBRL, formatDate } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
@@ -13,10 +13,17 @@ interface Props {
   groups: TitularGroup[];
   categories: Category[];
   totalTransactions: number;
+  onUpdate?: (id: string, data: Partial<Transaction>) => void;
+  onDelete?: (id: string) => void;
+  /** If provided, guard edits behind closed-cycle confirmation */
+  checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
+  reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function InvoiceTransactionList({ groups, categories, totalTransactions }: Props) {
+export function InvoiceTransactionList({ groups, categories, totalTransactions, onUpdate, onDelete, checkClosedCycle, reopenCycle }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
+  const [editValue, setEditValue] = useState('');
 
   function toggleGroup(titular: string) {
     const next = new Set(collapsed);
@@ -31,6 +38,47 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions }
     const parent = cat.parentId ? categories.find((c) => c.id === cat.parentId) : null;
     return parent ? `${parent.name}/${cat.name}` : cat.name;
   }
+
+  async function guardClosedCycle(t: Transaction): Promise<boolean> {
+    if (!checkClosedCycle || !reopenCycle) return true;
+    const closed = checkClosedCycle(t);
+    if (!closed) return true;
+    const ok = window.confirm(
+      `A fatura "${closed.label}" esta encerrada.\n\nDeseja reabri-la para editar esta transacao?`
+    );
+    if (!ok) return false;
+    await reopenCycle(closed.cycleId);
+    return true;
+  }
+
+  function startEdit(id: string, field: string, currentValue: string) {
+    setEditingCell({ id, field });
+    setEditValue(currentValue);
+  }
+
+  async function commitEdit(t: Transaction) {
+    if (!editingCell || !onUpdate) return;
+    const { field } = editingCell;
+
+    const ok = await guardClosedCycle(t);
+    if (!ok) { setEditingCell(null); return; }
+
+    if (field === 'description' && editValue.trim()) {
+      onUpdate(t.id, { description: editValue.trim() });
+    } else if (field === 'amount') {
+      const val = parseFloat(editValue.replace(',', '.'));
+      if (!isNaN(val)) onUpdate(t.id, { amount: val });
+    }
+
+    setEditingCell(null);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent, t: Transaction) {
+    if (e.key === 'Enter') commitEdit(t);
+    if (e.key === 'Escape') setEditingCell(null);
+  }
+
+  const editable = onUpdate ? 'cursor-pointer hover:bg-bg-secondary/50 transition-colors' : '';
 
   return (
     <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
@@ -78,27 +126,93 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions }
                           {formatDate(t.purchaseDate || t.date)}
                         </span>
 
-                        {/* Description + category */}
-                        <div className="flex-1 min-w-0 px-2">
-                          <div className="text-xs text-text-primary truncate">
-                            {t.description}
-                            {t.totalInstallments && (
-                              <span className="ml-1.5 text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded">
-                                {t.installmentNumber}/{t.totalInstallments}
-                              </span>
-                            )}
-                          </div>
-                          {t.categoryId && (
-                            <p className="text-[10px] text-text-secondary truncate">
-                              {getCategoryLabel(t.categoryId)}
-                            </p>
+                        {/* Description - editable */}
+                        <div
+                          className={`flex-1 min-w-0 px-2 ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'description', t.description)}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'description' ? (
+                            <input
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                            />
+                          ) : (
+                            <>
+                              <div className="text-xs text-text-primary truncate">
+                                {t.description}
+                                {t.totalInstallments && (
+                                  <span className="ml-1.5 text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+                                    {t.installmentNumber}/{t.totalInstallments}
+                                  </span>
+                                )}
+                              </div>
+                              {t.categoryId && (
+                                <p className="text-[10px] text-text-secondary truncate">
+                                  {getCategoryLabel(t.categoryId)}
+                                </p>
+                              )}
+                            </>
                           )}
                         </div>
 
-                        {/* Amount */}
-                        <span className={`text-xs font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                          {formatBRL(t.amount)}
+                        {/* Category - select */}
+                        {onUpdate ? (
+                          <div className="flex-shrink-0 w-[120px] mr-2">
+                            <select
+                              value={t.categoryId || ''}
+                              onChange={async (e) => {
+                                const val = e.target.value || null;
+                                const ok = await guardClosedCycle(t);
+                                if (!ok) { e.target.value = t.categoryId || ''; return; }
+                                onUpdate(t.id, { categoryId: val });
+                              }}
+                              className="w-full bg-transparent border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary"
+                              style={{ color: categories.find((c) => c.id === t.categoryId)?.color || undefined }}
+                            >
+                              <option value="">Sem cat.</option>
+                              {categories.map((cat) => (
+                                <option key={cat.id} value={cat.id}>{cat.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ) : null}
+
+                        {/* Amount - editable */}
+                        <span
+                          className={`text-xs font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'amount' ? (
+                            <input
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-20 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                            />
+                          ) : (
+                            formatBRL(t.amount)
+                          )}
                         </span>
+
+                        {/* Delete */}
+                        {onDelete && (
+                          <button
+                            onClick={async () => {
+                              const ok = await guardClosedCycle(t);
+                              if (!ok) return;
+                              onDelete(t.id);
+                            }}
+                            className="ml-2 text-text-secondary hover:text-accent-red flex-shrink-0"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>

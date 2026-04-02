@@ -7,16 +7,16 @@ import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
-import { getMonthYear, getMonthYearOffset } from '../../lib/utils';
+import { getMonthYear, getMonthYearOffset, getMonthLabel } from '../../lib/utils';
 
 export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [selectedCardId, setSelectedCardId] = useState('');
 
-  const { transactions, loading: loadingTx } = useTransactions();
+  const { transactions, loading: loadingTx, updateTransaction, deleteTransaction } = useTransactions();
   const { categories } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
-  const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle } = useBillingCycles();
+  const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
 
   // Auto-select first card
   const activeCardId = selectedCardId || cardAccounts[0]?.id || '';
@@ -102,6 +102,14 @@ export function CreditCardPage() {
     if (cycle) await registerPayment(cycle.id, amount, date);
   }
 
+  function checkClosedCycleForTx(t: { account: string; date: Date }): { cycleId: string; label: string } | null {
+    const account = cardAccounts.find((a) => a.name === t.account);
+    if (!account) return null;
+    const closed = getClosedCycle(account.id, t.date);
+    if (!closed) return null;
+    return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
+  }
+
   if (loadingTx || loadingAccounts) {
     return <div className="text-accent text-sm animate-pulse">Carregando cartoes...</div>;
   }
@@ -184,6 +192,10 @@ export function CreditCardPage() {
             groups={titularGroups}
             categories={categories}
             totalTransactions={invoiceTransactions.length}
+            onUpdate={updateTransaction}
+            onDelete={deleteTransaction}
+            checkClosedCycle={checkClosedCycleForTx}
+            reopenCycle={reopenCycle}
           />
         </div>
       </div>

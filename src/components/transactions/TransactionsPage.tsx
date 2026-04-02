@@ -320,6 +320,8 @@ export function TransactionsPage() {
         accountNames={accountNames}
         onUpdate={updateTransaction}
         onDelete={deleteTransaction}
+        checkClosedCycle={checkClosedCycle}
+        reopenCycle={reopenCycle}
       />
 
       {showForm && <TransactionForm onSubmit={handleAddTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} />}

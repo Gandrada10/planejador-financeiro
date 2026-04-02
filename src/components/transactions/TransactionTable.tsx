@@ -9,21 +9,43 @@ interface Props {
   accountNames: string[];
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
+  /** Optional: check if editing needs to reopen a closed billing cycle */
+  checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
+  reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function TransactionTable({ transactions, categories, accountNames, onUpdate, onDelete }: Props) {
+export function TransactionTable({ transactions, categories, accountNames, onUpdate, onDelete, checkClosedCycle, reopenCycle }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+
+  /** If the transaction is in a closed cycle, ask to reopen. Returns true if we can proceed. */
+  async function guardClosedCycle(t: Transaction): Promise<boolean> {
+    if (!checkClosedCycle || !reopenCycle) return true;
+    const closed = checkClosedCycle(t);
+    if (!closed) return true;
+    const ok = window.confirm(
+      `A fatura "${closed.label}" esta encerrada.\n\nDeseja reabri-la para editar esta transacao?`
+    );
+    if (!ok) return false;
+    await reopenCycle(closed.cycleId);
+    return true;
+  }
 
   function startEdit(id: string, field: string, currentValue: string) {
     setEditingCell({ id, field });
     setEditValue(currentValue);
   }
 
-  function commitEdit() {
+  async function commitEdit() {
     if (!editingCell) return;
     const { id, field } = editingCell;
+    const t = transactions.find((tx) => tx.id === id);
+
+    if (t) {
+      const canProceed = await guardClosedCycle(t);
+      if (!canProceed) { setEditingCell(null); return; }
+    }
 
     if (field === 'description' && editValue.trim()) {
       onUpdate(id, { description: editValue.trim() });
@@ -135,7 +157,12 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 <td className="p-2 text-text-secondary">
                   <select
                     value={t.account}
-                    onChange={(e) => onUpdate(t.id, { account: e.target.value })}
+                    onChange={async (e) => {
+                      const val = e.target.value;
+                      const ok = await guardClosedCycle(t);
+                      if (!ok) { e.target.value = t.account; return; }
+                      onUpdate(t.id, { account: val });
+                    }}
                     className="bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
                   >
                     <option value="">—</option>
@@ -203,7 +230,12 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 <td className="p-2">
                   <select
                     value={t.categoryId || ''}
-                    onChange={(e) => onUpdate(t.id, { categoryId: e.target.value || null })}
+                    onChange={async (e) => {
+                      const val = e.target.value || null;
+                      const ok = await guardClosedCycle(t);
+                      if (!ok) { e.target.value = t.categoryId || ''; return; }
+                      onUpdate(t.id, { categoryId: val });
+                    }}
                     className="bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary"
                     style={{ color: categories.find((c) => c.id === t.categoryId)?.color }}
                   >
@@ -215,7 +247,11 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 </td>
 
                 <td className="p-2">
-                  <button onClick={() => onDelete(t.id)} className="text-text-secondary hover:text-accent-red">
+                  <button onClick={async () => {
+                    const ok = await guardClosedCycle(t);
+                    if (!ok) return;
+                    onDelete(t.id);
+                  }} className="text-text-secondary hover:text-accent-red">
                     <Trash2 size={14} />
                   </button>
                 </td>
