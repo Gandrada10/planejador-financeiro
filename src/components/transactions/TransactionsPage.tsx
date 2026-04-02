@@ -20,7 +20,7 @@ export function TransactionsPage() {
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
-  const { sessions, applyCategorizationsFromSession } = useCategorizationSessions();
+  const { sessions, applyCategorizationsFromSession, applyAllPendingSessions } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
@@ -32,20 +32,15 @@ export function TransactionsPage() {
   const [filterInstallment, setFilterInstallment] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
-  const autoApplied = useRef(new Set<string>());
+  const autoApplied = useRef(false);
 
-  // Auto-apply categorizations from sessions that have categorized items
+  // Auto-apply ALL pending categorizations when page loads and sessions are available
+  // This doesn't depend on categorizedCount — it reads the actual session transactions
   useEffect(() => {
-    const pending = sessions.filter(
-      (s) => s.categorizedCount > 0 && s.expiresAt > new Date() && !autoApplied.current.has(s.id)
-    );
-    if (pending.length === 0) return;
-
-    for (const s of pending) {
-      autoApplied.current.add(s.id);
-      applyCategorizationsFromSession(s.id);
-    }
-  }, [sessions, applyCategorizationsFromSession]);
+    if (autoApplied.current || sessions.length === 0) return;
+    autoApplied.current = true;
+    applyAllPendingSessions();
+  }, [sessions, applyAllPendingSessions]);
 
   const months = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));

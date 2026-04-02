@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   collection,
   doc,
@@ -102,9 +102,10 @@ export function useCategorizationSessions() {
     return token;
   }
 
-  async function applyCategorizationsFromSession(token: string) {
+  // Read session transactions from Firestore and apply categorized ones to the real user transactions
+  const applyCategorizationsFromSession = useCallback(async (token: string) => {
     const uid = auth.currentUser?.uid;
-    if (!uid) return;
+    if (!uid) return 0;
 
     const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
     const batch = writeBatch(db);
@@ -122,11 +123,28 @@ export function useCategorizationSessions() {
       }
     }
 
-    await batch.commit();
+    if (applied > 0) {
+      await batch.commit();
+    }
     return applied;
-  }
+  }, []);
 
-  return { sessions, createSession, applyCategorizationsFromSession };
+  // Apply all pending sessions at once — called by TransactionsPage on mount
+  const applyAllPendingSessions = useCallback(async () => {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return 0;
+
+    let totalApplied = 0;
+    for (const s of sessions) {
+      if (s.expiresAt > new Date()) {
+        const applied = await applyCategorizationsFromSession(s.id);
+        totalApplied += applied;
+      }
+    }
+    return totalApplied;
+  }, [sessions, applyCategorizationsFromSession]);
+
+  return { sessions, createSession, applyCategorizationsFromSession, applyAllPendingSessions };
 }
 
 // Hook for the PUBLIC page (no auth required) to load and update a session
@@ -211,18 +229,26 @@ export function usePublicCategorizationSession(token: string) {
   }, [token]);
 
   async function categorizeTransaction(txId: string, categoryId: string, notes: string) {
+    // 1. Update the session transaction in Firestore
     const txRef = doc(db, 'categorizationSessions', token, 'transactions', txId);
     await updateDoc(txRef, { categoryId, notes });
 
-    // Update local state
+    // 2. Update local state
     setTransactions((prev) =>
       prev.map((t) => (t.id === txId ? { ...t, categoryId, notes } : t))
     );
 
-    // Update categorized count
-    const sessionRef = doc(db, 'categorizationSessions', token);
-    const newCount = transactions.filter((t) => t.id === txId ? true : t.categoryId !== null).length;
-    await updateDoc(sessionRef, { categorizedCount: newCount });
+    // 3. Update categorized count on the session document
+    // Use a functional approach to get the correct count after state update
+    try {
+      // Read fresh count from Firestore to avoid stale state
+      const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
+      const count = txSnap.docs.filter((d) => d.data().categoryId).length;
+      const sessionRef = doc(db, 'categorizationSessions', token);
+      await updateDoc(sessionRef, { categorizedCount: count });
+    } catch {
+      // Non-critical — count is just for display
+    }
   }
 
   return { session, transactions, categories, loading, error, categorizeTransaction };
