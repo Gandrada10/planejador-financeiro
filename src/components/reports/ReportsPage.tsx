@@ -275,7 +275,8 @@ export function ReportsPage() {
         3: { cellWidth: 35 },
         4: { cellWidth: 28, halign: 'right' },
       },
-      didParseCell: (data: { row: { index: number }; cell: { styles: { fontStyle: string; fillColor: number[] } } }) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      didParseCell: (data: any) => {
         const rowData = tableRows[data.row.index];
         if (rowData && !rowData[0]) {
           // Category/subcategory header row
