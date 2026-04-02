@@ -14,107 +14,158 @@ interface Props {
   budgets: Budget[];
 }
 
+function resolveCatName(id: string | null, categories: Category[]): string {
+  if (!id) return 'Sem categoria';
+  const cat = categories.find((c) => c.id === id);
+  if (!cat) return 'Sem categoria';
+  const parent = cat.parentId ? categories.find((c) => c.id === cat.parentId) : null;
+  return parent ? `${parent.name} / ${cat.name}` : cat.name;
+}
+
 function buildContext(transactions: Transaction[], categories: Category[], budgets: Budget[]): string {
+  if (transactions.length === 0) return 'Nenhum lancamento importado ainda.';
+
   const now = new Date();
   const currentMonth = getMonthYear(now);
+  const fiveYearsAgo = getMonthYearOffset(currentMonth, -60);
 
-  // Last 6 months summary
-  const monthLines: string[] = [];
-  for (let i = 5; i >= 0; i--) {
-    const m = getMonthYearOffset(currentMonth, -i);
+  // All months with data within 5 years, sorted ascending
+  const allMonths = [...new Set(transactions.map((t) => getMonthYear(t.date)))]
+    .filter((m) => m >= fiveYearsAgo)
+    .sort();
+
+  // Per-month aggregates
+  type MonthAgg = { income: number; expenses: number; count: number };
+  const monthAgg = new Map<string, MonthAgg>();
+  for (const m of allMonths) {
     const txs = transactions.filter((t) => getMonthYear(t.date) === m);
-    const income = txs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const expenses = txs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
-    if (txs.length > 0) {
-      monthLines.push(
-        `  ${getMonthLabel(m)}: Receitas ${formatBRL(income)}, Despesas ${formatBRL(Math.abs(expenses))}, Saldo ${formatBRL(income + expenses)} (${txs.length} lancamentos)`
-      );
-    }
-  }
-
-  // Current month details
-  const currentTxs = transactions.filter((t) => getMonthYear(t.date) === currentMonth);
-  const currentIncome = currentTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const currentExpenses = currentTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
-
-  // Top spending categories this month
-  const catTotals = new Map<string, number>();
-  for (const t of currentTxs) {
-    if (t.amount < 0 && t.categoryId) {
-      catTotals.set(t.categoryId, (catTotals.get(t.categoryId) || 0) + Math.abs(t.amount));
-    }
-  }
-  const topCats = Array.from(catTotals.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([id, total]) => {
-      const cat = categories.find((c) => c.id === id);
-      const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : null;
-      const name = parent ? `${parent.name} / ${cat!.name}` : (cat?.name || 'Sem categoria');
-      return `  ${name}: ${formatBRL(total)}`;
+    monthAgg.set(m, {
+      income: txs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0),
+      expenses: txs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0),
+      count: txs.length,
     });
+  }
 
-  // Uncategorized amount
-  const uncatTotal = Math.abs(currentTxs.filter((t) => t.amount < 0 && !t.categoryId).reduce((s, t) => s + t.amount, 0));
-  if (uncatTotal > 0) topCats.push(`  Sem categoria: ${formatBRL(uncatTotal)}`);
+  // Yearly aggregates
+  const yearAgg = new Map<string, MonthAgg>();
+  for (const [m, v] of monthAgg) {
+    const yr = m.slice(0, 4);
+    const p = yearAgg.get(yr) || { income: 0, expenses: 0, count: 0 };
+    yearAgg.set(yr, { income: p.income + v.income, expenses: p.expenses + v.expenses, count: p.count + v.count });
+  }
 
-  // Budget adherence this month
-  const monthBudgets = budgets.filter((b) => b.monthYear === currentMonth);
-  const budgetLines = monthBudgets.map((b) => {
-    const cat = categories.find((c) => c.id === b.categoryId);
+  // All-time totals
+  const allIncome = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const allExpenses = transactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+
+  // All-time category totals (expenses)
+  const catAllMap = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.amount < 0) {
+      const k = t.categoryId || '__uncat';
+      catAllMap.set(k, (catAllMap.get(k) || 0) + Math.abs(t.amount));
+    }
+  }
+  const topCatsAll = [...catAllMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([id, v]) => `  ${resolveCatName(id === '__uncat' ? null : id, categories)}: ${formatBRL(v)}`);
+
+  // Category evolution by year (top 6 categories)
+  const topCatIds = [...catAllMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([id]) => id);
+  const catByYear: string[] = [];
+  for (const catId of topCatIds) {
+    const name = resolveCatName(catId === '__uncat' ? null : catId, categories);
+    const byYear = [...yearAgg.keys()].sort().map((yr) => {
+      const v = Math.abs(transactions
+        .filter((t) => t.amount < 0 && getMonthYear(t.date).startsWith(yr) && (t.categoryId || '__uncat') === catId)
+        .reduce((s, t) => s + t.amount, 0));
+      return v > 0 ? `${yr}:${formatBRL(v)}` : null;
+    }).filter(Boolean).join(' | ');
+    if (byYear) catByYear.push(`  ${name}: ${byYear}`);
+  }
+
+  // Per-member all-time totals
+  const memberMap = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.amount < 0) {
+      const k = t.titular || t.familyMember || 'Sem identificacao';
+      memberMap.set(k, (memberMap.get(k) || 0) + Math.abs(t.amount));
+    }
+  }
+  const memberLines = [...memberMap.entries()].sort((a, b) => b[1] - a[1])
+    .map(([name, v]) => `  ${name}: ${formatBRL(v)}`);
+
+  // Current month detail
+  const currentTxs = transactions.filter((t) => getMonthYear(t.date) === currentMonth);
+  const cur = monthAgg.get(currentMonth) || { income: 0, expenses: 0, count: 0 };
+
+  const catCurMap = new Map<string, number>();
+  for (const t of currentTxs) {
+    if (t.amount < 0) {
+      const k = t.categoryId || '__uncat';
+      catCurMap.set(k, (catCurMap.get(k) || 0) + Math.abs(t.amount));
+    }
+  }
+  const topCatsCur = [...catCurMap.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10)
+    .map(([id, v]) => `  ${resolveCatName(id === '__uncat' ? null : id, categories)}: ${formatBRL(v)}`);
+
+  const top5cur = [...currentTxs].filter((t) => t.amount < 0).sort((a, b) => a.amount - b.amount).slice(0, 5)
+    .map((t) => `  ${t.description} (${resolveCatName(t.categoryId, categories)}): ${formatBRL(t.amount)}`);
+
+  // Budget adherence current month
+  const budgetLines = budgets.filter((b) => b.monthYear === currentMonth).map((b) => {
     const actual = Math.abs(currentTxs.filter((t) => t.categoryId === b.categoryId && t.amount < 0).reduce((s, t) => s + t.amount, 0));
     const pct = b.limitAmount > 0 ? ((actual / b.limitAmount) * 100).toFixed(0) : '0';
     const status = actual > b.limitAmount ? 'EXCEDIDO' : actual > b.limitAmount * 0.8 ? 'proximo do limite' : 'OK';
-    return `  ${cat?.name || '?'}: gasto ${formatBRL(actual)} de ${formatBRL(b.limitAmount)} (${pct}%) — ${status}`;
+    return `  ${resolveCatName(b.categoryId, categories)}: ${formatBRL(actual)} / ${formatBRL(b.limitAmount)} (${pct}%) — ${status}`;
   });
 
-  // By member
-  const memberTotals = new Map<string, number>();
-  for (const t of currentTxs) {
-    if (t.amount < 0) {
-      const key = t.titular || t.familyMember || 'Sem identificacao';
-      memberTotals.set(key, (memberTotals.get(key) || 0) + Math.abs(t.amount));
-    }
-  }
-  const memberLines = Array.from(memberTotals.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([name, total]) => `  ${name}: ${formatBRL(total)}`);
-
-  // Largest individual expenses this month
-  const top5 = [...currentTxs]
-    .filter((t) => t.amount < 0)
-    .sort((a, b) => a.amount - b.amount)
-    .slice(0, 5)
-    .map((t) => {
-      const cat = categories.find((c) => c.id === t.categoryId);
-      return `  ${t.description} (${cat?.name || 'sem cat.'}): ${formatBRL(t.amount)}`;
-    });
-
-  const lines = [
-    `Data de referencia: ${now.toLocaleDateString('pt-BR')} — Mes atual: ${getMonthLabel(currentMonth)}`,
+  // Assemble
+  const lines: string[] = [
+    `Data: ${now.toLocaleDateString('pt-BR')} | Mes atual: ${getMonthLabel(currentMonth)}`,
+    `Periodo de dados: ${getMonthLabel(allMonths[0])} ate ${getMonthLabel(allMonths[allMonths.length - 1])} (${transactions.length} lancamentos total)`,
     '',
-    '=== HISTORICO 6 MESES ===',
-    ...monthLines,
+    '=== RESUMO GERAL (todo o periodo) ===',
+    `Receitas totais: ${formatBRL(allIncome)}`,
+    `Despesas totais: ${formatBRL(Math.abs(allExpenses))}`,
+    `Saldo acumulado: ${formatBRL(allIncome + allExpenses)}`,
     '',
-    `=== MES ATUAL: ${getMonthLabel(currentMonth)} ===`,
-    `Total receitas: ${formatBRL(currentIncome)}`,
-    `Total despesas: ${formatBRL(Math.abs(currentExpenses))}`,
-    `Saldo do mes: ${formatBRL(currentIncome + currentExpenses)}`,
+    '=== RESUMO POR ANO ===',
+    ...[...yearAgg.entries()].sort().map(([yr, v]) =>
+      `  ${yr}: Receitas ${formatBRL(v.income)}, Despesas ${formatBRL(Math.abs(v.expenses))}, Saldo ${formatBRL(v.income + v.expenses)} (${v.count} lanc.)`
+    ),
     '',
-    'Gastos por categoria:',
-    ...topCats,
+    '=== HISTORICO MENSAL COMPLETO ===',
+    ...allMonths.map((m) => {
+      const v = monthAgg.get(m)!;
+      return `  ${getMonthLabel(m)}: +${formatBRL(v.income)} -${formatBRL(Math.abs(v.expenses))} =${formatBRL(v.income + v.expenses)}`;
+    }),
+    '',
+    '=== TOP 10 CATEGORIAS (todo o periodo) ===',
+    ...topCatsAll,
+    '',
+    '=== EVOLUCAO DAS PRINCIPAIS CATEGORIAS POR ANO ===',
+    ...catByYear,
   ];
 
-  if (memberLines.length > 1) {
-    lines.push('', 'Gastos por membro/titular:', ...memberLines);
+  if (memberLines.length > 0) {
+    lines.push('', '=== GASTOS POR MEMBRO/TITULAR (todo o periodo) ===', ...memberLines);
   }
 
-  if (top5.length > 0) {
-    lines.push('', 'Maiores lancamentos do mes:', ...top5);
+  lines.push(
+    '',
+    `=== MES ATUAL: ${getMonthLabel(currentMonth)} ===`,
+    `Receitas: ${formatBRL(cur.income)} | Despesas: ${formatBRL(Math.abs(cur.expenses))} | Saldo: ${formatBRL(cur.income + cur.expenses)}`,
+    '',
+    'Categorias do mes:',
+    ...topCatsCur,
+  );
+
+  if (top5cur.length > 0) {
+    lines.push('', 'Maiores lancamentos do mes:', ...top5cur);
   }
 
   if (budgetLines.length > 0) {
-    lines.push('', '=== ORCAMENTOS ===', ...budgetLines);
+    lines.push('', '=== ORCAMENTOS DO MES ===', ...budgetLines);
   }
 
   return lines.join('\n');
