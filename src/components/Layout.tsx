@@ -11,6 +11,7 @@ import {
   LogOut,
   Menu,
   X,
+  FileBarChart,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -19,6 +20,7 @@ const navItems = [
   { to: '/transacoes', icon: ArrowLeftRight, label: 'Transacoes' },
   { to: '/cartoes', icon: CreditCard, label: 'Cartoes' },
   { to: '/categorias', icon: Tags, label: 'Categorias' },
+  { to: '/relatorios', icon: FileBarChart, label: 'Relatorios' },
   { to: '/orcamento', icon: Wallet, label: 'Orcamento' },
   { to: '/configuracoes', icon: Settings, label: 'Configuracoes' },
 ];

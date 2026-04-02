@@ -1,0 +1,463 @@
+import { useState, useMemo } from 'react';
+import { Download, FileSpreadsheet, ChevronDown, ChevronRight } from 'lucide-react';
+import { useTransactions } from '../../hooks/useTransactions';
+import { useCategories } from '../../hooks/useCategories';
+import { MonthSelector } from '../shared/MonthSelector';
+import { CategoryIcon } from '../shared/CategoryIcon';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
+import type { Transaction, Category } from '../../types';
+
+interface CategoryGroup {
+  category: Category | null;
+  label: string;
+  icon: string;
+  total: number;
+  percentage: number;
+  subs: SubCategoryGroup[];
+}
+
+interface SubCategoryGroup {
+  category: Category | null;
+  label: string;
+  icon: string;
+  total: number;
+  percentage: number;
+  transactions: Transaction[];
+}
+
+export function ReportsPage() {
+  const { transactions, loading } = useTransactions();
+  const { categories, rootCategories, subCategories } = useCategories();
+  const [monthYear, setMonthYear] = useState(getMonthYear());
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
+  const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
+  const [filterType, setFilterType] = useState<'all' | 'despesa' | 'receita'>('all');
+
+  const monthTransactions = useMemo(
+    () => transactions.filter((t) => getMonthYear(t.date) === monthYear),
+    [transactions, monthYear]
+  );
+
+  const totalEntries = useMemo(
+    () => monthTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0),
+    [monthTransactions]
+  );
+  const totalExits = useMemo(
+    () => monthTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0),
+    [monthTransactions]
+  );
+  const totalBalance = totalEntries + totalExits;
+
+  // Filter transactions by type
+  const filteredTransactions = useMemo(() => {
+    if (filterType === 'despesa') return monthTransactions.filter((t) => t.amount < 0);
+    if (filterType === 'receita') return monthTransactions.filter((t) => t.amount > 0);
+    return monthTransactions;
+  }, [monthTransactions, filterType]);
+
+  const totalFiltered = useMemo(
+    () => filteredTransactions.reduce((s, t) => s + Math.abs(t.amount), 0),
+    [filteredTransactions]
+  );
+
+  // Group by category → subcategory → transactions
+  const grouped = useMemo(() => {
+    const catMap = new Map<string, Transaction[]>();
+
+    for (const t of filteredTransactions) {
+      const key = t.categoryId || '__uncategorized';
+      if (!catMap.has(key)) catMap.set(key, []);
+      catMap.get(key)!.push(t);
+    }
+
+    const groups: CategoryGroup[] = [];
+
+    // Process root categories
+    for (const root of rootCategories) {
+      const subs = subCategories(root.id);
+      const subGroups: SubCategoryGroup[] = [];
+
+      // Direct transactions on root category
+      const directTxs = catMap.get(root.id) || [];
+      if (directTxs.length > 0) {
+        const subTotal = directTxs.reduce((s, t) => s + t.amount, 0);
+        subGroups.push({
+          category: root,
+          label: root.name,
+          icon: root.icon,
+          total: subTotal,
+          percentage: totalFiltered > 0 ? (Math.abs(subTotal) / totalFiltered) * 100 : 0,
+          transactions: directTxs.sort((a, b) => a.date.getTime() - b.date.getTime()),
+        });
+        catMap.delete(root.id);
+      }
+
+      // Subcategory transactions
+      for (const sub of subs) {
+        const txs = catMap.get(sub.id) || [];
+        if (txs.length > 0) {
+          const subTotal = txs.reduce((s, t) => s + t.amount, 0);
+          subGroups.push({
+            category: sub,
+            label: sub.name,
+            icon: sub.icon,
+            total: subTotal,
+            percentage: totalFiltered > 0 ? (Math.abs(subTotal) / totalFiltered) * 100 : 0,
+            transactions: txs.sort((a, b) => a.date.getTime() - b.date.getTime()),
+          });
+          catMap.delete(sub.id);
+        }
+      }
+
+      if (subGroups.length > 0) {
+        const groupTotal = subGroups.reduce((s, g) => s + g.total, 0);
+        groups.push({
+          category: root,
+          label: root.name,
+          icon: root.icon,
+          total: groupTotal,
+          percentage: totalFiltered > 0 ? (Math.abs(groupTotal) / totalFiltered) * 100 : 0,
+          subs: subGroups,
+        });
+      }
+    }
+
+    // Remaining uncategorized or orphan transactions
+    for (const [key, txs] of catMap) {
+      const cat = categories.find((c) => c.id === key);
+      const total = txs.reduce((s, t) => s + t.amount, 0);
+      groups.push({
+        category: cat || null,
+        label: cat?.name || 'Sem categoria',
+        icon: cat?.icon || 'circle-ellipsis',
+        total,
+        percentage: totalFiltered > 0 ? (Math.abs(total) / totalFiltered) * 100 : 0,
+        subs: [{
+          category: cat || null,
+          label: cat?.name || 'Sem categoria',
+          icon: cat?.icon || 'circle-ellipsis',
+          total,
+          percentage: totalFiltered > 0 ? (Math.abs(total) / totalFiltered) * 100 : 0,
+          transactions: txs.sort((a, b) => a.date.getTime() - b.date.getTime()),
+        }],
+      });
+    }
+
+    // Sort by absolute total descending
+    groups.sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+    return groups;
+  }, [filteredTransactions, categories, rootCategories, subCategories, totalFiltered]);
+
+  function toggleCat(id: string) {
+    setExpandedCats((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSub(id: string) {
+    setExpandedSubs((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function expandAll() {
+    const catIds = new Set(grouped.map((g) => g.category?.id || g.label));
+    const subIds = new Set(grouped.flatMap((g) => g.subs.map((s) => s.category?.id || s.label)));
+    setExpandedCats(catIds);
+    setExpandedSubs(subIds);
+  }
+
+  function collapseAll() {
+    setExpandedCats(new Set());
+    setExpandedSubs(new Set());
+  }
+
+  async function exportExcel() {
+    const XLSX = await import('xlsx');
+    const rows: Record<string, string | number>[] = [];
+
+    for (const group of grouped) {
+      for (const sub of group.subs) {
+        for (const t of sub.transactions) {
+          rows.push({
+            'Data': formatDate(t.date),
+            'Descricao': t.description,
+            'Valor': t.amount,
+            'Categoria': group.label,
+            'Subcategoria': group.subs.length > 1 || sub.label !== group.label ? sub.label : '',
+            'Conta': t.account,
+            'Titular': t.titular,
+            'Parcela': t.totalInstallments ? `${t.installmentNumber}/${t.totalInstallments}` : '',
+            'Observacao': t.notes,
+          });
+        }
+      }
+    }
+
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Relatório');
+
+    // Auto-width
+    const colWidths = Object.keys(rows[0] || {}).map((key) => ({
+      wch: Math.max(key.length, ...rows.map((r) => String(r[key] || '').length)) + 2,
+    }));
+    ws['!cols'] = colWidths;
+
+    XLSX.writeFile(wb, `relatorio_${monthYear}.xlsx`);
+  }
+
+  async function exportPDF() {
+    const { default: jsPDF } = await import('jspdf');
+    const autoTable = (await import('jspdf-autotable')).default;
+
+    const doc = new jsPDF({ orientation: 'landscape' });
+    const title = `Relatório por Categoria — ${getMonthLabel(monthYear)}`;
+
+    doc.setFontSize(14);
+    doc.text(title, 14, 15);
+
+    doc.setFontSize(9);
+    doc.text(`Receitas: ${formatBRL(totalEntries)}   |   Despesas: ${formatBRL(totalExits)}   |   Saldo: ${formatBRL(totalBalance)}`, 14, 22);
+
+    const tableRows: (string | number)[][] = [];
+
+    for (const group of grouped) {
+      // Category header row
+      tableRows.push([
+        '',
+        `${group.label} (${group.percentage.toFixed(1)}%)`,
+        '',
+        '',
+        formatBRL(group.total),
+      ]);
+
+      for (const sub of group.subs) {
+        // Subcategory header (if different from parent)
+        if (group.subs.length > 1 || sub.label !== group.label) {
+          tableRows.push([
+            '',
+            `    ${sub.label} (${sub.percentage.toFixed(1)}%)`,
+            '',
+            '',
+            formatBRL(sub.total),
+          ]);
+        }
+
+        for (const t of sub.transactions) {
+          tableRows.push([
+            formatDate(t.date),
+            `        ${t.description}`,
+            t.account,
+            t.titular,
+            formatBRL(t.amount),
+          ]);
+        }
+      }
+    }
+
+    autoTable(doc, {
+      startY: 27,
+      head: [['Data', 'Descricao', 'Conta', 'Titular', 'Valor']],
+      body: tableRows,
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [245, 158, 11], textColor: [0, 0, 0], fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 35 },
+        4: { cellWidth: 28, halign: 'right' },
+      },
+      didParseCell: (data: { row: { index: number }; cell: { styles: { fontStyle: string; fillColor: number[] } } }) => {
+        const rowData = tableRows[data.row.index];
+        if (rowData && !rowData[0]) {
+          // Category/subcategory header row
+          data.cell.styles.fontStyle = 'bold';
+          data.cell.styles.fillColor = [30, 30, 30];
+        }
+      },
+    });
+
+    doc.save(`relatorio_${monthYear}.pdf`);
+  }
+
+  if (loading) {
+    return <div className="text-accent text-sm animate-pulse">Carregando...</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
+        <div className="flex items-center gap-3">
+          <MonthSelector value={monthYear} onChange={setMonthYear} />
+          <div className="flex gap-1">
+            <button
+              onClick={exportExcel}
+              disabled={filteredTransactions.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+              title="Exportar Excel"
+            >
+              <FileSpreadsheet size={14} /> Excel
+            </button>
+            <button
+              onClick={exportPDF}
+              disabled={filteredTransactions.length === 0}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+              title="Exportar PDF"
+            >
+              <Download size={14} /> PDF
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Summary + filters */}
+      <div className="flex gap-4 flex-wrap items-start">
+        {/* Summary card */}
+        <div className="bg-bg-card border border-border rounded-lg p-4 space-y-2 min-w-[200px]">
+          <div className="flex justify-between text-xs">
+            <span className="text-text-secondary">Receitas</span>
+            <span className="text-accent-green font-bold">{formatBRL(totalEntries)}</span>
+          </div>
+          <div className="flex justify-between text-xs">
+            <span className="text-text-secondary">Despesas</span>
+            <span className="text-accent-red font-bold">{formatBRL(totalExits)}</span>
+          </div>
+          <div className="border-t border-border pt-2 flex justify-between text-xs">
+            <span className="text-text-secondary">Total</span>
+            <span className={`font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+              {formatBRL(totalBalance)}
+            </span>
+          </div>
+        </div>
+
+        {/* Type filter */}
+        <div className="flex gap-1">
+          {([['all', 'Todos'], ['despesa', 'Despesas'], ['receita', 'Receitas']] as const).map(([value, label]) => (
+            <button
+              key={value}
+              onClick={() => setFilterType(value)}
+              className={`px-3 py-1.5 text-xs rounded ${
+                filterType === value
+                  ? 'bg-accent text-bg-primary font-bold'
+                  : 'bg-bg-secondary border border-border text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Expand/Collapse */}
+        <div className="flex gap-1 ml-auto">
+          <button onClick={expandAll} className="px-2 py-1.5 text-[10px] text-text-secondary hover:text-text-primary bg-bg-secondary border border-border rounded">
+            Expandir tudo
+          </button>
+          <button onClick={collapseAll} className="px-2 py-1.5 text-[10px] text-text-secondary hover:text-text-primary bg-bg-secondary border border-border rounded">
+            Recolher tudo
+          </button>
+        </div>
+      </div>
+
+      {/* Transaction count */}
+      <div className="text-xs text-text-secondary">
+        {filteredTransactions.length} lancamentos em {grouped.length} categorias
+      </div>
+
+      {/* Category groups */}
+      {grouped.length === 0 ? (
+        <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-sm">
+          Nenhum lancamento neste periodo.
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {grouped.map((group) => {
+            const catKey = group.category?.id || group.label;
+            const isCatExpanded = expandedCats.has(catKey);
+
+            return (
+              <div key={catKey} className="bg-bg-card border border-border rounded-lg overflow-hidden">
+                {/* Category header */}
+                <button
+                  onClick={() => toggleCat(catKey)}
+                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-bg-secondary/40 transition-colors"
+                >
+                  {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
+                  <CategoryIcon icon={group.icon} size={16} className="text-text-primary" />
+                  <span className="text-sm font-bold text-text-primary">{group.label}</span>
+                  <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
+                  <span className={`ml-auto text-sm font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    {formatBRL(group.total)}
+                  </span>
+                </button>
+
+                {/* Subcategories */}
+                {isCatExpanded && group.subs.map((sub) => {
+                  const subKey = sub.category?.id || sub.label;
+                  const isSubExpanded = expandedSubs.has(subKey);
+                  const showSubHeader = group.subs.length > 1 || sub.label !== group.label;
+
+                  return (
+                    <div key={subKey}>
+                      {/* Subcategory header */}
+                      {showSubHeader && (
+                        <button
+                          onClick={() => toggleSub(subKey)}
+                          className="w-full flex items-center gap-3 px-4 py-2 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
+                        >
+                          {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
+                          <CategoryIcon icon={sub.icon} size={14} className="text-text-secondary" />
+                          <span className="text-xs text-text-primary">{sub.label}</span>
+                          <span className="text-[10px] text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
+                          <span className={`ml-auto text-xs font-bold font-mono ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                            {formatBRL(sub.total)}
+                          </span>
+                        </button>
+                      )}
+
+                      {/* Transactions */}
+                      {(showSubHeader ? isSubExpanded : isCatExpanded) && (
+                        <div className="border-t border-border/30">
+                          {sub.transactions.map((t) => (
+                            <div
+                              key={t.id}
+                              className="flex items-center gap-3 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/10 text-xs"
+                            >
+                              <span className="text-text-secondary w-16 flex-shrink-0 font-mono">
+                                {formatDate(t.date)}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-text-primary truncate">{t.description}</p>
+                                <p className="text-[10px] text-text-secondary truncate">
+                                  {t.account}
+                                  {t.titular && ` · ${t.titular}`}
+                                  {t.totalInstallments && ` · ${t.installmentNumber}/${t.totalInstallments}`}
+                                </p>
+                              </div>
+                              <span className={`font-mono font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                {formatBRL(t.amount)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
