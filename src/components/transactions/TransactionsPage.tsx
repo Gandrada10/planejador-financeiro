@@ -182,7 +182,57 @@ export function TransactionsPage() {
       </div>
 
       <div className="flex gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
+        <select
+          value={filterAccount}
+          onChange={(e) => setFilterAccount(e.target.value)}
+          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todas as contas</option>
+          {accountNames.map((a) => (
+            <option key={a} value={a}>{a}</option>
+          ))}
+        </select>
+        <select
+          value={filterMonth}
+          onChange={(e) => setFilterMonth(e.target.value)}
+          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todos os meses</option>
+          {months.map((m) => (
+            <option key={m} value={m}>{getMonthLabel(m)}</option>
+          ))}
+        </select>
+        <select
+          value={filterCategory}
+          onChange={(e) => setFilterCategory(e.target.value)}
+          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todas as categorias</option>
+          <option value="uncategorized">Sem categoria</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          ))}
+        </select>
+        <select
+          value={filterTitular}
+          onChange={(e) => setFilterTitular(e.target.value)}
+          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todos os titulares</option>
+          {allTitulars.map((t) => (
+            <option key={t} value={t}>{t}</option>
+          ))}
+        </select>
+        <select
+          value={filterInstallment}
+          onChange={(e) => setFilterInstallment(e.target.value)}
+          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+        >
+          <option value="all">Todos os tipos</option>
+          <option value="installments">Parcelados</option>
+          <option value="single">Avulsos</option>
+        </select>
+        <div className="relative flex-1 min-w-[140px]">
           <Search size={14} className="absolute left-2.5 top-2.5 text-text-secondary" />
           <input
             type="text"
@@ -192,56 +242,6 @@ export function TransactionsPage() {
             className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
           />
         </div>
-        <select
-          value={filterMonth}
-          onChange={(e) => setFilterMonth(e.target.value)}
-          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
-        >
-          <option value="all">Todos os meses</option>
-          {months.map((m) => (
-            <option key={m} value={m}>{getMonthLabel(m)}</option>
-          ))}
-        </select>
-        <select
-          value={filterTitular}
-          onChange={(e) => setFilterTitular(e.target.value)}
-          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
-        >
-          <option value="all">Todos os titulares</option>
-          {allTitulars.map((t) => (
-            <option key={t} value={t}>{t}</option>
-          ))}
-        </select>
-        <select
-          value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
-        >
-          <option value="all">Todas as categorias</option>
-          <option value="uncategorized">Sem categoria</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
-          ))}
-        </select>
-        <select
-          value={filterAccount}
-          onChange={(e) => setFilterAccount(e.target.value)}
-          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
-        >
-          <option value="all">Todas as contas</option>
-          {accountNames.map((a) => (
-            <option key={a} value={a}>{a}</option>
-          ))}
-        </select>
-        <select
-          value={filterInstallment}
-          onChange={(e) => setFilterInstallment(e.target.value)}
-          className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
-        >
-          <option value="all">Todos os tipos</option>
-          <option value="installments">Parcelados</option>
-          <option value="single">Avulsos</option>
-        </select>
       </div>
 
       <div className="flex gap-4 text-xs text-text-secondary">
