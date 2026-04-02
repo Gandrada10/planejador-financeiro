@@ -10,7 +10,6 @@ import {
   Timestamp,
   query,
   where,
-  orderBy,
   onSnapshot,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
@@ -30,11 +29,14 @@ export function useCategorizationSessions() {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
 
+    // Query WITHOUT orderBy to avoid requiring a composite Firestore index.
+    // Sort client-side instead.
     const ref = collection(db, 'categorizationSessions');
-    const q = query(ref, where('userId', '==', uid), orderBy('createdAt', 'desc'));
-    return onSnapshot(q, (snap) => {
-      setSessions(
-        snap.docs.map((d) => {
+    const q = query(ref, where('userId', '==', uid));
+    return onSnapshot(
+      q,
+      (snap) => {
+        const list = snap.docs.map((d) => {
           const data = d.data();
           return {
             id: d.id,
@@ -45,9 +47,15 @@ export function useCategorizationSessions() {
             expiresAt: (data.expiresAt as Timestamp).toDate(),
             createdAt: (data.createdAt as Timestamp).toDate(),
           };
-        })
-      );
-    });
+        });
+        // Sort client-side: newest first
+        list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+        setSessions(list);
+      },
+      (err) => {
+        console.error('Erro ao carregar sessoes de categorizacao:', err);
+      }
+    );
   }, []);
 
   async function createSession(
@@ -105,28 +113,37 @@ export function useCategorizationSessions() {
   // Read session transactions from Firestore and apply categorized ones to the real user transactions
   const applyCategorizationsFromSession = useCallback(async (token: string) => {
     const uid = auth.currentUser?.uid;
-    if (!uid) return 0;
+    if (!uid) {
+      console.error('applyCategorizationsFromSession: usuario nao autenticado');
+      return 0;
+    }
 
-    const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
-    const batch = writeBatch(db);
-    let applied = 0;
+    try {
+      const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
+      const batch = writeBatch(db);
+      let applied = 0;
 
-    for (const txDoc of txSnap.docs) {
-      const data = txDoc.data();
-      if (data.categoryId) {
-        const realTxRef = doc(db, 'users', uid, 'transactions', data.transactionId);
-        batch.update(realTxRef, {
-          categoryId: data.categoryId,
-          ...(data.notes ? { notes: data.notes } : {}),
-        });
-        applied++;
+      for (const txDoc of txSnap.docs) {
+        const data = txDoc.data();
+        if (data.categoryId) {
+          const realTxRef = doc(db, 'users', uid, 'transactions', data.transactionId);
+          batch.update(realTxRef, {
+            categoryId: data.categoryId,
+            ...(data.notes ? { notes: data.notes } : {}),
+          });
+          applied++;
+        }
       }
-    }
 
-    if (applied > 0) {
-      await batch.commit();
+      if (applied > 0) {
+        await batch.commit();
+      }
+      return applied;
+    } catch (err) {
+      console.error('Erro ao aplicar categorizacoes:', err);
+      alert('Erro ao aplicar categorizacoes. Verifique o console para mais detalhes.');
+      return 0;
     }
-    return applied;
   }, []);
 
   // Apply all pending sessions at once — called by TransactionsPage on mount

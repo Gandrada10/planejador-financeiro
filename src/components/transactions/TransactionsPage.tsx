@@ -254,12 +254,12 @@ export function TransactionsPage() {
         </span>
       </div>
 
-      {sessions.filter((s) => s.categorizedCount > 0 && s.expiresAt > new Date()).map((s) => (
+      {sessions.filter((s) => s.expiresAt > new Date()).map((s) => (
         <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
           <div className="flex items-center gap-2">
             <CheckCircle size={14} className="text-accent" />
             <span className="text-text-primary">
-              <strong>{s.titularName}</strong> categorizou {s.categorizedCount}/{s.transactionIds.length} transacoes
+              <strong>{s.titularName}</strong> — {s.categorizedCount}/{s.transactionIds.length} categorizadas
             </span>
           </div>
           <button
@@ -267,12 +267,16 @@ export function TransactionsPage() {
               setApplyingSession(s.id);
               const count = await applyCategorizationsFromSession(s.id);
               setApplyingSession(null);
-              alert(`${count} categorias aplicadas!`);
+              if (count > 0) {
+                alert(`${count} categorias aplicadas com sucesso!`);
+              } else {
+                alert('Nenhuma categorizacao pendente encontrada nesta sessao.');
+              }
             }}
             disabled={applyingSession === s.id}
             className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
           >
-            {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
+            {applyingSession === s.id ? 'Aplicando...' : 'Aplicar Categorizacoes'}
           </button>
         </div>
       ))}
