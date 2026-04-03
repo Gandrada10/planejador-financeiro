@@ -5,6 +5,7 @@ interface Env {
 interface ParseRequest {
   rawText: string;
   fileName: string;
+  apiKey?: string;
 }
 
 interface ParsedTransaction {
@@ -19,20 +20,21 @@ interface ParsedTransaction {
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const apiKey = context.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    return new Response(JSON.stringify({ error: 'API key not configured' }), {
-      status: 500,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
-
   let body: ParseRequest;
   try {
     body = await context.request.json();
   } catch {
     return new Response(JSON.stringify({ error: 'Invalid request body' }), {
       status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
+
+  // Accept key from: request body (user-configured in app) > env var (Cloudflare dashboard)
+  const apiKey = body.apiKey || context.env.ANTHROPIC_API_KEY || '';
+  if (!apiKey) {
+    return new Response(JSON.stringify({ error: 'API key not configured. Configure sua chave Anthropic em Configuracoes > Chave API.' }), {
+      status: 500,
       headers: { 'Content-Type': 'application/json' },
     });
   }
@@ -55,10 +57,16 @@ Para cada transacao, extraia:
 - "purchaseDate": mesma data da compra (igual a "date"). So use valor diferente se houver explicitamente duas datas distintas no mesmo lancamento.
 - "description": descricao da transacao (limpa, sem codigos internos desnecessarios)
 - "amount": valor numerico (negativo para debitos/despesas, positivo para creditos/receitas)
-- "titular": nome do titular do cartao se identificavel no extrato, senao string vazia
+- "titular": nome do titular responsavel pelo lancamento. REGRAS CRITICAS para identificar titular:
+  * Faturas de cartao com multiplos titulares organizam os lancamentos em SECOES separadas por nome. Ex: uma secao "GUSTAVO ANDRADA" seguida de transacoes, depois uma secao "JULIANA KUHN - CARTAO ADICIONAL" seguida das transacoes dela.
+  * O nome do titular aparece como linha isolada (cabecalho de secao) ANTES do grupo de transacoes que pertencem a ele.
+  * Cada transacao deve receber o titular da secao em que aparece — nao use o mesmo titular para todas as transacoes se houver secoes distintas.
+  * Ignore sufixos como "CARTAO ADICIONAL", "ADICIONAL", "TITULAR" — use apenas o nome da pessoa.
+  * Se o extrato nao tiver secoes por titular (apenas um portador), use o nome do titular principal encontrado no cabecalho da fatura.
+  * Se nao for possivel identificar o titular de nenhuma forma, use string vazia.
 - "installmentNumber": numero da parcela atual se for compra parcelada (ex: 3 de "PARCELA 3/10"), senao null
 - "totalInstallments": total de parcelas se for compra parcelada (ex: 10 de "PARCELA 3/10"), senao null
-- "cardNumber": ultimos 4 digitos do cartao se visivel no extrato, senao null
+- "cardNumber": ultimos 4 digitos do cartao se visivel proximo ao lancamento ou cabecalho da secao, senao null
 
 Regras CRITICAS sobre datas:
 - A data ao lado de cada lancamento e a DATA DA COMPRA, nao confunda com datas de vencimento da fatura
@@ -76,13 +84,14 @@ Regras gerais:
 - Detecte datas em formatos: DD/MM/YYYY, DD/MM, YYYY-MM-DD, DD-MM-YYYY, DD.MM.YYYY
 - Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
 - PROCESSE TODAS as transacoes do extrato, mesmo que sejam muitas (100+)
+- CRUCIAL: em faturas com cartao adicional, as transacoes do adicional NAO sao do titular principal — atribua o titular correto a cada lancamento conforme a secao em que aparece
 
 Responda APENAS com um JSON object com dois campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
 - "transactions": array com as transacoes
 
-Sem markdown, sem explicacao, sem code blocks. Exemplo:
-{"isCreditCard":true,"transactions":[{"date":"2025-01-23","purchaseDate":"2025-01-23","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"}]}
+Sem markdown, sem explicacao, sem code blocks. Exemplo com dois titulares:
+{"isCreditCard":true,"transactions":[{"date":"2025-01-23","purchaseDate":"2025-01-23","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"},{"date":"2025-01-20","purchaseDate":"2025-01-20","description":"AMAZON","amount":-89.90,"titular":"MARIA SILVA","installmentNumber":null,"totalInstallments":null,"cardNumber":"5678"}]}
 
 Texto do extrato (pode estar desformatado, PDFs frequentemente tem quebras estranhas):
 ${truncatedText}`;
@@ -96,7 +105,7 @@ ${truncatedText}`;
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 16000,
         messages: [{ role: 'user', content: prompt }],
       }),

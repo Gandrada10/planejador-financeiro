@@ -13,7 +13,7 @@ export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [selectedCardId, setSelectedCardId] = useState('');
 
-  const { transactions, loading: loadingTx, updateTransaction, deleteTransaction } = useTransactions();
+  const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled } = useTransactions();
   const { categories } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
   const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
@@ -194,6 +194,7 @@ export function CreditCardPage() {
             totalTransactions={invoiceTransactions.length}
             onUpdate={updateTransaction}
             onDelete={deleteTransaction}
+            onBatchReconcile={batchUpdateReconciled}
             checkClosedCycle={checkClosedCycleForTx}
             reopenCycle={reopenCycle}
           />

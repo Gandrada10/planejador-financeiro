@@ -37,3 +37,12 @@ export function normalizeTitular(name: string): string {
     .toLowerCase()
     .replace(/(?:^|\s)\S/g, (ch) => ch.toUpperCase());
 }
+
+/**
+ * Filter categories so the dropdown only shows relevant types for a given amount.
+ * amount >= 0 → receita + ambos; amount < 0 → despesa + ambos
+ */
+export function filterCategoriesByAmount<T extends { type: string }>(categories: T[], amount: number): T[] {
+  const allowed = amount >= 0 ? ['receita', 'ambos'] : ['despesa', 'ambos'];
+  return categories.filter((c) => allowed.includes(c.type));
+}

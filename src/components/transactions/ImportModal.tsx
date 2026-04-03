@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account } from '../../types';
-import { formatBRL, getMonthYear, getMonthLabel } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel, filterCategoriesByAmount } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -186,10 +186,16 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         return;
       }
 
+      const localKey = localStorage.getItem('anthropic_api_key') || '';
+      if (!localKey) {
+        setError('Chave API nao configurada. Va em Configuracoes > Chave API e insira sua chave Anthropic.');
+        setAiParsing(false);
+        return;
+      }
       const response = await fetch('/api/parse-statement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText, fileName: file.name }),
+        body: JSON.stringify({ rawText, fileName: file.name, apiKey: localKey }),
       });
 
       if (!response.ok) {
@@ -236,6 +242,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           tags: [],
           notes: '',
           importBatch: null,
+          reconciled: false,
+          reconciledAt: null,
         };
         return {
           ...item,
@@ -625,15 +633,19 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               className={inputClass}
                             >
                               <option value="">—</option>
-                              {rootCats.map((cat) => {
-                                const subs = subCats(cat.id);
-                                return (
-                                  <optgroup key={cat.id} label={cat.name}>
-                                    <option value={cat.id}>{cat.name}</option>
-                                    {subs.map((s) => <option key={s.id} value={s.id}>  ↳ {s.name}</option>)}
-                                  </optgroup>
-                                );
-                              })}
+                              {(() => {
+                                const rel = filterCategoriesByAmount(categories, item.amount);
+                                const roots = rel.filter((c) => !c.parentId);
+                                return roots.map((cat) => {
+                                  const subs = rel.filter((c) => c.parentId === cat.id);
+                                  return (
+                                    <optgroup key={cat.id} label={cat.name}>
+                                      <option value={cat.id}>{cat.name}</option>
+                                      {subs.map((s) => <option key={s.id} value={s.id}>  ↳ {s.name}</option>)}
+                                    </optgroup>
+                                  );
+                                });
+                              })()}
                             </select>
                           ) : (
                             <span className="text-text-secondary">—</span>

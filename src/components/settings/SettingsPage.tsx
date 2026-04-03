@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X, Users } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X, Users, KeyRound, Eye, EyeOff } from 'lucide-react';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -33,6 +33,10 @@ export function SettingsPage() {
   const { members, memberNames, loading: loadingMembers, addMember, deleteMember } = useFamilyMembers();
   const { accounts, loading: loadingAccounts, addAccount, updateAccount, deleteAccount } = useAccounts();
   const { cycles, loading: loadingCycles, createCycle, closeCycle, reopenCycle, deleteCycle } = useBillingCycles();
+
+  const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem('anthropic_api_key') || '');
+  const [showKey, setShowKey] = useState(false);
+  const [keySaved, setKeySaved] = useState(false);
 
   const [newMemberName, setNewMemberName] = useState('');
   const [cardDigits, setCardDigits] = useState('');
@@ -313,6 +317,62 @@ export function SettingsPage() {
               </div>
             )}
           </>
+        )}
+      </div>
+
+      {/* Anthropic API Key */}
+      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <KeyRound size={16} className="text-accent" /> Chave API (Importacao com IA)
+          </h3>
+          <p className="text-[10px] text-text-secondary mt-1">
+            Informe sua chave da Anthropic para usar a importacao de extratos por IA (PDF, Excel). A chave e salva apenas neste navegador.
+          </p>
+        </div>
+        <div className="flex gap-2 flex-wrap items-center">
+          <div className="relative flex-1 min-w-[260px]">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={anthropicKey}
+              onChange={(e) => { setAnthropicKey(e.target.value); setKeySaved(false); }}
+              placeholder="sk-ant-..."
+              className={`${inputClass} w-full pr-9 font-mono text-xs`}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey((v) => !v)}
+              className="absolute right-2 top-2.5 text-text-secondary hover:text-text-primary"
+            >
+              {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+            </button>
+          </div>
+          <button
+            onClick={() => {
+              localStorage.setItem('anthropic_api_key', anthropicKey.trim());
+              setKeySaved(true);
+            }}
+            disabled={!anthropicKey.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+          >
+            {keySaved ? <><Check size={14} /> Salvo</> : 'Salvar'}
+          </button>
+          {anthropicKey && (
+            <button
+              onClick={() => { localStorage.removeItem('anthropic_api_key'); setAnthropicKey(''); setKeySaved(false); }}
+              className="text-text-secondary hover:text-accent-red"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+        {keySaved && (
+          <p className="text-[10px] text-accent-green">Chave salva. A importacao com IA ja pode ser usada.</p>
+        )}
+        {!anthropicKey && (
+          <p className="text-[10px] text-accent">
+            Sem chave configurada — importacao com IA retornara erro. Obtenha sua chave em console.anthropic.com.
+          </p>
         )}
       </div>
 

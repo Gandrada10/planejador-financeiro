@@ -22,6 +22,7 @@ export function DashboardPage() {
   const totalEntries = useMemo(() => monthTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0), [monthTransactions]);
   const totalExits = useMemo(() => monthTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0), [monthTransactions]);
   const totalBalance = totalEntries + totalExits;
+  const pendingReconciliation = useMemo(() => transactions.filter((t) => !t.reconciled).length, [transactions]);
 
   // Cash flow by account
   const cashFlowData = useMemo(() => {
@@ -102,7 +103,7 @@ export function DashboardPage() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="bg-bg-card border border-border rounded-lg p-4">
           <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Receitas</p>
           <p className="text-xl font-bold text-accent-green">{formatBRL(totalEntries)}</p>
@@ -115,6 +116,12 @@ export function DashboardPage() {
           <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Saldo</p>
           <p className={`text-xl font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
             {formatBRL(totalBalance)}
+          </p>
+        </div>
+        <div className="bg-bg-card border border-border rounded-lg p-4">
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Pendente Conciliacao</p>
+          <p className={`text-xl font-bold ${pendingReconciliation > 0 ? 'text-accent' : 'text-accent-green'}`}>
+            {pendingReconciliation}
           </p>
         </div>
       </div>

@@ -1,11 +1,17 @@
 import { useState, useMemo } from 'react';
-import { Download, FileSpreadsheet, ChevronDown, ChevronRight } from 'lucide-react';
+import { Download, FileSpreadsheet, ChevronDown, ChevronRight, TrendingUp, BarChart2, Tags } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
+import { useBudgets } from '../../hooks/useBudgets';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CategoryIcon } from '../shared/CategoryIcon';
+import { CashFlowReport } from './CashFlowReport';
+import { CategoryEvolutionReport } from './CategoryEvolutionReport';
+import { FinancialChat } from './FinancialChat';
 import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
+
+type ReportTab = 'categorias' | 'fluxo' | 'evolucao';
 
 interface CategoryGroup {
   category: Category | null;
@@ -28,6 +34,8 @@ interface SubCategoryGroup {
 export function ReportsPage() {
   const { transactions, loading } = useTransactions();
   const { categories, rootCategories, subCategories } = useCategories();
+  const { budgets } = useBudgets();
+  const [activeTab, setActiveTab] = useState<ReportTab>('categorias');
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
@@ -296,28 +304,62 @@ export function ReportsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
-        <div className="flex items-center gap-3">
+      <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
+
+      {/* Tab navigation */}
+      <div className="flex gap-1 border-b border-border pb-0">
+        {([
+          ['categorias', Tags, 'Por Categoria'],
+          ['fluxo', TrendingUp, 'Fluxo de Caixa'],
+          ['evolucao', BarChart2, 'Evolucao por Categoria'],
+        ] as [ReportTab, React.ElementType, string][]).map(([tab, Icon, label]) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`flex items-center gap-1.5 px-4 py-2 text-xs rounded-t transition-colors border-b-2 -mb-px ${
+              activeTab === tab
+                ? 'text-accent border-accent bg-accent/5'
+                : 'text-text-secondary border-transparent hover:text-text-primary hover:border-border'
+            }`}
+          >
+            <Icon size={13} />
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Fluxo de Caixa */}
+      {activeTab === 'fluxo' && <CashFlowReport />}
+
+      {/* Evolucao por Categoria */}
+      {activeTab === 'evolucao' && <CategoryEvolutionReport />}
+
+      {/* Por Categoria - existing report */}
+      {activeTab === 'categorias' && <>
+
+      {/* Range bar */}
+      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-lg">
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-text-secondary">Mes:</span>
           <MonthSelector value={monthYear} onChange={setMonthYear} />
-          <div className="flex gap-1">
-            <button
-              onClick={exportExcel}
-              disabled={filteredTransactions.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
-              title="Exportar Excel"
-            >
-              <FileSpreadsheet size={14} /> Excel
-            </button>
-            <button
-              onClick={exportPDF}
-              disabled={filteredTransactions.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
-              title="Exportar PDF"
-            >
-              <Download size={14} /> PDF
-            </button>
-          </div>
+        </div>
+        <div className="ml-auto flex gap-1">
+          <button
+            onClick={exportExcel}
+            disabled={filteredTransactions.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            title="Exportar Excel"
+          >
+            <FileSpreadsheet size={13} /> Excel
+          </button>
+          <button
+            onClick={exportPDF}
+            disabled={filteredTransactions.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            title="Exportar PDF"
+          >
+            <Download size={13} /> PDF
+          </button>
         </div>
       </div>
 
@@ -459,6 +501,9 @@ export function ReportsPage() {
           })}
         </div>
       )}
+      </>}
+
+      <FinancialChat transactions={transactions} categories={categories} budgets={budgets} />
     </div>
   );
 }

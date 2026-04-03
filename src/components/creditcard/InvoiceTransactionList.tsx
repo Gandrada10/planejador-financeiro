@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { useState } from 'react';
-import { formatBRL, formatDate } from '../../lib/utils';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 interface TitularGroup {
@@ -15,20 +15,45 @@ interface Props {
   totalTransactions: number;
   onUpdate?: (id: string, data: Partial<Transaction>) => void;
   onDelete?: (id: string) => void;
+  onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
   /** If provided, guard edits behind closed-cycle confirmation */
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function InvoiceTransactionList({ groups, categories, totalTransactions, onUpdate, onDelete, checkClosedCycle, reopenCycle }: Props) {
+export function InvoiceTransactionList({ groups, categories, totalTransactions, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [sortField, setSortField] = useState<'purchaseDate' | 'date'>('purchaseDate');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  function toggleSort(field: 'purchaseDate' | 'date') {
+    if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    else { setSortField(field); setSortDir('asc'); }
+  }
+
+  function SortIcon({ field }: { field: 'purchaseDate' | 'date' }) {
+    if (sortField !== field) return <ArrowUpDown size={9} className="inline ml-0.5 opacity-40" />;
+    return sortDir === 'asc'
+      ? <ArrowUp size={9} className="inline ml-0.5 text-accent" />
+      : <ArrowDown size={9} className="inline ml-0.5 text-accent" />;
+  }
+
+  const allTransactions = useMemo(() => groups.flatMap((g) => g.transactions), [groups]);
+  const pendingCount = useMemo(() => allTransactions.filter((t) => !t.reconciled).length, [allTransactions]);
 
   function toggleGroup(titular: string) {
     const next = new Set(collapsed);
     if (next.has(titular)) next.delete(titular); else next.add(titular);
     setCollapsed(next);
+  }
+
+  function toggleSelect(id: string) {
+    const next = new Set(selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelectedIds(next);
   }
 
   function getCategoryLabel(catId: string | null): string {
@@ -68,6 +93,25 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
     } else if (field === 'amount') {
       const val = parseFloat(editValue.replace(',', '.'));
       if (!isNaN(val)) onUpdate(t.id, { amount: val });
+    } else if (field === 'date' && editValue) {
+      const d = new Date(editValue + 'T12:00:00');
+      if (!isNaN(d.getTime())) onUpdate(t.id, { date: d });
+    } else if (field === 'purchaseDate') {
+      if (!editValue) {
+        onUpdate(t.id, { purchaseDate: null });
+      } else {
+        const d = new Date(editValue + 'T12:00:00');
+        if (!isNaN(d.getTime())) onUpdate(t.id, { purchaseDate: d });
+      }
+    } else if (field === 'installments') {
+      const parts = editValue.split('/');
+      const num = parseInt(parts[0]);
+      const total = parseInt(parts[1]);
+      if (!isNaN(num) && !isNaN(total)) {
+        onUpdate(t.id, { installmentNumber: num, totalInstallments: total });
+      } else if (!editValue.trim()) {
+        onUpdate(t.id, { installmentNumber: null, totalInstallments: null });
+      }
     }
 
     setEditingCell(null);
@@ -83,8 +127,43 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
   return (
     <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
       {/* Header */}
-      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <span className="text-xs font-bold text-text-primary">{totalTransactions} lancamentos</span>
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <span className="text-xs font-bold text-text-primary">{totalTransactions} lancamentos</span>
+          {pendingCount > 0 && (
+            <span className="text-[10px] text-accent">{pendingCount} pendentes conciliacao</span>
+          )}
+          <span className="text-[10px] text-text-secondary">
+            Ordenar:
+            <button onClick={() => toggleSort('purchaseDate')} className="ml-1 hover:text-text-primary">
+              Data <SortIcon field="purchaseDate" />
+            </button>
+            <span className="mx-1">·</span>
+            <button onClick={() => toggleSort('date')} className="hover:text-text-primary">
+              Competencia <SortIcon field="date" />
+            </button>
+          </span>
+        </div>
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2">
+            {onBatchReconcile && (
+              <button
+                onClick={() => { onBatchReconcile([...selectedIds], true); setSelectedIds(new Set()); }}
+                className="flex items-center gap-1 text-xs text-accent-green hover:underline"
+              >
+                <CheckCircle2 size={12} /> Conciliar ({selectedIds.size})
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={() => { selectedIds.forEach((id) => onDelete(id)); setSelectedIds(new Set()); }}
+                className="flex items-center gap-1 text-xs text-accent-red hover:underline"
+              >
+                <Trash2 size={12} /> Excluir ({selectedIds.size})
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       {groups.length === 0 ? (
@@ -107,6 +186,13 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                     <span className="text-xs font-bold text-text-primary">
                       {group.titular || 'Sem titular'}
                     </span>
+                    {(() => {
+                      const cardNum = group.transactions[0]?.cardNumber;
+                      const last4 = cardNum ? cardNum.replace(/\D/g, '').slice(-4) : null;
+                      return last4 ? (
+                        <span className="text-[10px] text-text-secondary font-mono">**** {last4}</span>
+                      ) : null;
+                    })()}
                   </div>
                   <span className="text-xs font-bold text-accent-red">{formatBRL(group.total)}</span>
                 </button>
@@ -114,17 +200,45 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                 {/* Transactions */}
                 {!isCollapsed && (
                   <div className="divide-y divide-border/30">
-                    {group.transactions.map((t) => (
+                    {[...group.transactions].sort((a, b) => {
+                      const av = sortField === 'date' ? a.date : (a.purchaseDate || a.date);
+                      const bv = sortField === 'date' ? b.date : (b.purchaseDate || b.date);
+                      const diff = av.getTime() - bv.getTime();
+                      return sortDir === 'asc' ? diff : -diff;
+                    }).map((t) => (
                       <div key={t.id} className="flex items-center px-4 py-2 hover:bg-bg-secondary/30 transition-colors">
-                        {/* Status dot */}
-                        <div className="w-6 flex-shrink-0">
-                          <span className={`w-2 h-2 rounded-full inline-block ${t.amount >= 0 ? 'bg-accent-green' : 'bg-accent'}`} />
+                        {/* Status / select dot */}
+                        <div className="w-6 flex-shrink-0 flex justify-center">
+                          <div
+                            className={`w-3.5 h-3.5 rounded-full border cursor-pointer transition-colors ${
+                              selectedIds.has(t.id)
+                                ? 'bg-accent border-accent'
+                                : t.reconciled
+                                ? 'bg-accent-green border-accent-green'
+                                : 'border-border hover:border-accent hover:bg-accent/20'
+                            }`}
+                            onClick={(e) => { e.stopPropagation(); toggleSelect(t.id); }}
+                            title={t.reconciled ? 'Conciliado – clique para selecionar' : 'Clique para selecionar'}
+                          />
                         </div>
 
-                        {/* Purchase date */}
-                        <span className="text-xs text-text-secondary w-[70px] flex-shrink-0">
-                          {formatDate(t.purchaseDate || t.date)}
-                        </span>
+                        {/* Purchase date - editable */}
+                        <div
+                          className={`text-xs text-text-secondary w-[70px] flex-shrink-0 ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'purchaseDate', (t.purchaseDate || t.date).toISOString().split('T')[0])}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
+                            <input
+                              autoFocus
+                              type="date"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-[90px] bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                            />
+                          ) : formatDate(t.purchaseDate || t.date)}
+                        </div>
 
                         {/* Description - editable */}
                         <div
@@ -142,13 +256,27 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                             />
                           ) : (
                             <>
-                              <div className="text-xs text-text-primary truncate">
+                              <div className="text-xs text-text-primary truncate flex items-center gap-1">
                                 {t.description}
-                                {t.totalInstallments && (
-                                  <span className="ml-1.5 text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded">
+                                {editingCell?.id === t.id && editingCell.field === 'installments' ? (
+                                  <input
+                                    autoFocus
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    onBlur={() => commitEdit(t)}
+                                    onKeyDown={(e) => handleKeyDown(e, t)}
+                                    placeholder="1/12"
+                                    className="ml-1 w-14 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-[10px] text-center focus:outline-none"
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                ) : t.totalInstallments ? (
+                                  <span
+                                    className={`ml-1.5 text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded flex-shrink-0 ${editable}`}
+                                    onClick={(e) => { e.stopPropagation(); onUpdate && startEdit(t.id, 'installments', `${t.installmentNumber ?? 1}/${t.totalInstallments}`); }}
+                                  >
                                     {t.installmentNumber}/{t.totalInstallments}
                                   </span>
-                                )}
+                                ) : null}
                               </div>
                               {t.categoryId && (
                                 <p className="text-[10px] text-text-secondary truncate">
@@ -161,23 +289,40 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
 
                         {/* Category - select */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[120px] mr-2">
-                            <select
-                              value={t.categoryId || ''}
-                              onChange={async (e) => {
-                                const val = e.target.value || null;
-                                const ok = await guardClosedCycle(t);
-                                if (!ok) { e.target.value = t.categoryId || ''; return; }
-                                onUpdate(t.id, { categoryId: val });
-                              }}
-                              className="w-full bg-transparent border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary"
-                              style={{ color: categories.find((c) => c.id === t.categoryId)?.color || undefined }}
-                            >
-                              <option value="">Sem cat.</option>
-                              {categories.map((cat) => (
-                                <option key={cat.id} value={cat.id}>{cat.name}</option>
-                              ))}
-                            </select>
+                          <div className="flex-shrink-0 w-[130px] mr-2">
+                            {(() => {
+                              const relevantCats = filterCategoriesByAmount(categories, t.amount);
+                              const rootCats = relevantCats.filter((c) => !c.parentId);
+                              return (
+                                <select
+                                  value={t.categoryId || ''}
+                                  onChange={async (e) => {
+                                    const val = e.target.value || null;
+                                    const ok = await guardClosedCycle(t);
+                                    if (!ok) { e.target.value = t.categoryId || ''; return; }
+                                    onUpdate(t.id, { categoryId: val });
+                                  }}
+                                  className="w-full bg-bg-secondary border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary rounded px-1"
+                                  style={{ color: categories.find((c) => c.id === t.categoryId)?.color || 'var(--color-text-secondary)' }}
+                                >
+                                  <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>Sem cat.</option>
+                                  {rootCats.map((cat) => {
+                                    const subs = relevantCats.filter((c) => c.parentId === cat.id);
+                                    if (subs.length > 0) {
+                                      return (
+                                        <optgroup key={cat.id} label={cat.name} style={{ backgroundColor: '#111111', color: '#737373' }}>
+                                          <option value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>
+                                          {subs.map((sub) => (
+                                            <option key={sub.id} value={sub.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>↳ {sub.name}</option>
+                                          ))}
+                                        </optgroup>
+                                      );
+                                    }
+                                    return <option key={cat.id} value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>;
+                                  })}
+                                </select>
+                              );
+                            })()}
                           </div>
                         ) : null}
 
