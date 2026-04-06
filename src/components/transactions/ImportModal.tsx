@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account } from '../../types';
-import { formatBRL, getMonthYear, getMonthLabel, filterCategoriesByAmount } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel, filterCategoriesByAmount, normalizeTitular } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -281,7 +281,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           categoryId: null,
           account: accountNames[0] ?? '',
           familyMember: matchedMember,
-          titular: t.titular || '',
+          // Use canonical member name as titular when matched; otherwise normalize to Title Case.
+          // This prevents duplicates in the titular filter when the same person's name
+          // appears in slightly different formats across different PDF imports.
+          titular: matchedMember || normalizeTitular(t.titular || ''),
           installmentNumber: t.installmentNumber,
           totalInstallments: t.totalInstallments,
           cardNumber: t.cardNumber,

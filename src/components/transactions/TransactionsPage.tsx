@@ -52,10 +52,20 @@ export function TransactionsPage() {
   }, [transactions]);
 
   const allTitulars = useMemo(() => {
-    const set = new Set(transactions.map((t) => t.titular).filter(Boolean));
-    titularNames.forEach((n) => set.add(n));
-    return Array.from(set).sort();
-  }, [transactions, titularNames]);
+    // Prefer the canonical family member names; only add raw titular strings
+    // when they don't match any known member (case-insensitive).
+    const knownNames = familyMemberNames.length > 0 ? familyMemberNames : titularNames;
+    const set = new Set<string>(knownNames);
+    for (const t of transactions) {
+      // familyMember is already fuzzy-matched to a canonical name at import time.
+      // Fall back to titular for older transactions imported before this fix.
+      const name = (t.familyMember || t.titular || '').trim();
+      if (!name) continue;
+      const alreadyCovered = knownNames.some((k) => k.toLowerCase() === name.toLowerCase());
+      if (!alreadyCovered) set.add(name);
+    }
+    return Array.from(set).filter(Boolean).sort();
+  }, [transactions, titularNames, familyMemberNames]);
 
   const filtered = useMemo(() => {
     let list = transactions;
@@ -63,7 +73,10 @@ export function TransactionsPage() {
       list = list.filter((t) => getMonthYear(t.date) === filterMonth);
     }
     if (filterTitular !== 'all') {
-      list = list.filter((t) => t.titular === filterTitular);
+      // Match against both fields: titular (raw) and familyMember (canonical).
+      // This ensures transactions from older imports (where titular wasn't normalized)
+      // still appear when filtering by the canonical member name.
+      list = list.filter((t) => t.titular === filterTitular || t.familyMember === filterTitular);
     }
     if (filterCategory === 'uncategorized') {
       list = list.filter((t) => !t.categoryId);
