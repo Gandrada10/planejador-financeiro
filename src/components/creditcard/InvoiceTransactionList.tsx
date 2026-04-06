@@ -214,10 +214,13 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                       return sortDir === 'asc' ? diff : -diff;
                     }).map((t) => (
                       <div key={t.id} className="flex items-center px-4 py-2 hover:bg-bg-secondary/30 transition-colors">
-                        {/* Status / select dot */}
-                        <div className="w-6 flex-shrink-0 flex justify-center">
+                        {/* Conciliação dot - tab-navigable */}
+                        <div className="w-6 flex-shrink-0 flex justify-center" data-tab-cell>
                           <div
-                            className={`w-3.5 h-3.5 rounded-full border cursor-pointer transition-colors ${
+                            tabIndex={0}
+                            role="checkbox"
+                            aria-checked={selectedIds.has(t.id)}
+                            className={`w-3.5 h-3.5 rounded-full border cursor-pointer transition-colors outline-none focus:ring-2 focus:ring-accent/50 ${
                               selectedIds.has(t.id)
                                 ? 'bg-accent border-accent'
                                 : t.reconciled
@@ -225,7 +228,17 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                                 : 'border-border hover:border-accent hover:bg-accent/20'
                             }`}
                             onClick={(e) => { e.stopPropagation(); toggleSelect(t.id); }}
-                            title={t.reconciled ? 'Conciliado – clique para selecionar' : 'Clique para selecionar'}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                e.preventDefault();
+                                toggleSelect(t.id);
+                              } else if (e.key === 'Tab') {
+                                e.preventDefault();
+                                const cell = (e.target as HTMLElement).closest('[data-tab-cell]');
+                                if (cell) tabNavigate(cell as HTMLElement, e.shiftKey ? 'prev' : 'next');
+                              }
+                            }}
+                            title={t.reconciled ? 'Conciliado – Enter para selecionar' : 'Enter para selecionar'}
                           />
                         </div>
 

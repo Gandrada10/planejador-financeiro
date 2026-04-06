@@ -211,10 +211,13 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
           <tbody>
             {sorted.map((t) => (
               <tr key={t.id} className="border-b border-border/30 hover:bg-bg-secondary/30">
-                {/* Status/select dot */}
-                <td className="p-2 w-8">
+                {/* Conciliação dot - tab-navigable */}
+                <td className="p-2" data-tab-cell>
                   <div
-                    className={`w-3.5 h-3.5 rounded-full border mx-auto cursor-pointer transition-colors ${
+                    tabIndex={0}
+                    role="checkbox"
+                    aria-checked={selectedIds.has(t.id)}
+                    className={`w-3.5 h-3.5 rounded-full border mx-auto cursor-pointer transition-colors outline-none focus:ring-2 focus:ring-accent/50 ${
                       selectedIds.has(t.id)
                         ? 'bg-accent border-accent'
                         : t.reconciled
@@ -222,7 +225,17 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                         : 'border-border hover:border-accent hover:bg-accent/20'
                     }`}
                     onClick={() => toggleSelect(t.id)}
-                    title={t.reconciled ? 'Conciliado – clique para selecionar' : 'Clique para selecionar'}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleSelect(t.id);
+                      } else if (e.key === 'Tab') {
+                        e.preventDefault();
+                        const cell = (e.target as HTMLElement).closest('[data-tab-cell]');
+                        if (cell) tabNavigate(cell as HTMLElement, e.shiftKey ? 'prev' : 'next');
+                      }
+                    }}
+                    title={t.reconciled ? 'Conciliado – Enter para selecionar' : 'Enter para selecionar'}
                   />
                 </td>
 
