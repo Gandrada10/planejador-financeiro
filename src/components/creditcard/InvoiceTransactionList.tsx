@@ -232,7 +232,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                         {/* Purchase date - editable */}
                         <div
                           data-tab-cell
-                          className={`text-xs text-text-secondary w-[70px] flex-shrink-0 ${editable}`}
+                          className={`text-xs text-text-secondary w-[70px] flex-shrink-0 overflow-hidden truncate ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'purchaseDate', (t.purchaseDate || t.date).toISOString().split('T')[0])}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
@@ -243,7 +243,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-[90px] bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
                             />
                           ) : formatDate(t.purchaseDate || t.date)}
                         </div>
@@ -251,7 +251,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                         {/* Description - editable */}
                         <div
                           data-tab-cell
-                          className={`flex-1 min-w-0 px-2 ${editable}`}
+                          className={`flex-1 min-w-0 px-2 overflow-hidden ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'description', t.description)}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'description' ? (
@@ -280,7 +280,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                         {/* Parcelas - editable, separate column */}
                         <div
                           data-tab-cell
-                          className={`flex-shrink-0 w-[55px] text-center ${editable}`}
+                          className={`flex-shrink-0 w-[55px] text-center overflow-hidden ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'installments' ? (
@@ -291,7 +291,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
                               placeholder="1/12"
-                              className="w-14 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-[10px] text-center focus:outline-none"
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-[10px] text-center focus:outline-none"
                               onClick={(e) => e.stopPropagation()}
                             />
                           ) : t.totalInstallments ? (
@@ -322,9 +322,9 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                         ) : null}
 
                         {/* Amount - editable */}
-                        <span
+                        <div
                           data-tab-cell
-                          className={`text-xs font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
+                          className={`text-xs font-bold flex-shrink-0 w-[85px] text-right overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'amount' ? (
@@ -334,12 +334,12 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-20 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
                             />
                           ) : (
                             formatBRL(t.amount)
                           )}
-                        </span>
+                        </div>
 
                         {/* Delete */}
                         {onDelete && (

@@ -169,10 +169,22 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
       )}
 
       <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs table-fixed">
+          <colgroup>
+            <col style={{ width: 32 }} />
+            <col style={{ width: 88 }} />
+            <col style={{ width: 88 }} />
+            <col />
+            <col style={{ width: 90 }} />
+            <col style={{ width: 80 }} />
+            <col style={{ width: 95 }} />
+            <col style={{ width: 60 }} />
+            <col style={{ width: 125 }} />
+            <col style={{ width: 36 }} />
+          </colgroup>
           <thead>
             <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
-              <th className="p-2 w-8 text-center">
+              <th className="p-2 text-center">
                 <div
                   className={`w-3 h-3 rounded-full border mx-auto cursor-pointer transition-colors ${
                     allSelected ? 'bg-accent border-accent' : 'border-border hover:border-accent'
@@ -193,7 +205,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
               <th className="p-2 text-right">Valor</th>
               <th className="p-2 text-center">Parcelas</th>
               <th className="p-2 text-left">Categoria</th>
-              <th className="p-2 w-10"></th>
+              <th className="p-2"></th>
             </tr>
           </thead>
           <tbody>
@@ -217,7 +229,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Competencia - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-text-secondary whitespace-nowrap ${editableCell}`}
+                  className={`p-2 text-text-secondary truncate overflow-hidden ${editableCell}`}
                   onClick={() => startEdit(t.id, 'date', t.date.toISOString().split('T')[0])}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'date' ? (
@@ -228,7 +240,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       onChange={(e) => setEditValue(e.target.value)}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
-                      className="bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
                     />
                   ) : formatDate(t.date)}
                 </td>
@@ -236,7 +248,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Data compra - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-text-secondary whitespace-nowrap ${editableCell}`}
+                  className={`p-2 text-text-secondary truncate overflow-hidden ${editableCell}`}
                   onClick={() => startEdit(t.id, 'purchaseDate', t.purchaseDate ? t.purchaseDate.toISOString().split('T')[0] : '')}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
@@ -247,7 +259,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       onChange={(e) => setEditValue(e.target.value)}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
-                      className="bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
                     />
                   ) : t.purchaseDate ? formatDate(t.purchaseDate) : '—'}
                 </td>
@@ -255,7 +267,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Descricao - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-text-primary max-w-[200px] truncate ${editableCell}`}
+                  className={`p-2 text-text-primary truncate overflow-hidden ${editableCell}`}
                   onClick={() => startEdit(t.id, 'description', t.description)}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'description' ? (
@@ -272,8 +284,8 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   )}
                 </td>
 
-                {/* Conta - select (not tab-navigable per user request) */}
-                <td className="p-2 text-text-secondary">
+                {/* Conta - select */}
+                <td className="p-2 text-text-secondary overflow-hidden">
                   <select
                     value={t.account}
                     onChange={async (e) => {
@@ -282,7 +294,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       if (!ok) { e.target.value = t.account; return; }
                       onUpdate(t.id, { account: val });
                     }}
-                    className="bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
+                    className="w-full bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
                   >
                     <option value="">—</option>
                     {accountNames.map((name) => (
@@ -294,7 +306,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Membro - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-text-secondary ${editableCell}`}
+                  className={`p-2 text-text-secondary truncate overflow-hidden ${editableCell}`}
                   onClick={() => startEdit(t.id, 'familyMember', t.familyMember || '')}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'familyMember' ? (
@@ -314,7 +326,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Valor - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-right font-bold whitespace-nowrap ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
+                  className={`p-2 text-right font-bold truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
                   onClick={() => startEdit(t.id, 'amount', String(t.amount))}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'amount' ? (
@@ -324,7 +336,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       onChange={(e) => setEditValue(e.target.value)}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
-                      className="w-20 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
                     />
                   ) : (
                     formatBRL(t.amount)
@@ -334,7 +346,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Parcelas - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-center text-text-secondary ${editableCell}`}
+                  className={`p-2 text-center text-text-secondary overflow-hidden ${editableCell}`}
                   onClick={() => startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'installments' ? (
@@ -345,7 +357,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
                       placeholder="1/12"
-                      className="w-16 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-center focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-center focus:outline-none"
                     />
                   ) : t.totalInstallments ? (
                     <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
@@ -355,7 +367,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 </td>
 
                 {/* Categoria - combobox with autocomplete + tab navigation */}
-                <td className="p-2">
+                <td className="p-2 overflow-hidden">
                   <CategoryCombobox
                     categories={categories}
                     amount={t.amount}
