@@ -95,6 +95,12 @@ Regras gerais:
 - PROCESSE TODAS as transacoes do extrato, mesmo que sejam muitas (100+)
 - CRUCIAL: siga rigorosamente a logica de "titular_ativo" descrita acima — o titular so muda com cabecalho de nome de pessoa, jamais por coluna, pagina ou cabecalho de tabela
 
+Secoes especiais em faturas de cartao (CRITICO):
+- ENCARGOS, SEGUROS, ANUIDADE, IOF, TAXAS: sao cobranças extras que aparecem em secoes separadas (as vezes em colunas menores). Devem ser importadas como transacoes normais. Pertencem ao titular PRINCIPAL do cartao (o primeiro da fatura) a menos que estejam explicitamente dentro de uma secao de outro titular.
+- ESTORNOS / CREDITOS / "OUTROS CREDITOS": sao valores positivos (credito a favor do cliente). Importe-os com amount POSITIVO. Atribua ao titular principal a menos que estejam dentro de secao de outro titular.
+- COMPRAS DE FATURAS FUTURAS / LANCAMENTOS FUTUROS / "PROXIMAS FATURAS": esta secao lista compras que serao cobradas em faturas FUTURAS, nao na fatura atual. NAO IMPORTE essas transacoes — ignore toda a secao de faturas futuras por completo.
+- RESUMO DA FATURA / TOTAIS / "TOTAL DA FATURA": ignore linhas de resumo, totais e subtotais — so importe lancamentos individuais.
+
 Responda APENAS com um JSON object com dois campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
 - "transactions": array com as transacoes

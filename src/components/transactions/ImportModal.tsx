@@ -680,12 +680,16 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             className={`px-2 py-1 rounded text-xs border transition-colors ${
                               item.installmentType === 'parcelada'
                                 ? 'bg-accent/10 border-accent/30 text-accent'
-                                : 'bg-bg-secondary border-border text-text-secondary hover:border-accent/30'
+                                : item.totalInstallments && item.totalInstallments > 1
+                                  ? 'bg-accent/10 border-accent/20 text-accent/80'
+                                  : 'bg-bg-secondary border-border text-text-secondary hover:border-accent/30'
                             }`}
                           >
-                            {item.installmentType === 'parcelada'
+                            {item.totalInstallments && item.totalInstallments > 1
                               ? `${item.installmentNumber || 1}/${item.totalInstallments}`
-                              : 'Unica'}
+                              : item.installmentType === 'parcelada'
+                                ? `${item.installmentNumber || 1}/${item.totalInstallments}`
+                                : 'Unica'}
                             <ChevronDown size={10} className="inline ml-1" />
                           </button>
                         </td>
