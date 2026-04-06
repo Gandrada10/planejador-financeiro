@@ -59,8 +59,10 @@ Para cada transacao, extraia:
 - "amount": valor numerico (negativo para debitos/despesas, positivo para creditos/receitas)
 - "titular": nome do titular responsavel pelo lancamento. REGRAS CRITICAS para identificar titular:
   * Faturas de cartao com multiplos titulares organizam os lancamentos em SECOES separadas por nome. Ex: uma secao "GUSTAVO ANDRADA" seguida de transacoes, depois uma secao "JULIANA KUHN - CARTAO ADICIONAL" seguida das transacoes dela.
-  * O nome do titular aparece como linha isolada (cabecalho de secao) ANTES do grupo de transacoes que pertencem a ele.
+  * O nome do titular aparece como linha isolada (cabecalho de secao) ANTES do grupo de transacoes que pertencem a ele. Frequentemente aparece junto com os ultimos 4 digitos do cartao no mesmo cabecalho (ex: "GUILHERME ANDRADA ... 1234").
   * Cada transacao deve receber o titular da secao em que aparece — nao use o mesmo titular para todas as transacoes se houver secoes distintas.
+  * LAYOUT DE DUAS COLUNAS: Algumas faturas em PDF tem duas colunas de lancamentos lado a lado (titular principal na coluna esquerda, adicional na direita). Apos a extracao do PDF, o texto da coluna esquerda aparece inteiro primeiro, depois o texto da coluna direita. Identifique esse padrao: quando o texto mudar de "bloco" e comecar outro cabecalho de titular, voce esta entrando na segunda coluna.
+  * QUEBRA DE PAGINA: Quando uma nova pagina comeca e nao ha novo cabecalho de titular, continue usando o titular da secao anterior. O cabecalho de secao NAO precisa se repetir em cada pagina.
   * Ignore sufixos como "CARTAO ADICIONAL", "ADICIONAL", "TITULAR" — use apenas o nome da pessoa.
   * Se o extrato nao tiver secoes por titular (apenas um portador), use o nome do titular principal encontrado no cabecalho da fatura.
   * Se nao for possivel identificar o titular de nenhuma forma, use string vazia.
@@ -85,6 +87,8 @@ Regras gerais:
 - Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
 - PROCESSE TODAS as transacoes do extrato, mesmo que sejam muitas (100+)
 - CRUCIAL: em faturas com cartao adicional, as transacoes do adicional NAO sao do titular principal — atribua o titular correto a cada lancamento conforme a secao em que aparece
+- CRUCIAL: mantenha o titular ativo ate encontrar explicitamente um novo cabecalho de secao com outro nome — nao redefina o titular baseado em heuristicas ou posicao na pagina
+- CRUCIAL: se houver duas colunas, o texto de cada coluna foi emitido separadamente (esquerda primeiro, depois direita) — identifique o cabecalho de cada bloco para atribuir o titular correto
 
 Responda APENAS com um JSON object com dois campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)

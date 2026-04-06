@@ -140,21 +140,68 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       const buffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
       let text = '';
+
+      const buildColumnText = (items: { x: number; y: number; text: string }[]) => {
+        const lineMap = new Map<number, { x: number; text: string }[]>();
+        for (const item of items) {
+          if (!lineMap.has(item.y)) lineMap.set(item.y, []);
+          lineMap.get(item.y)!.push({ x: item.x, text: item.text });
+        }
+        return Array.from(lineMap.entries())
+          .sort((a, b) => b[0] - a[0])
+          .map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '))
+          .join('\n');
+      };
+
       for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
+        const viewport = page.getViewport({ scale: 1 });
+        const pageWidth = viewport.width;
         const content = await page.getTextContent();
-        const lineMap = new Map<number, { x: number; text: string }[]>();
+
+        // Collect all positioned text items
+        const allItems: { x: number; y: number; text: string }[] = [];
         for (const item of content.items) {
           if (!('str' in item) || !item.str.trim()) continue;
-          const y = Math.round(item.transform[5] / 3) * 3;
-          if (!lineMap.has(y)) lineMap.set(y, []);
-          lineMap.get(y)!.push({ x: item.transform[4], text: item.str });
+          allItems.push({
+            x: item.transform[4],
+            y: Math.round(item.transform[5] / 3) * 3,
+            text: item.str,
+          });
         }
-        const lines = Array.from(lineMap.entries())
-          .sort((a, b) => b[0] - a[0])
-          .map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '));
-        text += lines.join('\n') + '\n\n';
+        if (allItems.length === 0) continue;
+
+        // Detect two-column layout: check if the middle 30% of the page has very few items
+        // compared to items clearly on the left and right halves.
+        const midStart = pageWidth * 0.35;
+        const midEnd = pageWidth * 0.65;
+        const leftCount = allItems.filter((i) => i.x < midStart).length;
+        const rightCount = allItems.filter((i) => i.x > midEnd).length;
+        const midCount = allItems.filter((i) => i.x >= midStart && i.x <= midEnd).length;
+        const isTwoColumn =
+          leftCount >= 5 &&
+          rightCount >= 5 &&
+          midCount < Math.min(leftCount, rightCount) * 0.2; // gap in the middle
+
+        if (isTwoColumn) {
+          // Find the actual split point: largest X gap in the middle zone
+          const midXs = allItems.map((i) => i.x).filter((x) => x >= midStart && x <= midEnd).sort((a, b) => a - b);
+          let splitX = pageWidth / 2;
+          if (midXs.length > 0) {
+            // If items exist in middle zone, split after the last item before the gap
+            splitX = midXs[midXs.length - 1] + 1;
+          }
+          const leftItems = allItems.filter((i) => i.x < splitX);
+          const rightItems = allItems.filter((i) => i.x >= splitX);
+          // Emit left column first (top to bottom), then right column (top to bottom)
+          text += buildColumnText(leftItems) + '\n';
+          text += buildColumnText(rightItems) + '\n\n';
+          console.log(`[PDF p${p}] two-column detected (left=${leftCount}, right=${rightCount}, mid=${midCount})`);
+        } else {
+          text += buildColumnText(allItems) + '\n\n';
+        }
       }
+
       if (text.trim().length < 100) {
         text = '';
         for (let p = 1; p <= pdf.numPages; p++) {
