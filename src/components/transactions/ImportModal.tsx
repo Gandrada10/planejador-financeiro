@@ -295,7 +295,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         return {
           ...item,
           isDuplicate: isDuplicate(item, existingTransactions),
-          installmentType: hasInstallments ? 'parcelada' as const : 'unica' as const,
+          // For credit card imports each row is already one installment for one month
+          // — never auto-expand. Only expand installments for bank account statements.
+          installmentType: (hasInstallments && !detectedCreditCard) ? 'parcelada' as const : 'unica' as const,
           periodicity: 1,
           installmentAmount: hasInstallments ? t.amount : null,
         };
