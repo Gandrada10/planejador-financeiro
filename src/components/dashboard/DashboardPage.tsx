@@ -19,6 +19,12 @@ export function DashboardPage() {
     [transactions, monthYear]
   );
 
+  const availableMonths = useMemo(() => {
+    const set = new Set(transactions.map((t) => getMonthYear(t.date)));
+    set.add(getMonthYear());
+    return Array.from(set).sort().reverse();
+  }, [transactions]);
+
   const totalEntries = useMemo(() => monthTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0), [monthTransactions]);
   const totalExits = useMemo(() => monthTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0), [monthTransactions]);
   const totalBalance = totalEntries + totalExits;
@@ -99,7 +105,7 @@ export function DashboardPage() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-text-primary">Dashboard</h2>
-        <MonthSelector value={monthYear} onChange={setMonthYear} />
+        <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
       </div>
 
       {/* Summary Cards */}
