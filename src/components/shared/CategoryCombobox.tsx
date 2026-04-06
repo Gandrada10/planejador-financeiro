@@ -131,6 +131,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
   return (
     <div ref={containerRef} className={`relative ${className}`} data-tab-cell data-category-combobox>
       <button
+        tabIndex={-1}
         data-category-trigger
         onClick={openDropdown}
         className={`w-full text-left bg-transparent border-none ${textSize} cursor-pointer focus:outline-none hover:text-text-primary rounded px-1 ${py} truncate`}

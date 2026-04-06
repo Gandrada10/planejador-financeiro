@@ -62,10 +62,18 @@ export function tabNavigate(fromElement: HTMLElement, direction: 'next' | 'prev'
   const nextIdx = direction === 'next' ? currentIdx + 1 : currentIdx - 1;
   if (nextIdx < 0 || nextIdx >= allCells.length) return;
   const target = allCells[nextIdx];
+  // Category combobox → click trigger to open dropdown
   const trigger = target.querySelector<HTMLElement>('[data-category-trigger]');
   if (trigger) {
     trigger.click();
-  } else {
-    target.click();
+    return;
   }
+  // Conciliation dot (or other focusable role=checkbox) → focus it
+  const checkbox = target.querySelector<HTMLElement>('[role="checkbox"]');
+  if (checkbox) {
+    checkbox.focus();
+    return;
+  }
+  // Regular editable cell → click to start inline editing
+  target.click();
 }

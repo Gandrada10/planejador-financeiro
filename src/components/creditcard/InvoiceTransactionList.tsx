@@ -357,6 +357,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                         {/* Delete */}
                         {onDelete && (
                           <button
+                            tabIndex={-1}
                             onClick={async () => {
                               const ok = await guardClosedCycle(t);
                               if (!ok) return;

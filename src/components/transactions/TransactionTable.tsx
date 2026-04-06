@@ -300,6 +300,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 {/* Conta - select */}
                 <td className="p-2 text-text-secondary overflow-hidden">
                   <select
+                    tabIndex={-1}
                     value={t.account}
                     onChange={async (e) => {
                       const val = e.target.value;
@@ -394,7 +395,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                 </td>
 
                 <td className="p-2">
-                  <button onClick={async () => {
+                  <button tabIndex={-1} onClick={async () => {
                     const ok = await guardClosedCycle(t);
                     if (!ok) return;
                     onDelete(t.id);
