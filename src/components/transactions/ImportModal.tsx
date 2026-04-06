@@ -193,8 +193,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           }
           const leftItems = allItems.filter((i) => i.x < splitX);
           const rightItems = allItems.filter((i) => i.x >= splitX);
-          // Emit left column first (top to bottom), then right column (top to bottom)
+          // Emit left column first (top to bottom), then right column (top to bottom).
+          // The [COLUNA-DIREITA] marker tells the AI that the right column is a direct
+          // continuation of the invoice — the active cardholder section does NOT reset
+          // just because the column changed. Only an explicit cardholder name header
+          // (e.g. "NOME SOBRENOME (final XXXX)") changes the active titular.
           text += buildColumnText(leftItems) + '\n';
+          text += '[COLUNA-DIREITA]\n';
           text += buildColumnText(rightItems) + '\n\n';
           console.log(`[PDF p${p}] two-column detected (left=${leftCount}, right=${rightCount}, mid=${midCount})`);
         } else {
