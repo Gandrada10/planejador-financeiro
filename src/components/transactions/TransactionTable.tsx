@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import type { Transaction, Category } from '../../types';
-import { formatBRL, formatDate } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 
 interface Props {
@@ -11,7 +11,6 @@ interface Props {
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
-  /** Optional: check if editing needs to reopen a closed billing cycle */
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
@@ -44,7 +43,6 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
       : <ArrowDown size={10} className="inline ml-1 text-accent" />;
   }
 
-  /** If the transaction is in a closed cycle, ask to reopen. Returns true if we can proceed. */
   async function guardClosedCycle(t: Transaction): Promise<boolean> {
     if (!checkClosedCycle || !reopenCycle) return true;
     const closed = checkClosedCycle(t);
@@ -106,7 +104,14 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter') commitEdit();
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const cell = (e.target as HTMLElement).closest('[data-tab-cell]');
+      commitEdit();
+      if (e.key === 'Tab' && cell) {
+        setTimeout(() => tabNavigate(cell as HTMLElement, e.shiftKey ? 'prev' : 'next'), 50);
+      }
+    }
     if (e.key === 'Escape') setEditingCell(null);
   }
 
@@ -168,7 +173,6 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
           <thead>
             <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
               <th className="p-2 w-8 text-center">
-                {/* Select-all dot */}
                 <div
                   className={`w-3 h-3 rounded-full border mx-auto cursor-pointer transition-colors ${
                     allSelected ? 'bg-accent border-accent' : 'border-border hover:border-accent'
@@ -209,8 +213,10 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                     title={t.reconciled ? 'Conciliado – clique para selecionar' : 'Clique para selecionar'}
                   />
                 </td>
-                {/* Date - editable */}
+
+                {/* Competencia - editable */}
                 <td
+                  data-tab-cell
                   className={`p-2 text-text-secondary whitespace-nowrap ${editableCell}`}
                   onClick={() => startEdit(t.id, 'date', t.date.toISOString().split('T')[0])}
                 >
@@ -227,8 +233,9 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   ) : formatDate(t.date)}
                 </td>
 
-                {/* Purchase date - editable */}
+                {/* Data compra - editable */}
                 <td
+                  data-tab-cell
                   className={`p-2 text-text-secondary whitespace-nowrap ${editableCell}`}
                   onClick={() => startEdit(t.id, 'purchaseDate', t.purchaseDate ? t.purchaseDate.toISOString().split('T')[0] : '')}
                 >
@@ -245,8 +252,9 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   ) : t.purchaseDate ? formatDate(t.purchaseDate) : '—'}
                 </td>
 
-                {/* Description - editable */}
+                {/* Descricao - editable */}
                 <td
+                  data-tab-cell
                   className={`p-2 text-text-primary max-w-[200px] truncate ${editableCell}`}
                   onClick={() => startEdit(t.id, 'description', t.description)}
                 >
@@ -264,7 +272,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   )}
                 </td>
 
-                {/* Account - select */}
+                {/* Conta - select (not tab-navigable per user request) */}
                 <td className="p-2 text-text-secondary">
                   <select
                     value={t.account}
@@ -285,6 +293,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
 
                 {/* Membro - editable */}
                 <td
+                  data-tab-cell
                   className={`p-2 text-text-secondary ${editableCell}`}
                   onClick={() => startEdit(t.id, 'familyMember', t.familyMember || '')}
                 >
@@ -302,8 +311,9 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   )}
                 </td>
 
-                {/* Amount - editable */}
+                {/* Valor - editable */}
                 <td
+                  data-tab-cell
                   className={`p-2 text-right font-bold whitespace-nowrap ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
                   onClick={() => startEdit(t.id, 'amount', String(t.amount))}
                 >
@@ -323,6 +333,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
 
                 {/* Parcelas - editable */}
                 <td
+                  data-tab-cell
                   className={`p-2 text-center text-text-secondary ${editableCell}`}
                   onClick={() => startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
                 >
@@ -343,7 +354,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   ) : '—'}
                 </td>
 
-                {/* Category - combobox with autocomplete + vertical tab */}
+                {/* Categoria - combobox with autocomplete + tab navigation */}
                 <td className="p-2">
                   <CategoryCombobox
                     categories={categories}

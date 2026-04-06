@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import type { Category } from '../../types';
-import { filterCategoriesByAmount } from '../../lib/utils';
+import { filterCategoriesByAmount, tabNavigate } from '../../lib/utils';
 
 function removeAccents(str: string) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -11,7 +11,7 @@ interface Props {
   amount: number;
   value: string | null;
   onChange: (categoryId: string | null) => void;
-  /** CSS class for the trigger button */
+  /** CSS class for the wrapper */
   className?: string;
   /** Text size class */
   textSize?: string;
@@ -30,7 +30,6 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
   const relevantCats = useMemo(() => filterCategoriesByAmount(categories, amount), [categories, amount]);
   const rootCats = useMemo(() => relevantCats.filter((c) => !c.parentId), [relevantCats]);
 
-  // Build flat ordered list of { id, label, color, isChild }
   const allOptions = useMemo(() => {
     const opts: { id: string; label: string; searchLabel: string; color: string; isChild: boolean }[] = [];
     for (const cat of rootCats) {
@@ -53,17 +52,14 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
     return allOptions.filter((o) => removeAccents(o.searchLabel.toLowerCase()).includes(term));
   }, [allOptions, search]);
 
-  // Current label
   const currentCat = categories.find((c) => c.id === value);
   const currentLabel = currentCat ? currentCat.name : '';
   const currentColor = currentCat?.color || 'var(--color-text-secondary)';
 
-  // Reset highlight when filtered list changes
   useEffect(() => {
     setHighlighted(search.trim() ? 0 : -1);
   }, [search]);
 
-  // Scroll highlighted into view
   useEffect(() => {
     if (highlighted >= 0 && listRef.current) {
       const el = listRef.current.children[highlighted] as HTMLElement;
@@ -71,7 +67,6 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
     }
   }, [highlighted]);
 
-  // Close on outside click
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
@@ -91,28 +86,25 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
     setTimeout(() => inputRef.current?.focus(), 0);
   }
 
-  function select(id: string | null) {
+  function doNavigate(direction: 'next' | 'prev') {
+    if (containerRef.current) {
+      setTimeout(() => tabNavigate(containerRef.current!, direction), 50);
+    }
+  }
+
+  function select(id: string | null, autoAdvance = false) {
     onChange(id);
     setOpen(false);
     setSearch('');
+    if (autoAdvance) doNavigate('next');
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Tab') {
-      // Vertical navigation: move to next/prev category combobox
       e.preventDefault();
       setOpen(false);
       setSearch('');
-      const allComboboxes = document.querySelectorAll<HTMLElement>('[data-category-combobox]');
-      const arr = Array.from(allComboboxes);
-      const currentIdx = arr.findIndex((el) => containerRef.current?.contains(el));
-      const nextIdx = e.shiftKey ? currentIdx - 1 : currentIdx + 1;
-      if (nextIdx >= 0 && nextIdx < arr.length) {
-        const nextCombobox = arr[nextIdx];
-        // Click the trigger to open it
-        const trigger = nextCombobox.querySelector<HTMLElement>('[data-category-trigger]');
-        if (trigger) trigger.click();
-      }
+      doNavigate(e.shiftKey ? 'prev' : 'next');
       return;
     }
     if (e.key === 'ArrowDown') {
@@ -124,9 +116,9 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
     } else if (e.key === 'Enter') {
       e.preventDefault();
       if (highlighted >= 0 && filtered[highlighted]) {
-        select(filtered[highlighted].id);
+        select(filtered[highlighted].id, true);
       } else if (filtered.length === 1) {
-        select(filtered[0].id);
+        select(filtered[0].id, true);
       }
     } else if (e.key === 'Escape') {
       setOpen(false);
@@ -137,8 +129,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
   const py = compact ? 'py-0' : 'py-0.5';
 
   return (
-    <div ref={containerRef} className={`relative ${className}`} data-category-combobox>
-      {/* Trigger */}
+    <div ref={containerRef} className={`relative ${className}`} data-tab-cell data-category-combobox>
       <button
         data-category-trigger
         onClick={openDropdown}
@@ -148,10 +139,8 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
         {currentLabel || <span className="text-text-secondary">Sem categoria</span>}
       </button>
 
-      {/* Dropdown */}
       {open && (
         <div className="absolute z-50 mt-1 w-56 bg-[#1a1a1a] border border-border rounded-lg shadow-xl overflow-hidden" style={{ left: 0 }}>
-          {/* Search input */}
           <div className="p-1.5 border-b border-border">
             <input
               ref={inputRef}
@@ -163,10 +152,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
               className="w-full bg-bg-secondary border border-border rounded px-2 py-1.5 text-text-primary text-xs focus:outline-none focus:border-accent placeholder:text-text-secondary/50"
             />
           </div>
-
-          {/* Options */}
           <div ref={listRef} className="max-h-48 overflow-y-auto">
-            {/* Sem categoria option */}
             <button
               onClick={() => select(null)}
               className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-accent/10 hover:text-text-primary transition-colors"

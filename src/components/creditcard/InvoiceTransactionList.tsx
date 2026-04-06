@@ -1,8 +1,8 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { formatBRL, formatDate } from '../../lib/utils';
-import { CategoryCombobox } from '../shared/CategoryCombobox';
+import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
+import { CategoryCombobox } from '../shared/CategoryCombobox';
 
 interface TitularGroup {
   titular: string;
@@ -17,7 +17,6 @@ interface Props {
   onUpdate?: (id: string, data: Partial<Transaction>) => void;
   onDelete?: (id: string) => void;
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
-  /** If provided, guard edits behind closed-cycle confirmation */
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
@@ -119,7 +118,14 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
   }
 
   function handleKeyDown(e: React.KeyboardEvent, t: Transaction) {
-    if (e.key === 'Enter') commitEdit(t);
+    if (e.key === 'Enter' || e.key === 'Tab') {
+      e.preventDefault();
+      const cell = (e.target as HTMLElement).closest('[data-tab-cell]');
+      commitEdit(t);
+      if (e.key === 'Tab' && cell) {
+        setTimeout(() => tabNavigate(cell as HTMLElement, e.shiftKey ? 'prev' : 'next'), 50);
+      }
+    }
     if (e.key === 'Escape') setEditingCell(null);
   }
 
@@ -225,6 +231,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
 
                         {/* Purchase date - editable */}
                         <div
+                          data-tab-cell
                           className={`text-xs text-text-secondary w-[70px] flex-shrink-0 ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'purchaseDate', (t.purchaseDate || t.date).toISOString().split('T')[0])}
                         >
@@ -243,6 +250,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
 
                         {/* Description - editable */}
                         <div
+                          data-tab-cell
                           className={`flex-1 min-w-0 px-2 ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'description', t.description)}
                         >
@@ -257,27 +265,8 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                             />
                           ) : (
                             <>
-                              <div className="text-xs text-text-primary truncate flex items-center gap-1">
+                              <div className="text-xs text-text-primary truncate">
                                 {t.description}
-                                {editingCell?.id === t.id && editingCell.field === 'installments' ? (
-                                  <input
-                                    autoFocus
-                                    value={editValue}
-                                    onChange={(e) => setEditValue(e.target.value)}
-                                    onBlur={() => commitEdit(t)}
-                                    onKeyDown={(e) => handleKeyDown(e, t)}
-                                    placeholder="1/12"
-                                    className="ml-1 w-14 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-[10px] text-center focus:outline-none"
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                ) : t.totalInstallments ? (
-                                  <span
-                                    className={`ml-1.5 text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded flex-shrink-0 ${editable}`}
-                                    onClick={(e) => { e.stopPropagation(); onUpdate && startEdit(t.id, 'installments', `${t.installmentNumber ?? 1}/${t.totalInstallments}`); }}
-                                  >
-                                    {t.installmentNumber}/{t.totalInstallments}
-                                  </span>
-                                ) : null}
                               </div>
                               {t.categoryId && (
                                 <p className="text-[10px] text-text-secondary truncate">
@@ -288,7 +277,33 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                           )}
                         </div>
 
-                        {/* Category - combobox with autocomplete + vertical tab */}
+                        {/* Parcelas - editable, separate column */}
+                        <div
+                          data-tab-cell
+                          className={`flex-shrink-0 w-[55px] text-center ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'installments' ? (
+                            <input
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              placeholder="1/12"
+                              className="w-14 bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-[10px] text-center focus:outline-none"
+                              onClick={(e) => e.stopPropagation()}
+                            />
+                          ) : t.totalInstallments ? (
+                            <span className="text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded font-mono">
+                              {t.installmentNumber}/{t.totalInstallments}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-text-secondary">—</span>
+                          )}
+                        </div>
+
+                        {/* Category - combobox with autocomplete + tab navigation */}
                         {onUpdate ? (
                           <div className="flex-shrink-0 w-[130px] mr-2">
                             <CategoryCombobox
@@ -308,6 +323,7 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
 
                         {/* Amount - editable */}
                         <span
+                          data-tab-cell
                           className={`text-xs font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
                         >

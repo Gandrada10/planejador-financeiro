@@ -46,3 +46,26 @@ export function filterCategoriesByAmount<T extends { type: string }>(categories:
   const allowed = amount >= 0 ? ['receita', 'ambos'] : ['despesa', 'ambos'];
   return categories.filter((c) => allowed.includes(c.type));
 }
+
+/**
+ * Navigate between editable cells marked with [data-tab-cell].
+ * Finds the next (or prev) cell in DOM order and activates it.
+ * - If the target has a [data-category-trigger], clicks it (opens combobox).
+ * - Otherwise clicks the cell itself (starts inline editing).
+ */
+export function tabNavigate(fromElement: HTMLElement, direction: 'next' | 'prev') {
+  const allCells = Array.from(document.querySelectorAll<HTMLElement>('[data-tab-cell]'));
+  const currentIdx = allCells.findIndex(
+    (el) => el === fromElement || el.contains(fromElement) || fromElement.contains(el)
+  );
+  if (currentIdx === -1) return;
+  const nextIdx = direction === 'next' ? currentIdx + 1 : currentIdx - 1;
+  if (nextIdx < 0 || nextIdx >= allCells.length) return;
+  const target = allCells[nextIdx];
+  const trigger = target.querySelector<HTMLElement>('[data-category-trigger]');
+  if (trigger) {
+    trigger.click();
+  } else {
+    target.click();
+  }
+}
