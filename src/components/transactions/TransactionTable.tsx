@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import type { Transaction, Category } from '../../types';
-import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
+import { formatBRL, formatDate } from '../../lib/utils';
+import { CategoryCombobox } from '../shared/CategoryCombobox';
 
 interface Props {
   transactions: Transaction[];
@@ -342,52 +343,18 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   ) : '—'}
                 </td>
 
-                {/* Category - select */}
+                {/* Category - combobox with autocomplete + vertical tab */}
                 <td className="p-2">
-                  {(() => {
-                    const relevantCats = filterCategoriesByAmount(categories, t.amount);
-                    const rootCats = relevantCats.filter((c) => !c.parentId);
-                    const rowIndex = sorted.indexOf(t);
-                    return (
-                      <select
-                        value={t.categoryId || ''}
-                        data-category-select
-                        onChange={async (e) => {
-                          const val = e.target.value || null;
-                          const ok = await guardClosedCycle(t);
-                          if (!ok) { e.target.value = t.categoryId || ''; return; }
-                          onUpdate(t.id, { categoryId: val });
-                        }}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Tab') {
-                            e.preventDefault();
-                            const selects = document.querySelectorAll<HTMLSelectElement>('[data-category-select]');
-                            const nextIndex = e.shiftKey ? rowIndex - 1 : rowIndex + 1;
-                            const nextSelect = selects[nextIndex];
-                            if (nextSelect) nextSelect.focus();
-                          }
-                        }}
-                        className="bg-bg-secondary border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary rounded px-1"
-                        style={{ color: categories.find((c) => c.id === t.categoryId)?.color || 'var(--color-text-secondary)' }}
-                      >
-                        <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>Sem categoria</option>
-                        {rootCats.map((cat) => {
-                          const subs = relevantCats.filter((c) => c.parentId === cat.id);
-                          if (subs.length > 0) {
-                            return (
-                              <optgroup key={cat.id} label={cat.name} style={{ backgroundColor: '#111111', color: '#737373' }}>
-                                <option value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>
-                                {subs.map((sub) => (
-                                  <option key={sub.id} value={sub.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>↳ {sub.name}</option>
-                                ))}
-                              </optgroup>
-                            );
-                          }
-                          return <option key={cat.id} value={cat.id} style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>{cat.name}</option>;
-                        })}
-                      </select>
-                    );
-                  })()}
+                  <CategoryCombobox
+                    categories={categories}
+                    amount={t.amount}
+                    value={t.categoryId}
+                    onChange={async (val) => {
+                      const ok = await guardClosedCycle(t);
+                      if (!ok) return;
+                      onUpdate(t.id, { categoryId: val });
+                    }}
+                  />
                 </td>
 
                 <td className="p-2">
