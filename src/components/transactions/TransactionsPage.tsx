@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, Landmark } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -10,6 +10,7 @@ import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { TransactionTable } from './TransactionTable';
 import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
+import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { getMonthYear, getMonthLabel } from '../../lib/utils';
 import type { Transaction } from '../../types';
@@ -24,7 +25,9 @@ export function TransactionsPage() {
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showPluggySync, setShowPluggySync] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const hasPluggyCredentials = !!(localStorage.getItem('pluggy_client_id') && localStorage.getItem('pluggy_client_secret'));
   const [filterMonth, setFilterMonth] = useState(getMonthYear());
   const [filterTitular, setFilterTitular] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -172,6 +175,15 @@ export function TransactionsPage() {
           >
             <Upload size={14} /> Importar Extrato
           </button>
+          {hasPluggyCredentials && (
+            <button
+              onClick={() => setShowPluggySync(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
+              title="Sincronizar transacoes automaticamente via Open Banking (Pluggy)"
+            >
+              <Landmark size={14} /> Sincronizar Banco
+            </button>
+          )}
           <button
             onClick={() => setShowShareModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
@@ -341,6 +353,15 @@ export function TransactionsPage() {
           categories={categories}
           allTitulars={allTitulars}
           titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
+        />
+      )}
+      {showPluggySync && (
+        <PluggySync
+          existingTransactions={transactions}
+          accounts={accounts}
+          titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
+          onImport={handleImport}
+          onClose={() => setShowPluggySync(false)}
         />
       )}
       {showShareModal && (
