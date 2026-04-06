@@ -347,14 +347,25 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                   {(() => {
                     const relevantCats = filterCategoriesByAmount(categories, t.amount);
                     const rootCats = relevantCats.filter((c) => !c.parentId);
+                    const rowIndex = sorted.indexOf(t);
                     return (
                       <select
                         value={t.categoryId || ''}
+                        data-category-select
                         onChange={async (e) => {
                           const val = e.target.value || null;
                           const ok = await guardClosedCycle(t);
                           if (!ok) { e.target.value = t.categoryId || ''; return; }
                           onUpdate(t.id, { categoryId: val });
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab') {
+                            e.preventDefault();
+                            const selects = document.querySelectorAll<HTMLSelectElement>('[data-category-select]');
+                            const nextIndex = e.shiftKey ? rowIndex - 1 : rowIndex + 1;
+                            const nextSelect = selects[nextIndex];
+                            if (nextSelect) nextSelect.focus();
+                          }
                         }}
                         className="bg-bg-secondary border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary rounded px-1"
                         style={{ color: categories.find((c) => c.id === t.categoryId)?.color || 'var(--color-text-secondary)' }}

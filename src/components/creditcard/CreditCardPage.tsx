@@ -81,6 +81,12 @@ export function CreditCardPage() {
 
   const futureInstallmentsTotal = futureInstallments.reduce((s, t) => s + t.amount, 0);
 
+  const availableMonths = useMemo(() => {
+    const set = new Set(transactions.map((t) => getMonthYear(t.date)));
+    set.add(getMonthYear());
+    return Array.from(set).sort().reverse();
+  }, [transactions]);
+
   // Current cycle
   const currentCycle = activeCard ? getCycleForCard(activeCard.id, monthYear) : undefined;
 
@@ -143,7 +149,7 @@ export function CreditCardPage() {
               <option key={a.id} value={a.id}>{a.name}{a.dueDay ? ` (venc. dia ${a.dueDay})` : ''}</option>
             ))}
           </select>
-          <MonthSelector value={monthYear} onChange={setMonthYear} />
+          <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
         </div>
       </div>
 

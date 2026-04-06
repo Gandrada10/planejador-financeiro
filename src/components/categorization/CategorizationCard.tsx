@@ -26,7 +26,10 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
   const [showNotes, setShowNotes] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const searchRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const highlightedRef = useRef<HTMLButtonElement>(null);
 
   const expenseCategories = useMemo(
     () => filterCategoriesByAmount(categories, transaction.amount),
@@ -77,13 +80,36 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
     return { groups, standalone };
   }, [search, groupedCategories]);
 
+  // Flat list of selectable categories (subs from groups + standalone), in display order
+  const flatCategories = useMemo(() => {
+    const flat: Category[] = [];
+    for (const group of filteredGroups.groups) {
+      for (const sub of group.subs) flat.push(sub);
+    }
+    for (const cat of filteredGroups.standalone) flat.push(cat);
+    return flat;
+  }, [filteredGroups]);
+
   const hasResults = filteredGroups.groups.length > 0 || filteredGroups.standalone.length > 0;
+
+  // Reset highlight to first item whenever search changes
+  useEffect(() => {
+    setHighlightedIndex(search.trim() ? 0 : -1);
+  }, [search]);
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlightedRef.current) {
+      highlightedRef.current.scrollIntoView({ block: 'nearest' });
+    }
+  }, [highlightedIndex]);
 
   // Reset state when transaction changes
   useEffect(() => {
     setSearch('');
     setShowNotes(false);
     setNotes('');
+    setHighlightedIndex(-1);
   }, [transaction.id]);
 
   async function handleSelect(categoryId: string) {
@@ -92,21 +118,52 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
     setNotes('');
     setShowNotes(false);
     setSearch('');
+    setHighlightedIndex(-1);
     setSaving(false);
   }
 
-  function CategoryButton({ cat, indent }: { cat: Category; indent?: boolean }) {
+  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.min(i + 1, flatCategories.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((i) => Math.max(i - 1, 0));
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (highlightedIndex >= 0 && flatCategories[highlightedIndex]) {
+        handleSelect(flatCategories[highlightedIndex].id);
+      } else if (flatCategories.length === 1) {
+        // If only one result, Enter selects it even without highlight
+        handleSelect(flatCategories[0].id);
+      }
+    } else if (e.key === 'Escape') {
+      setSearch('');
+      setHighlightedIndex(-1);
+    }
+  }
+
+  function CategoryButton({ cat, indent, index }: { cat: Category; indent?: boolean; index: number }) {
+    const isHighlighted = index === highlightedIndex;
     return (
       <button
+        ref={isHighlighted ? highlightedRef : undefined}
         onClick={() => handleSelect(cat.id)}
         disabled={saving}
-        className={`w-full flex items-center gap-3 px-4 py-3.5 bg-bg-secondary border border-border rounded-xl hover:border-accent hover:bg-accent/5 active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'ml-6' : ''}`}
+        className={`w-full flex items-center gap-3 px-4 py-3.5 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'ml-6' : ''} ${
+          isHighlighted
+            ? 'border-accent bg-accent/10 text-text-primary'
+            : 'border-border hover:border-accent hover:bg-accent/5'
+        }`}
       >
         <CategoryIcon icon={cat.icon} size={18} className="text-text-primary flex-shrink-0" />
         <span className="text-sm text-text-primary text-left">{cat.name}</span>
       </button>
     );
   }
+
+  // Build indexed flat list tracker for rendering
+  let flatIndex = 0;
 
   return (
     <div className="flex flex-col gap-3">
@@ -141,12 +198,13 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar categoria..."
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Buscar categoria... (↑↓ navegar, Enter selecionar)"
               className={`w-full pl-8 pr-8 py-2.5 bg-bg-secondary border border-border rounded-lg text-text-primary text-[16px] focus:outline-none focus:border-accent ${silverPlaceholder}`}
             />
             {search && (
               <button
-                onClick={() => { setSearch(''); searchRef.current?.focus(); }}
+                onClick={() => { setSearch(''); setHighlightedIndex(-1); searchRef.current?.focus(); }}
                 className={`absolute right-3 top-1/2 -translate-y-1/2 ${silver} hover:text-text-primary`}
               >
                 <X size={14} />
@@ -156,7 +214,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
         </div>
 
         {/* Category list — vertical, grouped, no horizontal scroll */}
-        <div className="p-3 max-h-[50vh] overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div ref={listRef} className="p-3 max-h-[50vh] overflow-y-auto overflow-x-hidden overscroll-contain">
           {!hasResults ? (
             <p className={`${silver} text-xs text-center py-4`}>
               Nenhuma categoria encontrada
@@ -172,9 +230,10 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
                     <span className="truncate">{group.parent.name}</span>
                   </div>
                   {/* Subcategories */}
-                  {group.subs.map((sub) => (
-                    <CategoryButton key={sub.id} cat={sub} indent />
-                  ))}
+                  {group.subs.map((sub) => {
+                    const idx = flatIndex++;
+                    return <CategoryButton key={sub.id} cat={sub} indent index={idx} />;
+                  })}
                 </div>
               ))}
 
@@ -184,9 +243,10 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
                   Outras
                 </div>
               )}
-              {filteredGroups.standalone.map((cat) => (
-                <CategoryButton key={cat.id} cat={cat} />
-              ))}
+              {filteredGroups.standalone.map((cat) => {
+                const idx = flatIndex++;
+                return <CategoryButton key={cat.id} cat={cat} index={idx} />;
+              })}
             </div>
           )}
         </div>

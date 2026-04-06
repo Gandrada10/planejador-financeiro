@@ -41,6 +41,12 @@ export function ReportsPage() {
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<'all' | 'despesa' | 'receita'>('all');
 
+  const availableMonths = useMemo(() => {
+    const set = new Set(transactions.map((t) => getMonthYear(t.date)));
+    set.add(getMonthYear());
+    return Array.from(set).sort().reverse();
+  }, [transactions]);
+
   const monthTransactions = useMemo(
     () => transactions.filter((t) => getMonthYear(t.date) === monthYear),
     [transactions, monthYear]
@@ -341,7 +347,7 @@ export function ReportsPage() {
       <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-lg">
         <div className="flex items-center gap-2 text-xs">
           <span className="text-text-secondary">Mes:</span>
-          <MonthSelector value={monthYear} onChange={setMonthYear} />
+          <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
         </div>
         <div className="ml-auto flex gap-1">
           <button
