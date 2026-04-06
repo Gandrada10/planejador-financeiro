@@ -141,6 +141,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
       let text = '';
 
+      /** Sort items top-to-bottom then left-to-right and join into lines */
       const buildColumnText = (items: { x: number; y: number; text: string }[]) => {
         const lineMap = new Map<number, { x: number; text: string }[]>();
         for (const item of items) {
@@ -148,7 +149,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           lineMap.get(item.y)!.push({ x: item.x, text: item.text });
         }
         return Array.from(lineMap.entries())
-          .sort((a, b) => b[0] - a[0])
+          .sort((a, b) => b[0] - a[0]) // descending Y = top-to-bottom in PDF coords
           .map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '))
           .join('\n');
       };
@@ -171,37 +172,59 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         }
         if (allItems.length === 0) continue;
 
-        // Detect two-column layout: check if the middle 30% of the page has very few items
-        // compared to items clearly on the left and right halves.
-        const midStart = pageWidth * 0.35;
-        const midEnd = pageWidth * 0.65;
-        const leftCount = allItems.filter((i) => i.x < midStart).length;
-        const rightCount = allItems.filter((i) => i.x > midEnd).length;
-        const midCount = allItems.filter((i) => i.x >= midStart && i.x <= midEnd).length;
-        const isTwoColumn =
-          leftCount >= 5 &&
-          rightCount >= 5 &&
-          midCount < Math.min(leftCount, rightCount) * 0.2; // gap in the middle
+        // ── Two-column detection ───────────────────────────────────────────────
+        // Strategy: find the X position of the leftmost item on each line, then
+        // look for the largest gap between those "line-start" X values within the
+        // central 60% of the page (20–80%). Two columns produce a large gap
+        // between the left-column starts (~50pt) and right-column starts (~300pt).
+        // This is far more reliable than checking zone counts, because it is not
+        // fooled by text that extends across the page (amounts, headers, etc.).
+
+        // Step 1 – leftmost X per Y level
+        const lineStartX = new Map<number, number>(); // y → min(x)
+        for (const item of allItems) {
+          const cur = lineStartX.get(item.y);
+          if (cur === undefined || item.x < cur) lineStartX.set(item.y, item.x);
+        }
+        const startXs = Array.from(lineStartX.values()).sort((a, b) => a - b);
+
+        // Step 2 – find the largest gap in start-X values within the central page
+        let maxGap = 0;
+        let splitX = pageWidth / 2;
+        for (let i = 0; i < startXs.length - 1; i++) {
+          const gap = startXs[i + 1] - startXs[i];
+          const mid = (startXs[i] + startXs[i + 1]) / 2;
+          // Only consider gaps in the central 60% of the page (avoids margins)
+          if (mid >= pageWidth * 0.20 && mid <= pageWidth * 0.80 && gap > maxGap) {
+            maxGap = gap;
+            splitX = mid; // midpoint of the gap is the column boundary
+          }
+        }
+
+        // Step 3 – require the gap to be at least 18% of page width AND
+        // both sides must have several lines to avoid false positives
+        const leftLines = startXs.filter((x) => x < splitX).length;
+        const rightLines = startXs.filter((x) => x >= splitX).length;
+        const isTwoColumn = maxGap >= pageWidth * 0.18 && leftLines >= 3 && rightLines >= 3;
+
+        console.log(
+          `[PDF p${p}] pageWidth=${pageWidth.toFixed(0)} maxGap=${maxGap.toFixed(0)} ` +
+          `splitX=${splitX.toFixed(0)} leftLines=${leftLines} rightLines=${rightLines} ` +
+          `isTwoColumn=${isTwoColumn}`
+        );
 
         if (isTwoColumn) {
-          // Find the actual split point: largest X gap in the middle zone
-          const midXs = allItems.map((i) => i.x).filter((x) => x >= midStart && x <= midEnd).sort((a, b) => a - b);
-          let splitX = pageWidth / 2;
-          if (midXs.length > 0) {
-            // If items exist in middle zone, split after the last item before the gap
-            splitX = midXs[midXs.length - 1] + 1;
-          }
           const leftItems = allItems.filter((i) => i.x < splitX);
           const rightItems = allItems.filter((i) => i.x >= splitX);
-          // Emit left column first (top to bottom), then right column (top to bottom).
-          // The [COLUNA-DIREITA] marker tells the AI that the right column is a direct
-          // continuation of the invoice — the active cardholder section does NOT reset
-          // just because the column changed. Only an explicit cardholder name header
-          // (e.g. "NOME SOBRENOME (final XXXX)") changes the active titular.
+
+          // Emit left column first (top-to-bottom), then mark the column break,
+          // then emit right column (top-to-bottom).
+          // The [COLUNA-DIREITA] marker signals to the AI that this is a layout
+          // break — the active cardholder section continues unless an explicit
+          // cardholder name header appears right after the marker.
           text += buildColumnText(leftItems) + '\n';
           text += '[COLUNA-DIREITA]\n';
           text += buildColumnText(rightItems) + '\n\n';
-          console.log(`[PDF p${p}] two-column detected (left=${leftCount}, right=${rightCount}, mid=${midCount})`);
         } else {
           text += buildColumnText(allItems) + '\n\n';
         }
@@ -215,7 +238,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           text += content.items.filter((i) => 'str' in i).map((i) => ('str' in i ? i.str : '')).join(' ') + '\n';
         }
       }
-      console.log('[PDF extract] chars:', text.length, '| preview:', text.slice(0, 300));
+      console.log('[PDF extract] chars:', text.length, '| preview:', text.slice(0, 500));
       return text;
     }
 
