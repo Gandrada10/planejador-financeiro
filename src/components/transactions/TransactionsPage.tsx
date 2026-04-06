@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, Landmark } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -10,6 +10,7 @@ import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { TransactionTable } from './TransactionTable';
 import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
+import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { getMonthYear, getMonthLabel } from '../../lib/utils';
 import type { Transaction } from '../../types';
@@ -24,7 +25,9 @@ export function TransactionsPage() {
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showPluggySync, setShowPluggySync] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const hasPluggyCredentials = !!(localStorage.getItem('pluggy_client_id') && localStorage.getItem('pluggy_client_secret'));
   const [filterMonth, setFilterMonth] = useState(getMonthYear());
   const [filterTitular, setFilterTitular] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -49,10 +52,20 @@ export function TransactionsPage() {
   }, [transactions]);
 
   const allTitulars = useMemo(() => {
-    const set = new Set(transactions.map((t) => t.titular).filter(Boolean));
-    titularNames.forEach((n) => set.add(n));
-    return Array.from(set).sort();
-  }, [transactions, titularNames]);
+    // Prefer the canonical family member names; only add raw titular strings
+    // when they don't match any known member (case-insensitive).
+    const knownNames = familyMemberNames.length > 0 ? familyMemberNames : titularNames;
+    const set = new Set<string>(knownNames);
+    for (const t of transactions) {
+      // familyMember is already fuzzy-matched to a canonical name at import time.
+      // Fall back to titular for older transactions imported before this fix.
+      const name = (t.familyMember || t.titular || '').trim();
+      if (!name) continue;
+      const alreadyCovered = knownNames.some((k) => k.toLowerCase() === name.toLowerCase());
+      if (!alreadyCovered) set.add(name);
+    }
+    return Array.from(set).filter(Boolean).sort();
+  }, [transactions, titularNames, familyMemberNames]);
 
   const filtered = useMemo(() => {
     let list = transactions;
@@ -60,7 +73,10 @@ export function TransactionsPage() {
       list = list.filter((t) => getMonthYear(t.date) === filterMonth);
     }
     if (filterTitular !== 'all') {
-      list = list.filter((t) => t.titular === filterTitular);
+      // Match against both fields: titular (raw) and familyMember (canonical).
+      // This ensures transactions from older imports (where titular wasn't normalized)
+      // still appear when filtering by the canonical member name.
+      list = list.filter((t) => t.titular === filterTitular || t.familyMember === filterTitular);
     }
     if (filterCategory === 'uncategorized') {
       list = list.filter((t) => !t.categoryId);
@@ -172,6 +188,15 @@ export function TransactionsPage() {
           >
             <Upload size={14} /> Importar Extrato
           </button>
+          {hasPluggyCredentials && (
+            <button
+              onClick={() => setShowPluggySync(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
+              title="Sincronizar transacoes automaticamente via Open Banking (Pluggy)"
+            >
+              <Landmark size={14} /> Sincronizar Banco
+            </button>
+          )}
           <button
             onClick={() => setShowShareModal(true)}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
@@ -341,6 +366,15 @@ export function TransactionsPage() {
           categories={categories}
           allTitulars={allTitulars}
           titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
+        />
+      )}
+      {showPluggySync && (
+        <PluggySync
+          existingTransactions={transactions}
+          accounts={accounts}
+          titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
+          onImport={handleImport}
+          onClose={() => setShowPluggySync(false)}
         />
       )}
       {showShareModal && (

@@ -4,7 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account } from '../../types';
-import { formatBRL, getMonthYear, getMonthLabel, filterCategoriesByAmount } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel, filterCategoriesByAmount, normalizeTitular } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -140,21 +140,96 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       const buffer = await file.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: buffer }).promise;
       let text = '';
+
+      /** Sort items top-to-bottom then left-to-right and join into lines */
+      const buildColumnText = (items: { x: number; y: number; text: string }[]) => {
+        const lineMap = new Map<number, { x: number; text: string }[]>();
+        for (const item of items) {
+          if (!lineMap.has(item.y)) lineMap.set(item.y, []);
+          lineMap.get(item.y)!.push({ x: item.x, text: item.text });
+        }
+        return Array.from(lineMap.entries())
+          .sort((a, b) => b[0] - a[0]) // descending Y = top-to-bottom in PDF coords
+          .map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '))
+          .join('\n');
+      };
+
       for (let p = 1; p <= pdf.numPages; p++) {
         const page = await pdf.getPage(p);
+        const viewport = page.getViewport({ scale: 1 });
+        const pageWidth = viewport.width;
         const content = await page.getTextContent();
-        const lineMap = new Map<number, { x: number; text: string }[]>();
+
+        // Collect all positioned text items
+        const allItems: { x: number; y: number; text: string }[] = [];
         for (const item of content.items) {
           if (!('str' in item) || !item.str.trim()) continue;
-          const y = Math.round(item.transform[5] / 3) * 3;
-          if (!lineMap.has(y)) lineMap.set(y, []);
-          lineMap.get(y)!.push({ x: item.transform[4], text: item.str });
+          allItems.push({
+            x: item.transform[4],
+            y: Math.round(item.transform[5] / 3) * 3,
+            text: item.str,
+          });
         }
-        const lines = Array.from(lineMap.entries())
-          .sort((a, b) => b[0] - a[0])
-          .map(([, its]) => its.sort((a, b) => a.x - b.x).map((i) => i.text).join(' '));
-        text += lines.join('\n') + '\n\n';
+        if (allItems.length === 0) continue;
+
+        // ── Two-column detection ───────────────────────────────────────────────
+        // Strategy: find the X position of the leftmost item on each line, then
+        // look for the largest gap between those "line-start" X values within the
+        // central 60% of the page (20–80%). Two columns produce a large gap
+        // between the left-column starts (~50pt) and right-column starts (~300pt).
+        // This is far more reliable than checking zone counts, because it is not
+        // fooled by text that extends across the page (amounts, headers, etc.).
+
+        // Step 1 – leftmost X per Y level
+        const lineStartX = new Map<number, number>(); // y → min(x)
+        for (const item of allItems) {
+          const cur = lineStartX.get(item.y);
+          if (cur === undefined || item.x < cur) lineStartX.set(item.y, item.x);
+        }
+        const startXs = Array.from(lineStartX.values()).sort((a, b) => a - b);
+
+        // Step 2 – find the largest gap in start-X values within the central page
+        let maxGap = 0;
+        let splitX = pageWidth / 2;
+        for (let i = 0; i < startXs.length - 1; i++) {
+          const gap = startXs[i + 1] - startXs[i];
+          const mid = (startXs[i] + startXs[i + 1]) / 2;
+          // Only consider gaps in the central 60% of the page (avoids margins)
+          if (mid >= pageWidth * 0.20 && mid <= pageWidth * 0.80 && gap > maxGap) {
+            maxGap = gap;
+            splitX = mid; // midpoint of the gap is the column boundary
+          }
+        }
+
+        // Step 3 – require the gap to be at least 18% of page width AND
+        // both sides must have several lines to avoid false positives
+        const leftLines = startXs.filter((x) => x < splitX).length;
+        const rightLines = startXs.filter((x) => x >= splitX).length;
+        const isTwoColumn = maxGap >= pageWidth * 0.18 && leftLines >= 3 && rightLines >= 3;
+
+        console.log(
+          `[PDF p${p}] pageWidth=${pageWidth.toFixed(0)} maxGap=${maxGap.toFixed(0)} ` +
+          `splitX=${splitX.toFixed(0)} leftLines=${leftLines} rightLines=${rightLines} ` +
+          `isTwoColumn=${isTwoColumn}`
+        );
+
+        if (isTwoColumn) {
+          const leftItems = allItems.filter((i) => i.x < splitX);
+          const rightItems = allItems.filter((i) => i.x >= splitX);
+
+          // Emit left column first (top-to-bottom), then mark the column break,
+          // then emit right column (top-to-bottom).
+          // The [COLUNA-DIREITA] marker signals to the AI that this is a layout
+          // break — the active cardholder section continues unless an explicit
+          // cardholder name header appears right after the marker.
+          text += buildColumnText(leftItems) + '\n';
+          text += '[COLUNA-DIREITA]\n';
+          text += buildColumnText(rightItems) + '\n\n';
+        } else {
+          text += buildColumnText(allItems) + '\n\n';
+        }
       }
+
       if (text.trim().length < 100) {
         text = '';
         for (let p = 1; p <= pdf.numPages; p++) {
@@ -163,7 +238,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           text += content.items.filter((i) => 'str' in i).map((i) => ('str' in i ? i.str : '')).join(' ') + '\n';
         }
       }
-      console.log('[PDF extract] chars:', text.length, '| preview:', text.slice(0, 300));
+      console.log('[PDF extract] chars:', text.length, '| preview:', text.slice(0, 500));
       return text;
     }
 
@@ -234,7 +309,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           categoryId: null,
           account: accountNames[0] ?? '',
           familyMember: matchedMember,
-          titular: t.titular || '',
+          // Use canonical member name as titular when matched; otherwise normalize to Title Case.
+          // This prevents duplicates in the titular filter when the same person's name
+          // appears in slightly different formats across different PDF imports.
+          titular: matchedMember || normalizeTitular(t.titular || ''),
           installmentNumber: t.installmentNumber,
           totalInstallments: t.totalInstallments,
           cardNumber: t.cardNumber,
@@ -248,7 +326,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         return {
           ...item,
           isDuplicate: isDuplicate(item, existingTransactions),
-          installmentType: hasInstallments ? 'parcelada' as const : 'unica' as const,
+          // For credit card imports each row is already one installment for one month
+          // — never auto-expand. Only expand installments for bank account statements.
+          installmentType: (hasInstallments && !detectedCreditCard) ? 'parcelada' as const : 'unica' as const,
           periodicity: 1,
           installmentAmount: hasInstallments ? t.amount : null,
         };
@@ -600,12 +680,16 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             className={`px-2 py-1 rounded text-xs border transition-colors ${
                               item.installmentType === 'parcelada'
                                 ? 'bg-accent/10 border-accent/30 text-accent'
-                                : 'bg-bg-secondary border-border text-text-secondary hover:border-accent/30'
+                                : item.totalInstallments && item.totalInstallments > 1
+                                  ? 'bg-accent/10 border-accent/20 text-accent/80'
+                                  : 'bg-bg-secondary border-border text-text-secondary hover:border-accent/30'
                             }`}
                           >
-                            {item.installmentType === 'parcelada'
+                            {item.totalInstallments && item.totalInstallments > 1
                               ? `${item.installmentNumber || 1}/${item.totalInstallments}`
-                              : 'Unica'}
+                              : item.installmentType === 'parcelada'
+                                ? `${item.installmentNumber || 1}/${item.totalInstallments}`
+                                : 'Unica'}
                             <ChevronDown size={10} className="inline ml-1" />
                           </button>
                         </td>

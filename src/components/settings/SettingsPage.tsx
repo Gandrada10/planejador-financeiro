@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X, Users, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink } from 'lucide-react';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -37,6 +37,14 @@ export function SettingsPage() {
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem('anthropic_api_key') || '');
   const [showKey, setShowKey] = useState(false);
   const [keySaved, setKeySaved] = useState(false);
+
+  // Pluggy credentials
+  const [pluggyClientId, setPluggyClientId] = useState(() => localStorage.getItem('pluggy_client_id') || '');
+  const [pluggyClientSecret, setPluggyClientSecret] = useState(() => localStorage.getItem('pluggy_client_secret') || '');
+  const [showPluggySecret, setShowPluggySecret] = useState(false);
+  const [pluggySaved, setPluggySaved] = useState(false);
+  const [pluggyTesting, setPluggyTesting] = useState(false);
+  const [pluggyTestResult, setPluggyTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
 
   const [newMemberName, setNewMemberName] = useState('');
   const [cardDigits, setCardDigits] = useState('');
@@ -104,6 +112,28 @@ export function SettingsPage() {
     if (!cycleAccountId || !cycleMonth) return;
     await createCycle(cycleAccountId, cycleMonth);
     setCycleAccountId(''); setCycleMonth('');
+  }
+
+  async function testPluggyConnection() {
+    setPluggyTesting(true);
+    setPluggyTestResult(null);
+    try {
+      const res = await fetch('/api/pluggy-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'auth_test', clientId: pluggyClientId.trim(), clientSecret: pluggyClientSecret.trim() }),
+      });
+      const data = await res.json() as { ok?: boolean; itemCount?: number; error?: string };
+      if (data.ok) {
+        setPluggyTestResult({ ok: true, msg: `Conectado! ${data.itemCount ?? 0} banco(s) vinculado(s).` });
+      } else {
+        setPluggyTestResult({ ok: false, msg: data.error || 'Erro desconhecido' });
+      }
+    } catch {
+      setPluggyTestResult({ ok: false, msg: 'Falha de conexao com o servidor.' });
+    } finally {
+      setPluggyTesting(false);
+    }
   }
 
   if (loading || loadingMembers || loadingAccounts || loadingCycles) {
@@ -372,6 +402,111 @@ export function SettingsPage() {
         {!anthropicKey && (
           <p className="text-[10px] text-accent">
             Sem chave configurada — importacao com IA retornara erro. Obtenha sua chave em console.anthropic.com.
+          </p>
+        )}
+      </div>
+
+      {/* Pluggy (Open Banking) */}
+      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <Landmark size={16} className="text-accent" /> Importacao Automatica (Pluggy / Open Banking)
+          </h3>
+          <p className="text-[10px] text-text-secondary mt-1">
+            Conecte seus bancos via Open Finance para importar transacoes automaticamente — sem precisar de PDF.
+            Use o <strong>Meu Pluggy</strong> (gratuito para uso pessoal) para obter suas credenciais.
+          </p>
+          <a
+            href="https://meu.pluggy.ai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[10px] text-accent hover:underline mt-1"
+          >
+            <ExternalLink size={10} /> Abrir meu.pluggy.ai para conectar seus bancos
+          </a>
+        </div>
+
+        <div className="bg-bg-secondary rounded p-3 space-y-1 text-[10px] text-text-secondary">
+          <p className="font-bold text-text-primary text-xs">Como obter as credenciais:</p>
+          <p>1. Acesse <strong>meu.pluggy.ai</strong> e crie uma conta gratuita</p>
+          <p>2. Conecte suas contas bancarias no painel</p>
+          <p>3. Va em <strong>Configuracoes &gt; API</strong> para copiar o CLIENT_ID e CLIENT_SECRET</p>
+          <p>4. Cole abaixo e clique em Salvar</p>
+        </div>
+
+        <div className="space-y-2">
+          <div>
+            <label className="text-[10px] text-text-secondary mb-1 block">CLIENT_ID</label>
+            <input
+              type="text"
+              value={pluggyClientId}
+              onChange={(e) => { setPluggyClientId(e.target.value); setPluggySaved(false); setPluggyTestResult(null); }}
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              className={`${inputClass} w-full font-mono text-xs`}
+            />
+          </div>
+          <div>
+            <label className="text-[10px] text-text-secondary mb-1 block">CLIENT_SECRET</label>
+            <div className="relative">
+              <input
+                type={showPluggySecret ? 'text' : 'password'}
+                value={pluggyClientSecret}
+                onChange={(e) => { setPluggyClientSecret(e.target.value); setPluggySaved(false); setPluggyTestResult(null); }}
+                placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+                className={`${inputClass} w-full pr-9 font-mono text-xs`}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPluggySecret((v) => !v)}
+                className="absolute right-2 top-2.5 text-text-secondary hover:text-text-primary"
+              >
+                {showPluggySecret ? <EyeOff size={14} /> : <Eye size={14} />}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => {
+              localStorage.setItem('pluggy_client_id', pluggyClientId.trim());
+              localStorage.setItem('pluggy_client_secret', pluggyClientSecret.trim());
+              setPluggySaved(true);
+              setPluggyTestResult(null);
+            }}
+            disabled={!pluggyClientId.trim() || !pluggyClientSecret.trim()}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+          >
+            {pluggySaved ? <><Check size={14} /> Salvo</> : 'Salvar'}
+          </button>
+          <button
+            onClick={testPluggyConnection}
+            disabled={!pluggyClientId.trim() || !pluggyClientSecret.trim() || pluggyTesting}
+            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-50"
+          >
+            {pluggyTesting ? <RefreshCw size={13} className="animate-spin" /> : <Landmark size={13} />}
+            Testar Conexao
+          </button>
+          {(pluggyClientId || pluggyClientSecret) && (
+            <button
+              onClick={() => {
+                localStorage.removeItem('pluggy_client_id');
+                localStorage.removeItem('pluggy_client_secret');
+                setPluggyClientId('');
+                setPluggyClientSecret('');
+                setPluggySaved(false);
+                setPluggyTestResult(null);
+              }}
+              className="text-text-secondary hover:text-accent-red"
+            >
+              <Trash2 size={14} />
+            </button>
+          )}
+        </div>
+
+        {pluggyTestResult && (
+          <p className={`text-[10px] font-bold ${pluggyTestResult.ok ? 'text-accent-green' : 'text-accent-red'}`}>
+            {pluggyTestResult.ok ? '✓' : '✗'} {pluggyTestResult.msg}
           </p>
         )}
       </div>

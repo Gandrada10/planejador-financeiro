@@ -57,13 +57,22 @@ Para cada transacao, extraia:
 - "purchaseDate": mesma data da compra (igual a "date"). So use valor diferente se houver explicitamente duas datas distintas no mesmo lancamento.
 - "description": descricao da transacao (limpa, sem codigos internos desnecessarios)
 - "amount": valor numerico (negativo para debitos/despesas, positivo para creditos/receitas)
-- "titular": nome do titular responsavel pelo lancamento. REGRAS CRITICAS para identificar titular:
-  * Faturas de cartao com multiplos titulares organizam os lancamentos em SECOES separadas por nome. Ex: uma secao "GUSTAVO ANDRADA" seguida de transacoes, depois uma secao "JULIANA KUHN - CARTAO ADICIONAL" seguida das transacoes dela.
-  * O nome do titular aparece como linha isolada (cabecalho de secao) ANTES do grupo de transacoes que pertencem a ele.
-  * Cada transacao deve receber o titular da secao em que aparece — nao use o mesmo titular para todas as transacoes se houver secoes distintas.
+- "titular": nome do titular responsavel pelo lancamento. Imagine que voce mantem uma variavel "titular_ativo" que começa vazia e so muda quando voce encontra um cabecalho de secao de titular. Cada transacao recebe o valor atual de "titular_ativo". Regras:
+
+  QUANDO o titular_ativo MUDA:
+  * Apenas quando aparece uma linha que e um cabecalho de secao de titular: nome proprio isolado (geralmente em maiusculas) seguido opcionalmente de "(final XXXX)", numero do cartao ou tipo ("CARTAO ADICIONAL"). Exemplos: "GUILHERME ANDRADA (final 4535)", "JULIANA KUHN - CARTAO ADICIONAL", "MARIA SILVA".
+  * Isso pode ocorrer em qualquer posicao: no inicio do extrato, no meio de uma coluna, logo apos [COLUNA-DIREITA], ou no inicio de uma nova pagina. Sempre que aparecer, atualiza o titular_ativo.
   * Ignore sufixos como "CARTAO ADICIONAL", "ADICIONAL", "TITULAR" — use apenas o nome da pessoa.
-  * Se o extrato nao tiver secoes por titular (apenas um portador), use o nome do titular principal encontrado no cabecalho da fatura.
-  * Se nao for possivel identificar o titular de nenhuma forma, use string vazia.
+
+  QUANDO o titular_ativo NAO muda (mantenha o titular anterior):
+  * Ao encontrar o marcador [COLUNA-DIREITA]: e apenas uma quebra grafica de coluna, nao troca de titular.
+  * Ao encontrar cabecalhos de tabela: "Lancamentos: compras e saques", "DATA ESTABELECIMENTO VALOR EM RS", "DATA LANCAMENTO VALOR" e similares sao cabecalhos de coluna — ignorar para fins de titular.
+  * Ao encontrar subtotais: "Lancamentos no cartao (final XXXX): R$ YYY", totais de pagina, rodapes.
+  * Ao iniciar nova pagina sem novo nome de titular.
+
+  REGRA GERAL: o titular_ativo persiste ate ser explicitamente substituido por um novo nome de pessoa. Nao existe reset automatico por posicao, coluna ou pagina.
+
+  Se o extrato nao tiver secoes por titular, use o nome do portador principal do cabecalho da fatura para todas as transacoes. Se impossivel identificar, use string vazia.
 - "installmentNumber": numero da parcela atual se for compra parcelada (ex: 3 de "PARCELA 3/10"), senao null
 - "totalInstallments": total de parcelas se for compra parcelada (ex: 10 de "PARCELA 3/10"), senao null
 - "cardNumber": ultimos 4 digitos do cartao se visivel proximo ao lancamento ou cabecalho da secao, senao null
@@ -84,7 +93,13 @@ Regras gerais:
 - Detecte datas em formatos: DD/MM/YYYY, DD/MM, YYYY-MM-DD, DD-MM-YYYY, DD.MM.YYYY
 - Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
 - PROCESSE TODAS as transacoes do extrato, mesmo que sejam muitas (100+)
-- CRUCIAL: em faturas com cartao adicional, as transacoes do adicional NAO sao do titular principal — atribua o titular correto a cada lancamento conforme a secao em que aparece
+- CRUCIAL: siga rigorosamente a logica de "titular_ativo" descrita acima — o titular so muda com cabecalho de nome de pessoa, jamais por coluna, pagina ou cabecalho de tabela
+
+Secoes especiais em faturas de cartao (CRITICO):
+- ENCARGOS, SEGUROS, ANUIDADE, IOF, TAXAS: sao cobranças extras que aparecem em secoes separadas (as vezes em colunas menores). Devem ser importadas como transacoes normais. Pertencem ao titular PRINCIPAL do cartao (o primeiro da fatura) a menos que estejam explicitamente dentro de uma secao de outro titular.
+- ESTORNOS / CREDITOS / "OUTROS CREDITOS": sao valores positivos (credito a favor do cliente). Importe-os com amount POSITIVO. Atribua ao titular principal a menos que estejam dentro de secao de outro titular.
+- COMPRAS DE FATURAS FUTURAS / LANCAMENTOS FUTUROS / "PROXIMAS FATURAS": esta secao lista compras que serao cobradas em faturas FUTURAS, nao na fatura atual. NAO IMPORTE essas transacoes — ignore toda a secao de faturas futuras por completo.
+- RESUMO DA FATURA / TOTAIS / "TOTAL DA FATURA": ignore linhas de resumo, totais e subtotais — so importe lancamentos individuais.
 
 Responda APENAS com um JSON object com dois campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
