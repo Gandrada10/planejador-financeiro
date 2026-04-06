@@ -57,18 +57,22 @@ Para cada transacao, extraia:
 - "purchaseDate": mesma data da compra (igual a "date"). So use valor diferente se houver explicitamente duas datas distintas no mesmo lancamento.
 - "description": descricao da transacao (limpa, sem codigos internos desnecessarios)
 - "amount": valor numerico (negativo para debitos/despesas, positivo para creditos/receitas)
-- "titular": nome do titular responsavel pelo lancamento. REGRAS CRITICAS para identificar titular:
-  * Faturas de cartao com multiplos titulares organizam os lancamentos em SECOES separadas por nome. Ex: uma secao "GUSTAVO ANDRADA" seguida de transacoes, depois uma secao "JULIANA KUHN - CARTAO ADICIONAL" seguida das transacoes dela.
-  * O nome do titular aparece como linha isolada (cabecalho de secao) ANTES do grupo de transacoes que pertencem a ele. Frequentemente aparece junto com os ultimos 4 digitos do cartao no mesmo cabecalho (ex: "GUILHERME ANDRADA ... 1234").
-  * Cada transacao deve receber o titular da secao em que aparece — nao use o mesmo titular para todas as transacoes se houver secoes distintas.
-  * LAYOUT DE DUAS COLUNAS — REGRA FUNDAMENTAL: O texto extraido contem o marcador [COLUNA-DIREITA] onde a coluna esquerda termina e a coluna direita comeca na MESMA pagina. Voce deve ler: coluna esquerda (de cima para baixo) → [COLUNA-DIREITA] → coluna direita (de cima para baixo) → proxima pagina. O marcador [COLUNA-DIREITA] NAO muda o titular ativo.
-  * EXEMPLO DE DUAS COLUNAS: Se a coluna esquerda termina com transacoes de "GUILHERME ANDRADA" e a coluna direita começa com "Lancamentos: compras e saques" (cabecalho de tabela) seguido de mais transacoes SEM novo nome de titular, essas transacoes da coluna direita sao de GUILHERME ANDRADA — o titular continua. So muda quando aparece explicitamente outro nome.
-  * CABECALHOS DE TABELA NAO SAO TITULARES: Linhas como "Lancamentos: compras e saques", "DATA ESTABELECIMENTO VALOR EM RS", "DATA LANCAMENTO VALOR", "Lancamentos no cartao (final XXXX): R$ YYY" sao cabecalhos de coluna ou subtotais — NUNCA mudam o titular ativo.
-  * COMO IDENTIFICAR UM CABECALHO DE TITULAR DE VERDADE: nome proprio isolado (geralmente em maiusculas), frequentemente seguido de "(final XXXX)" ou descricao do tipo de cartao. Ex: "GUILHERME ANDRADA (final 4535)", "JULIANA KUHN - CARTAO ADICIONAL". SO essas linhas mudam o titular.
-  * QUEBRA DE PAGINA: igualmente, quando uma nova pagina comeca sem novo cabecalho de titular, o titular da ultima secao da pagina anterior continua valendo.
+- "titular": nome do titular responsavel pelo lancamento. Imagine que voce mantem uma variavel "titular_ativo" que começa vazia e so muda quando voce encontra um cabecalho de secao de titular. Cada transacao recebe o valor atual de "titular_ativo". Regras:
+
+  QUANDO o titular_ativo MUDA:
+  * Apenas quando aparece uma linha que e um cabecalho de secao de titular: nome proprio isolado (geralmente em maiusculas) seguido opcionalmente de "(final XXXX)", numero do cartao ou tipo ("CARTAO ADICIONAL"). Exemplos: "GUILHERME ANDRADA (final 4535)", "JULIANA KUHN - CARTAO ADICIONAL", "MARIA SILVA".
+  * Isso pode ocorrer em qualquer posicao: no inicio do extrato, no meio de uma coluna, logo apos [COLUNA-DIREITA], ou no inicio de uma nova pagina. Sempre que aparecer, atualiza o titular_ativo.
   * Ignore sufixos como "CARTAO ADICIONAL", "ADICIONAL", "TITULAR" — use apenas o nome da pessoa.
-  * Se o extrato nao tiver secoes por titular (apenas um portador), use o nome do titular principal encontrado no cabecalho da fatura.
-  * Se nao for possivel identificar o titular de nenhuma forma, use string vazia.
+
+  QUANDO o titular_ativo NAO muda (mantenha o titular anterior):
+  * Ao encontrar o marcador [COLUNA-DIREITA]: e apenas uma quebra grafica de coluna, nao troca de titular.
+  * Ao encontrar cabecalhos de tabela: "Lancamentos: compras e saques", "DATA ESTABELECIMENTO VALOR EM RS", "DATA LANCAMENTO VALOR" e similares sao cabecalhos de coluna — ignorar para fins de titular.
+  * Ao encontrar subtotais: "Lancamentos no cartao (final XXXX): R$ YYY", totais de pagina, rodapes.
+  * Ao iniciar nova pagina sem novo nome de titular.
+
+  REGRA GERAL: o titular_ativo persiste ate ser explicitamente substituido por um novo nome de pessoa. Nao existe reset automatico por posicao, coluna ou pagina.
+
+  Se o extrato nao tiver secoes por titular, use o nome do portador principal do cabecalho da fatura para todas as transacoes. Se impossivel identificar, use string vazia.
 - "installmentNumber": numero da parcela atual se for compra parcelada (ex: 3 de "PARCELA 3/10"), senao null
 - "totalInstallments": total de parcelas se for compra parcelada (ex: 10 de "PARCELA 3/10"), senao null
 - "cardNumber": ultimos 4 digitos do cartao se visivel proximo ao lancamento ou cabecalho da secao, senao null
@@ -89,10 +93,7 @@ Regras gerais:
 - Detecte datas em formatos: DD/MM/YYYY, DD/MM, YYYY-MM-DD, DD-MM-YYYY, DD.MM.YYYY
 - Para PDFs, algumas linhas podem estar em ordem incorreta - use logica para reconstituir transacoes
 - PROCESSE TODAS as transacoes do extrato, mesmo que sejam muitas (100+)
-- CRUCIAL: em faturas com cartao adicional, as transacoes do adicional NAO sao do titular principal — atribua o titular correto a cada lancamento conforme a secao em que aparece
-- CRUCIAL: mantenha o titular ativo ate encontrar explicitamente um novo cabecalho de secao com outro nome — nao redefina o titular baseado em heuristicas ou posicao na pagina
-- CRUCIAL: o marcador [COLUNA-DIREITA] no texto indica virada de coluna grafica na mesma pagina, NAO troca de titular. Continue com o titular ativo ate encontrar um nome proprio isolado que identifique nova secao
-- CRUCIAL: "Lancamentos: compras e saques" e variantes sao cabecalhos de tabela — nunca os interprete como cabecalho de titular
+- CRUCIAL: siga rigorosamente a logica de "titular_ativo" descrita acima — o titular so muda com cabecalho de nome de pessoa, jamais por coluna, pagina ou cabecalho de tabela
 
 Responda APENAS com um JSON object com dois campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
