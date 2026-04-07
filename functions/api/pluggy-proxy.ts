@@ -26,8 +26,12 @@ async function getApiKey(clientId: string, clientSecret: string): Promise<string
     const text = await res.text();
     throw new Error(`Pluggy auth failed (${res.status}): ${text}`);
   }
-  const data = await res.json() as { apiKey: string };
-  return data.apiKey;
+  const data = await res.json() as { apiKey?: string; accessToken?: string };
+  const apiKey = data.apiKey || data.accessToken;
+  if (!apiKey) {
+    throw new Error(`Pluggy auth OK mas sem apiKey. Resposta: ${JSON.stringify(data)}`);
+  }
+  return apiKey;
 }
 
 async function pluggyGet(apiKey: string, path: string): Promise<unknown> {
