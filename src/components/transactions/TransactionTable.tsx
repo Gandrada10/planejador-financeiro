@@ -136,9 +136,9 @@ export function TransactionTable({ transactions, categories, projects = [], acco
     setSelectedIds(new Set());
   }
 
-  function reconcileSelected() {
+  function reconcileSelected(reconcile: boolean) {
     if (!onBatchReconcile) return;
-    onBatchReconcile([...selectedIds], true);
+    onBatchReconcile([...selectedIds], reconcile);
     setSelectedIds(new Set());
   }
 
@@ -158,11 +158,19 @@ export function TransactionTable({ transactions, categories, projects = [], acco
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 p-2 bg-bg-secondary rounded text-xs">
           <span className="text-text-secondary">{selectedIds.size} selecionadas</span>
-          {onBatchReconcile && (
-            <button onClick={reconcileSelected} className="text-accent-green hover:underline flex items-center gap-1">
-              <CheckCircle2 size={12} /> Conciliar
-            </button>
-          )}
+          {onBatchReconcile && (() => {
+            const selectedList = sorted.filter((t) => selectedIds.has(t.id));
+            const allReconciled = selectedList.every((t) => t.reconciled);
+            return allReconciled ? (
+              <button onClick={() => reconcileSelected(false)} className="text-text-secondary hover:underline flex items-center gap-1">
+                <CheckCircle2 size={12} /> Desconciliar
+              </button>
+            ) : (
+              <button onClick={() => reconcileSelected(true)} className="text-accent-green hover:underline flex items-center gap-1">
+                <CheckCircle2 size={12} /> Conciliar
+              </button>
+            );
+          })()}
           <button onClick={deleteSelected} className="text-accent-red hover:underline flex items-center gap-1">
             <Trash2 size={12} /> Excluir
           </button>
@@ -172,17 +180,17 @@ export function TransactionTable({ transactions, categories, projects = [], acco
       <div className="overflow-auto bg-bg-card border border-border rounded-lg">
         <table className="w-full text-xs table-fixed">
           <colgroup>
-            <col style={{ width: 32 }} />
-            <col style={{ width: 88 }} />
-            <col style={{ width: 88 }} />
-            <col />
-            <col style={{ width: 90 }} />
-            <col style={{ width: 80 }} />
-            <col style={{ width: 95 }} />
-            <col style={{ width: 60 }} />
-            <col style={{ width: 115 }} />
-            <col style={{ width: 95 }} />
-            <col style={{ width: 36 }} />
+            <col style={{ width: 32 }} />  {/* dot */}
+            <col style={{ width: 82 }} />  {/* competencia */}
+            <col style={{ width: 82 }} />  {/* data */}
+            <col style={{ width: '22%' }} /> {/* descricao - limitada */}
+            <col style={{ width: 82 }} />  {/* conta */}
+            <col style={{ width: 72 }} />  {/* membro */}
+            <col style={{ width: 88 }} />  {/* valor */}
+            <col style={{ width: 58 }} />  {/* parcelas */}
+            <col style={{ width: 115 }} /> {/* categoria */}
+            <col style={{ width: 110 }} /> {/* projeto - mais espaço */}
+            <col style={{ width: 32 }} />  {/* delete */}
           </colgroup>
           <thead>
             <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
@@ -384,7 +392,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 </td>
 
                 {/* Categoria - combobox with autocomplete + tab navigation */}
-                <td className="p-2 overflow-hidden">
+                <td className="p-2 relative">
                   <CategoryCombobox
                     categories={categories}
                     amount={t.amount}
@@ -403,9 +411,10 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                     tabIndex={-1}
                     value={t.projectId || ''}
                     onChange={async (e) => {
+                      const value = e.target.value;
                       const ok = await guardClosedCycle(t);
-                      if (!ok) { e.target.value = t.projectId || ''; return; }
-                      onUpdate(t.id, { projectId: e.target.value || null });
+                      if (!ok) return;
+                      onUpdate(t.id, { projectId: value || null });
                     }}
                     className="w-full bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary truncate"
                     style={{ color: projects.find((p) => p.id === t.projectId)?.color || 'var(--color-text-secondary)' }}

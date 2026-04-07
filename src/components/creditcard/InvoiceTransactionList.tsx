@@ -168,14 +168,25 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
         </div>
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-2">
-            {onBatchReconcile && (
-              <button
-                onClick={() => { onBatchReconcile([...selectedIds], true); setSelectedIds(new Set()); }}
-                className="flex items-center gap-1 text-xs text-accent-green hover:underline"
-              >
-                <CheckCircle2 size={12} /> Conciliar ({selectedIds.size})
-              </button>
-            )}
+            {onBatchReconcile && (() => {
+              const selList = allTransactions.filter((t) => selectedIds.has(t.id));
+              const allRec = selList.every((t) => t.reconciled);
+              return allRec ? (
+                <button
+                  onClick={() => { onBatchReconcile([...selectedIds], false); setSelectedIds(new Set()); }}
+                  className="flex items-center gap-1 text-xs text-text-secondary hover:underline"
+                >
+                  <CheckCircle2 size={12} /> Desconciliar ({selectedIds.size})
+                </button>
+              ) : (
+                <button
+                  onClick={() => { onBatchReconcile([...selectedIds], true); setSelectedIds(new Set()); }}
+                  className="flex items-center gap-1 text-xs text-accent-green hover:underline"
+                >
+                  <CheckCircle2 size={12} /> Conciliar ({selectedIds.size})
+                </button>
+              );
+            })()}
             {onDelete && (
               <button
                 onClick={() => { selectedIds.forEach((id) => onDelete(id)); setSelectedIds(new Set()); }}
@@ -356,9 +367,10 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                               tabIndex={-1}
                               value={t.projectId || ''}
                               onChange={async (e) => {
+                                const value = e.target.value;
                                 const ok = await guardClosedCycle(t);
-                                if (!ok) { e.target.value = t.projectId || ''; return; }
-                                onUpdate(t.id, { projectId: e.target.value || null });
+                                if (!ok) return;
+                                onUpdate(t.id, { projectId: value || null });
                               }}
                               className="w-full bg-transparent border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary truncate"
                               style={{ color: projects.find((p) => p.id === t.projectId)?.color || 'var(--color-text-secondary)' }}
