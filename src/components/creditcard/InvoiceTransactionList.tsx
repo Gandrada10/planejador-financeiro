@@ -372,7 +372,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                                 />
                               </div>
                               {t.categoryId && (
-                                <p className="text-[10px] text-text-secondary truncate">
+                                <p className="text-xs text-text-secondary truncate">
                                   {getCategoryLabel(t.categoryId)}
                                 </p>
                               )}
@@ -418,7 +418,6 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                                 if (!ok) return;
                                 onUpdate(t.id, { categoryId: val });
                               }}
-                              textSize="text-[10px]"
                               compact
                             />
                           </div>
