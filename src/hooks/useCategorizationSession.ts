@@ -66,7 +66,7 @@ export function useCategorizationSessions() {
     const uid = auth.currentUser?.uid;
     if (!uid) throw new Error('Not authenticated');
 
-    const uncategorized = transactions.filter((t) => !t.categoryId && t.amount < 0);
+    const uncategorized = transactions.filter((t) => !t.categoryId);
     if (uncategorized.length === 0) throw new Error('Nenhuma transacao sem categoria encontrada');
 
     const token = generateToken();
@@ -212,18 +212,20 @@ export function usePublicCategorizationSession(token: string) {
           createdAt: (data.createdAt as Timestamp).toDate(),
         });
 
-        // Load categories
+        // Load categories (sort alphabetically so mobile matches desktop order)
         const catSnap = await getDocs(collection(db, 'categorizationSessions', token, 'categories'));
         setCategories(
-          catSnap.docs.map((d) => ({
-            id: d.id,
-            name: d.data().name,
-            icon: d.data().icon,
-            color: d.data().color,
-            type: d.data().type,
-            parentId: d.data().parentId ?? null,
-            createdAt: new Date(),
-          }))
+          catSnap.docs
+            .map((d) => ({
+              id: d.id,
+              name: d.data().name as string,
+              icon: d.data().icon as string,
+              color: d.data().color as string,
+              type: d.data().type as Category['type'],
+              parentId: (d.data().parentId as string | null) ?? null,
+              createdAt: new Date(),
+            }))
+            .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }))
         );
 
         // Load transactions

@@ -38,14 +38,15 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
 
   // Group by parent/child hierarchy
   const groupedCategories = useMemo(() => {
-    const roots = expenseCategories.filter((c) => !c.parentId);
+    const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' });
+    const roots = expenseCategories.filter((c) => !c.parentId).sort((a, b) => collator.compare(a.name, b.name));
     const children = expenseCategories.filter((c) => c.parentId);
 
     const groups: { parent: Category; subs: Category[] }[] = [];
     const standalone: Category[] = [];
 
     for (const root of roots) {
-      const subs = children.filter((c) => c.parentId === root.id);
+      const subs = children.filter((c) => c.parentId === root.id).sort((a, b) => collator.compare(a.name, b.name));
       if (subs.length > 0) {
         groups.push({ parent: root, subs });
       } else {
@@ -143,21 +144,26 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
     }
   }
 
-  function CategoryButton({ cat, indent, index }: { cat: Category; indent?: boolean; index: number }) {
+  function CategoryButton({ cat, indent, index, parentName }: { cat: Category; indent?: boolean; index: number; parentName?: string }) {
     const isHighlighted = index === highlightedIndex;
     return (
       <button
         ref={isHighlighted ? highlightedRef : undefined}
         onClick={() => handleSelect(cat.id)}
         disabled={saving}
-        className={`w-full flex items-center gap-3 px-4 py-3.5 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'ml-6' : ''} ${
+        className={`w-full flex items-center gap-3 px-4 py-3 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'ml-6' : ''} ${
           isHighlighted
             ? 'border-accent bg-accent/10 text-text-primary'
             : 'border-border hover:border-accent hover:bg-accent/5'
         }`}
       >
         <CategoryIcon icon={cat.icon} size={18} className="text-text-primary flex-shrink-0" />
-        <span className="text-sm text-text-primary text-left">{cat.name}</span>
+        <div className="flex flex-col text-left min-w-0">
+          <span className="text-sm text-text-primary">{cat.name}</span>
+          {parentName && (
+            <span className={`text-[11px] ${silver} leading-tight`}>{parentName}</span>
+          )}
+        </div>
       </button>
     );
   }
@@ -232,7 +238,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
                   {/* Subcategories */}
                   {group.subs.map((sub) => {
                     const idx = flatIndex++;
-                    return <CategoryButton key={sub.id} cat={sub} indent index={idx} />;
+                    return <CategoryButton key={sub.id} cat={sub} indent index={idx} parentName={search.trim() ? group.parent.name : undefined} />;
                   })}
                 </div>
               ))}

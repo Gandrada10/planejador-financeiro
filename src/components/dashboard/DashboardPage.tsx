@@ -95,17 +95,25 @@ export function DashboardPage() {
     });
   }, [monthTransactions, accounts, getCycleForCard, monthYear]);
 
-  // Expenses by category
+  // Expenses by category (grouped by parent; subcategory breakdowns tracked separately)
   const expensesByCategory = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { amount: number; subs: Map<string, number> }>();
     for (const t of monthTransactions) {
       if (t.amount >= 0) continue;
       const catId = t.categoryId || '__uncategorized';
-      map.set(catId, (map.get(catId) || 0) + t.amount);
+      const cat = categories.find((c) => c.id === catId);
+      const parentId = cat?.parentId || catId; // use parent if it's a subcategory
+
+      if (!map.has(parentId)) map.set(parentId, { amount: 0, subs: new Map() });
+      const entry = map.get(parentId)!;
+      entry.amount += t.amount;
+      if (cat?.parentId) {
+        entry.subs.set(catId, (entry.subs.get(catId) || 0) + t.amount);
+      }
     }
     const totalExp = Math.abs(totalExits);
     return Array.from(map.entries())
-      .map(([catId, amount]) => {
+      .map(([catId, { amount, subs }]) => {
         const cat = categories.find((c) => c.id === catId);
         return {
           name: cat?.name || 'Sem categoria',
@@ -113,6 +121,18 @@ export function DashboardPage() {
           color: cat?.color || '#737373',
           amount,
           percentage: totalExp > 0 ? (Math.abs(amount) / totalExp) * 100 : 0,
+          subs: Array.from(subs.entries())
+            .map(([subId, subAmount]) => {
+              const subCat = categories.find((c) => c.id === subId);
+              return {
+                name: subCat?.name || 'Sem subcategoria',
+                icon: subCat?.icon || '',
+                color: subCat?.color || '#737373',
+                amount: subAmount,
+                percentage: totalExp > 0 ? (Math.abs(subAmount) / totalExp) * 100 : 0,
+              };
+            })
+            .sort((a, b) => a.amount - b.amount),
         };
       })
       .sort((a, b) => a.amount - b.amount); // most negative first
