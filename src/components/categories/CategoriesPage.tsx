@@ -92,77 +92,99 @@ export function CategoriesPage() {
         </div>
       </div>
 
-      {/* Categories grid — root + subcategories */}
-      <div className="space-y-3">
-        {rootCategories.length === 0 && (
-          <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
-            Nenhuma categoria. Crie categorias para organizar suas transacoes.
-          </div>
-        )}
-        {rootCategories.map((cat) => {
-          const subs = subCategories(cat.id);
-          return (
-            <div key={cat.id} className="bg-bg-card border border-border rounded-lg overflow-hidden">
-              {/* Parent row */}
-              <div
-                className="flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
-                onClick={() => startEdit(cat)}
-              >
-                <CategoryIcon icon={cat.icon} size={24} className="text-text-primary" />
-                <div className="flex-1 min-w-0">
+      {/* Categories grid — grouped by type */}
+      {rootCategories.length === 0 ? (
+        <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
+          Nenhuma categoria. Crie categorias para organizar suas transações.
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {(
+            [
+              { key: 'despesa', label: 'Despesas', dotColor: 'bg-accent-red' },
+              { key: 'receita', label: 'Receitas', dotColor: 'bg-accent-green' },
+              { key: 'ambos',   label: 'Despesa e Receita', dotColor: 'bg-accent' },
+            ] as const
+          )
+            .filter(({ key }) => rootCategories.some((c) => c.type === key))
+            .map(({ key, label, dotColor }) => {
+              const group = rootCategories.filter((c) => c.type === key);
+              return (
+                <div key={key} className="space-y-2">
                   <div className="flex items-center gap-2">
-                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                    <span className="text-sm text-text-primary font-bold truncate">{cat.name}</span>
+                    <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                    <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">{label}</h3>
+                    <span className="text-[10px] text-text-secondary">({group.length})</span>
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-[10px] text-text-secondary uppercase">{cat.type}</span>
-                    <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === cat.id).length} regras</span>
-                    <span className="text-[10px] text-text-secondary">{subs.length} subcategorias</span>
-                  </div>
-                </div>
-                <button
-                  onClick={(e) => { e.stopPropagation(); startNewSub(cat.id); }}
-                  title="Nova subcategoria"
-                  className="text-text-secondary hover:text-accent p-1 text-xs"
-                >
-                  <Plus size={14} />
-                </button>
-                <button
-                  onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }}
-                  className="text-text-secondary hover:text-accent-red p-1"
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
+                  <div className="space-y-2">
+                    {group.map((cat) => {
+                      const subs = subCategories(cat.id);
+                      return (
+                        <div key={cat.id} className="bg-bg-card border border-border rounded-lg overflow-hidden">
+                          {/* Parent row */}
+                          <div
+                            className="flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
+                            onClick={() => startEdit(cat)}
+                          >
+                            <CategoryIcon icon={cat.icon} size={24} className="text-text-primary" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                                <span className="text-sm text-text-primary font-bold truncate">{cat.name}</span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-0.5">
+                                <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === cat.id).length} regras</span>
+                                <span className="text-[10px] text-text-secondary">{subs.length} subcategorias</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); startNewSub(cat.id); }}
+                              title="Nova subcategoria"
+                              className="text-text-secondary hover:text-accent p-1 text-xs"
+                            >
+                              <Plus size={14} />
+                            </button>
+                            <button
+                              onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }}
+                              className="text-text-secondary hover:text-accent-red p-1"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
 
-              {/* Subcategory rows */}
-              {subs.map((sub) => (
-                <div
-                  key={sub.id}
-                  className="flex items-center gap-3 p-2.5 pl-8 border-t border-border/40 cursor-pointer hover:bg-bg-secondary/20 transition-colors"
-                  onClick={() => startEdit(sub)}
-                >
-                  <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
-                  <CategoryIcon icon={sub.icon} size={18} className="text-text-primary" />
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
-                      <span className="text-xs text-text-primary font-medium truncate">{sub.name}</span>
-                    </div>
-                    <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === sub.id).length} regras</span>
+                          {/* Subcategory rows */}
+                          {subs.map((sub) => (
+                            <div
+                              key={sub.id}
+                              className="flex items-center gap-3 p-2.5 pl-8 border-t border-border/40 cursor-pointer hover:bg-bg-secondary/20 transition-colors"
+                              onClick={() => startEdit(sub)}
+                            >
+                              <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
+                              <CategoryIcon icon={sub.icon} size={18} className="text-text-primary" />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
+                                  <span className="text-xs text-text-primary font-medium truncate">{sub.name}</span>
+                                </div>
+                                <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === sub.id).length} regras</span>
+                              </div>
+                              <button
+                                onClick={(e) => { e.stopPropagation(); deleteCategory(sub.id); }}
+                                className="text-text-secondary hover:text-accent-red p-1"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })}
                   </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); deleteCategory(sub.id); }}
-                    className="text-text-secondary hover:text-accent-red p-1"
-                  >
-                    <Trash2 size={12} />
-                  </button>
                 </div>
-              ))}
-            </div>
-          );
-        })}
-      </div>
+              );
+            })}
+        </div>
+      )}
 
       {/* Rules section */}
       <div>
