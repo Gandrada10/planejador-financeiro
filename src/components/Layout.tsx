@@ -12,6 +12,7 @@ import {
   Menu,
   X,
   FileBarChart,
+  FolderKanban,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 
@@ -20,6 +21,7 @@ const navItems = [
   { to: '/transacoes', icon: ArrowLeftRight, label: 'Transacoes' },
   { to: '/cartoes', icon: CreditCard, label: 'Cartoes' },
   { to: '/categorias', icon: Tags, label: 'Categorias' },
+  { to: '/projetos', icon: FolderKanban, label: 'Projetos' },
   { to: '/relatorios', icon: FileBarChart, label: 'Relatorios' },
   { to: '/orcamento', icon: Wallet, label: 'Orcamento' },
   { to: '/configuracoes', icon: Settings, label: 'Configuracoes' },

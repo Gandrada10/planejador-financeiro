@@ -243,6 +243,7 @@ export function PluggySync({ existingTransactions, accounts, titularNames, onImp
             installmentNumber: tx.creditData?.installmentNumber ?? null,
             totalInstallments: tx.creditData?.totalInstallments ?? null,
             cardNumber: acc.number?.slice(-4) ?? null,
+            projectId: null,
             pluggyTransactionId: tx.id,
             tags: [],
             notes: '',

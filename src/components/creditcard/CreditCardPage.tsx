@@ -4,6 +4,7 @@ import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
+import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
@@ -17,6 +18,7 @@ export function CreditCardPage() {
   const { categories } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
   const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
+  const { activeProjects } = useProjects();
 
   // Auto-select first card
   const activeCardId = selectedCardId || cardAccounts[0]?.id || '';
@@ -197,6 +199,7 @@ export function CreditCardPage() {
           <InvoiceTransactionList
             groups={titularGroups}
             categories={categories}
+            projects={activeProjects}
             totalTransactions={invoiceTransactions.length}
             onUpdate={updateTransaction}
             onDelete={deleteTransaction}

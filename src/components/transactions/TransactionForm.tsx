@@ -68,6 +68,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
       installmentNumber: totalInst ? 1 : null,
       totalInstallments: totalInst || null,
       cardNumber: null,
+      projectId: null,
       pluggyTransactionId: null,
       tags: [],
       notes,

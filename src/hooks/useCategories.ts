@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   collection,
   query,
@@ -114,10 +114,14 @@ export function useCategories() {
     await deleteDoc(doc(db, 'users', uid, 'categoryRules', id));
   }
 
+  // Use a ref so matchCategory always sees the latest rules without re-creating
+  const rulesRef = useRef(rules);
+  rulesRef.current = rules;
+
   // Match a description against rules and return category ID
-  function matchCategory(description: string): string | null {
+  const matchCategory = useCallback((description: string): string | null => {
     const lower = description.toLowerCase();
-    for (const rule of rules) {
+    for (const rule of rulesRef.current) {
       const pattern = rule.pattern.toLowerCase();
       // Support wildcards: *uber* matches "UBER TRIP 123"
       if (pattern.startsWith('*') && pattern.endsWith('*')) {
@@ -131,7 +135,7 @@ export function useCategories() {
       }
     }
     return null;
-  }
+  }, []);
 
   // Root categories (no parent)
   const rootCategories = categories.filter((c) => !c.parentId);

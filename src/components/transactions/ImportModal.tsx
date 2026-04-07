@@ -34,6 +34,7 @@ interface Props {
   categories?: Category[];
   allTitulars?: string[];
   titularNames?: string[];
+  matchCategory?: (description: string) => string | null;
 }
 
 /** Fuzzy match a statement titular name to a registered member name */
@@ -84,7 +85,7 @@ function generateMonthOptions(): string[] {
   return options;
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [] }: Props) {
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -306,7 +307,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           purchaseDate: t.purchaseDate ? new Date(t.purchaseDate + 'T12:00:00') : null,
           description: t.description,
           amount: t.amount,
-          categoryId: null,
+          categoryId: matchCategory ? matchCategory(t.description) : null,
           account: accountNames[0] ?? '',
           familyMember: matchedMember,
           // Use canonical member name as titular when matched; otherwise normalize to Title Case.
@@ -316,6 +317,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           installmentNumber: t.installmentNumber,
           totalInstallments: t.totalInstallments,
           cardNumber: t.cardNumber,
+          projectId: null,
           pluggyTransactionId: null,
           tags: [],
           notes: '',

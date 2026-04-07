@@ -39,6 +39,7 @@ export interface Transaction {
   installmentNumber: number | null;
   totalInstallments: number | null;
   cardNumber: string | null;
+  projectId: string | null;
   pluggyTransactionId: string | null;
   tags: string[];
   notes: string;
@@ -86,6 +87,14 @@ export interface CategorizationTransaction {
   totalInstallments: number | null;
   categoryId: string | null;
   notes: string;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  color: string;
+  status: 'active' | 'archived';
+  createdAt: Date;
 }
 
 export interface Budget {

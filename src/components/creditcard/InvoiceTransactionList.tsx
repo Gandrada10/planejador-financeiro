@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
-import type { Transaction, Category } from '../../types';
+import type { Transaction, Category, Project } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 
 interface TitularGroup {
@@ -13,6 +13,7 @@ interface TitularGroup {
 interface Props {
   groups: TitularGroup[];
   categories: Category[];
+  projects?: Project[];
   totalTransactions: number;
   onUpdate?: (id: string, data: Partial<Transaction>) => void;
   onDelete?: (id: string) => void;
@@ -21,13 +22,14 @@ interface Props {
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function InvoiceTransactionList({ groups, categories, totalTransactions, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
+export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<'purchaseDate' | 'date'>('purchaseDate');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+  const [filterPending, setFilterPending] = useState(false);
 
   function toggleSort(field: 'purchaseDate' | 'date') {
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -43,6 +45,14 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
 
   const allTransactions = useMemo(() => groups.flatMap((g) => g.transactions), [groups]);
   const pendingCount = useMemo(() => allTransactions.filter((t) => !t.reconciled).length, [allTransactions]);
+
+  // Filtered groups when pending filter is active
+  const displayGroups = useMemo(() => {
+    if (!filterPending) return groups;
+    return groups
+      .map((g) => ({ ...g, transactions: g.transactions.filter((t) => !t.reconciled) }))
+      .filter((g) => g.transactions.length > 0);
+  }, [groups, filterPending]);
 
   function toggleGroup(titular: string) {
     const next = new Set(collapsed);
@@ -138,7 +148,12 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-text-primary">{totalTransactions} lancamentos</span>
           {pendingCount > 0 && (
-            <span className="text-[10px] text-accent">{pendingCount} pendentes conciliacao</span>
+            <button
+              onClick={() => setFilterPending(!filterPending)}
+              className={`text-[10px] hover:underline ${filterPending ? 'text-accent font-bold' : 'text-accent'}`}
+            >
+              {pendingCount} pendentes conciliacao{filterPending && ' ✕'}
+            </button>
           )}
           <span className="text-[10px] text-text-secondary">
             Ordenar:
@@ -173,13 +188,13 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
         )}
       </div>
 
-      {groups.length === 0 ? (
+      {displayGroups.length === 0 ? (
         <div className="p-8 text-center text-text-secondary text-xs">
           Nenhuma transacao neste periodo
         </div>
       ) : (
         <div className="divide-y divide-border">
-          {groups.map((group) => {
+          {displayGroups.map((group) => {
             const isCollapsed = collapsed.has(group.titular);
             return (
               <div key={group.titular}>
@@ -331,6 +346,28 @@ export function InvoiceTransactionList({ groups, categories, totalTransactions, 
                               textSize="text-[10px]"
                               compact
                             />
+                          </div>
+                        ) : null}
+
+                        {/* Projeto */}
+                        {onUpdate ? (
+                          <div className="flex-shrink-0 w-[80px] mr-1 overflow-hidden">
+                            <select
+                              tabIndex={-1}
+                              value={t.projectId || ''}
+                              onChange={async (e) => {
+                                const ok = await guardClosedCycle(t);
+                                if (!ok) { e.target.value = t.projectId || ''; return; }
+                                onUpdate(t.id, { projectId: e.target.value || null });
+                              }}
+                              className="w-full bg-transparent border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary truncate"
+                              style={{ color: projects.find((p) => p.id === t.projectId)?.color || 'var(--color-text-secondary)' }}
+                            >
+                              <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>—</option>
+                              {projects.filter((p) => p.status === 'active').map((p) => (
+                                <option key={p.id} value={p.id} style={{ backgroundColor: '#111111', color: p.color }}>{p.name}</option>
+                              ))}
+                            </select>
                           </div>
                         ) : null}
 

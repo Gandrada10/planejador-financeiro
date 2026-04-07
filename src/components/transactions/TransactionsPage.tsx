@@ -7,6 +7,7 @@ import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
+import { useProjects } from '../../hooks/useProjects';
 import { TransactionTable } from './TransactionTable';
 import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
@@ -23,6 +24,7 @@ export function TransactionsPage() {
   const { memberNames: familyMemberNames } = useFamilyMembers();
   const { sessions, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
+  const { activeProjects } = useProjects();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showPluggySync, setShowPluggySync] = useState(false);
@@ -33,6 +35,7 @@ export function TransactionsPage() {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterAccount, setFilterAccount] = useState('all');
   const [filterInstallment, setFilterInstallment] = useState('all');
+  const [filterReconciled, setFilterReconciled] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
   const autoApplied = useRef(false);
@@ -91,6 +94,11 @@ export function TransactionsPage() {
     } else if (filterInstallment === 'single') {
       list = list.filter((t) => !t.totalInstallments || t.totalInstallments < 2);
     }
+    if (filterReconciled === 'pending') {
+      list = list.filter((t) => !t.reconciled);
+    } else if (filterReconciled === 'reconciled') {
+      list = list.filter((t) => t.reconciled);
+    }
     if (searchText) {
       const q = searchText.toLowerCase();
       list = list.filter(
@@ -102,7 +110,7 @@ export function TransactionsPage() {
       );
     }
     return list;
-  }, [transactions, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, searchText]);
+  }, [transactions, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterReconciled, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -278,9 +286,13 @@ export function TransactionsPage() {
           Despesas: R$ {Math.abs(filtered.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </span>
         {transactions.filter((t) => !t.reconciled).length > 0 && (
-          <span className="text-accent">
+          <button
+            onClick={() => setFilterReconciled(filterReconciled === 'pending' ? 'all' : 'pending')}
+            className={`hover:underline ${filterReconciled === 'pending' ? 'text-accent font-bold' : 'text-accent'}`}
+          >
             {transactions.filter((t) => !t.reconciled).length} pendentes conciliacao
-          </span>
+            {filterReconciled === 'pending' && ' ✕'}
+          </button>
         )}
       </div>
 
@@ -347,6 +359,7 @@ export function TransactionsPage() {
       <TransactionTable
         transactions={filtered}
         categories={categories}
+        projects={activeProjects}
         accountNames={accountNames}
         onUpdate={updateTransaction}
         onDelete={deleteTransaction}
@@ -366,6 +379,7 @@ export function TransactionsPage() {
           categories={categories}
           allTitulars={allTitulars}
           titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
+          matchCategory={matchCategory}
         />
       )}
       {showPluggySync && (

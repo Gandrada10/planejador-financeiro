@@ -1,12 +1,13 @@
 import { useState, useMemo } from 'react';
 import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
-import type { Transaction, Category } from '../../types';
+import type { Transaction, Category, Project } from '../../types';
 import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 
 interface Props {
   transactions: Transaction[];
   categories: Category[];
+  projects?: Project[];
   accountNames: string[];
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
@@ -15,7 +16,7 @@ interface Props {
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function TransactionTable({ transactions, categories, accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -179,7 +180,8 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
             <col style={{ width: 80 }} />
             <col style={{ width: 95 }} />
             <col style={{ width: 60 }} />
-            <col style={{ width: 125 }} />
+            <col style={{ width: 115 }} />
+            <col style={{ width: 95 }} />
             <col style={{ width: 36 }} />
           </colgroup>
           <thead>
@@ -205,6 +207,7 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
               <th className="p-2 text-right">Valor</th>
               <th className="p-2 text-center">Parcelas</th>
               <th className="p-2 text-left">Categoria</th>
+              <th className="p-2 text-left">Projeto</th>
               <th className="p-2"></th>
             </tr>
           </thead>
@@ -392,6 +395,26 @@ export function TransactionTable({ transactions, categories, accountNames, onUpd
                       onUpdate(t.id, { categoryId: val });
                     }}
                   />
+                </td>
+
+                {/* Projeto */}
+                <td className="p-2 overflow-hidden">
+                  <select
+                    tabIndex={-1}
+                    value={t.projectId || ''}
+                    onChange={async (e) => {
+                      const ok = await guardClosedCycle(t);
+                      if (!ok) { e.target.value = t.projectId || ''; return; }
+                      onUpdate(t.id, { projectId: e.target.value || null });
+                    }}
+                    className="w-full bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary truncate"
+                    style={{ color: projects.find((p) => p.id === t.projectId)?.color || 'var(--color-text-secondary)' }}
+                  >
+                    <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>—</option>
+                    {projects.filter((p) => p.status === 'active').map((p) => (
+                      <option key={p.id} value={p.id} style={{ backgroundColor: '#111111', color: p.color }}>{p.name}</option>
+                    ))}
+                  </select>
                 </td>
 
                 <td className="p-2">
