@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
 import type { Transaction, Category, Project } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
+import { NoteTag } from '../shared/NoteTag';
 
 interface TitularGroup {
   titular: string;
@@ -239,7 +240,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                       const diff = av.getTime() - bv.getTime();
                       return sortDir === 'asc' ? diff : -diff;
                     }).map((t) => (
-                      <div key={t.id} className="flex items-center px-4 py-2 hover:bg-bg-secondary/30 transition-colors">
+                      <div key={t.id} className="flex items-center px-4 py-2 hover:bg-bg-secondary/30 transition-colors group">
                         {/* Conciliação dot - tab-navigable */}
                         <div className="w-6 flex-shrink-0 flex justify-center" data-tab-cell>
                           <div
@@ -304,8 +305,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                             />
                           ) : (
                             <>
-                              <div className="text-xs text-text-primary truncate">
-                                {t.description}
+                              <div className="flex items-center gap-1 min-w-0">
+                                <span className="text-xs text-text-primary truncate">{t.description}</span>
+                                <NoteTag
+                                  note={t.notes || ''}
+                                  onSave={(note) => onUpdate && onUpdate(t.id, { notes: note })}
+                                />
                               </div>
                               {t.categoryId && (
                                 <p className="text-[10px] text-text-secondary truncate">

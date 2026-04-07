@@ -3,6 +3,7 @@ import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-re
 import type { Transaction, Category, Project } from '../../types';
 import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
+import { NoteTag } from '../shared/NoteTag';
 
 interface Props {
   transactions: Transaction[];
@@ -221,7 +222,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
           </thead>
           <tbody>
             {sorted.map((t) => (
-              <tr key={t.id} className="border-b border-border/30 hover:bg-bg-secondary/30">
+              <tr key={t.id} className="border-b border-border/30 hover:bg-bg-secondary/30 group">
                 {/* Conciliação dot - tab-navigable */}
                 <td className="p-2" data-tab-cell>
                   <div
@@ -291,7 +292,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 {/* Descricao - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-text-primary truncate overflow-hidden ${editableCell}`}
+                  className={`p-2 text-text-primary overflow-hidden ${editableCell}`}
                   onClick={() => startEdit(t.id, 'description', t.description)}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'description' ? (
@@ -304,7 +305,13 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
                     />
                   ) : (
-                    t.description
+                    <div className="flex items-center gap-1 min-w-0">
+                      <span className="truncate">{t.description}</span>
+                      <NoteTag
+                        note={t.notes || ''}
+                        onSave={(note) => onUpdate(t.id, { notes: note })}
+                      />
+                    </div>
                   )}
                 </td>
 
