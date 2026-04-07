@@ -110,6 +110,18 @@ export function CreditCardPage() {
     if (cycle) await registerPayment(cycle.id, amount, date);
   }
 
+  async function handleBatchMove(ids: string[], targetMonthYear: string) {
+    const [y, m] = targetMonthYear.split('-').map(Number);
+    for (const id of ids) {
+      const tx = transactions.find((t) => t.id === id);
+      if (!tx) continue;
+      const newDate = new Date(tx.date);
+      newDate.setFullYear(y);
+      newDate.setMonth(m - 1);
+      await updateTransaction(id, { date: newDate });
+    }
+  }
+
   function checkClosedCycleForTx(t: { account: string; date: Date }): { cycleId: string; label: string } | null {
     const account = cardAccounts.find((a) => a.name === t.account);
     if (!account) return null;
@@ -201,9 +213,12 @@ export function CreditCardPage() {
             categories={categories}
             projects={activeProjects}
             totalTransactions={invoiceTransactions.length}
+            availableMonths={availableMonths}
+            currentMonthYear={monthYear}
             onUpdate={updateTransaction}
             onDelete={deleteTransaction}
             onBatchReconcile={batchUpdateReconciled}
+            onBatchMove={handleBatchMove}
             checkClosedCycle={checkClosedCycleForTx}
             reopenCycle={reopenCycle}
           />

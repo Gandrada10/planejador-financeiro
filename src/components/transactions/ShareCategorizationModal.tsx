@@ -19,7 +19,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, o
   const [error, setError] = useState('');
 
   const uncategorizedCount = transactions.filter(
-    (t) => !t.categoryId && t.amount < 0 && (!selectedTitular || t.titular === selectedTitular)
+    (t) => !t.categoryId && (!selectedTitular || t.titular === selectedTitular)
   ).length;
 
   async function handleGenerate() {
@@ -89,7 +89,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, o
 
               <div className="bg-bg-secondary rounded p-3 text-xs text-text-secondary">
                 {uncategorizedCount > 0 ? (
-                  <span><strong className="text-accent">{uncategorizedCount}</strong> transacoes sem categoria serao enviadas.</span>
+                  <span><strong className="text-accent">{uncategorizedCount}</strong> transacoes sem categoria (despesas e receitas) serao enviadas.</span>
                 ) : (
                   <span>Nenhuma transacao sem categoria encontrada{selectedTitular ? ` para ${selectedTitular}` : ''}.</span>
                 )}
