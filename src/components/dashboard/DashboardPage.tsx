@@ -4,6 +4,7 @@ import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
+import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
@@ -17,6 +18,7 @@ export function DashboardPage() {
   const { getBudgetsForMonth } = useBudgets();
   const { accounts } = useAccounts();
   const { getCycleForCard } = useBillingCycles();
+  const { activeProjects } = useProjects();
 
   const monthTransactions = useMemo(
     () => transactions.filter((t) => getMonthYear(t.date) === monthYear),
@@ -33,6 +35,40 @@ export function DashboardPage() {
   const totalExits = useMemo(() => monthTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0), [monthTransactions]);
   const totalBalance = totalEntries + totalExits;
   const pendingReconciliation = useMemo(() => transactions.filter((t) => !t.reconciled).length, [transactions]);
+
+  // YTD accumulated result (year of selected month)
+  const currentYear = monthYear.split('-')[0];
+  const yearBalance = useMemo(() => {
+    return transactions
+      .filter((t) => getMonthYear(t.date).startsWith(currentYear))
+      .reduce((s, t) => s + t.amount, 0);
+  }, [transactions, currentYear]);
+
+  // Average monthly result over last 12 months (only months with data)
+  const avg12months = useMemo(() => {
+    const [y, m] = monthYear.split('-').map(Number);
+    const last12: string[] = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(y, m - 1 - i, 1);
+      last12.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
+    }
+    const withData = last12.filter((mo) => transactions.some((t) => getMonthYear(t.date) === mo));
+    if (withData.length === 0) return 0;
+    const total = withData.reduce((sum, mo) => {
+      return sum + transactions.filter((t) => getMonthYear(t.date) === mo).reduce((s, t) => s + t.amount, 0);
+    }, 0);
+    return total / withData.length;
+  }, [transactions, monthYear]);
+
+  // Active projects with spending in the selected period
+  const projectsData = useMemo(() => {
+    return activeProjects.map((p) => {
+      const ptxs = monthTransactions.filter((t) => t.projectId === p.id);
+      const spent = ptxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+      const income = ptxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      return { ...p, spent, income, balance: income + spent, count: ptxs.length };
+    });
+  }, [activeProjects, monthTransactions]);
 
   // Cash flow by account
   const cashFlowData = useMemo(() => {
@@ -119,25 +155,41 @@ export function DashboardPage() {
         <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
       </div>
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Primary summary — Receitas / Despesas / Resultado do período */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div className="bg-bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Receitas</p>
-          <p className="text-xl font-bold text-accent-green">{formatBRL(totalEntries)}</p>
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Receitas do período</p>
+          <p className="text-2xl font-bold text-accent-green">{formatBRL(totalEntries)}</p>
         </div>
         <div className="bg-bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Despesas</p>
-          <p className="text-xl font-bold text-accent-red">{formatBRL(totalExits)}</p>
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Despesas do período</p>
+          <p className="text-2xl font-bold text-accent-red">{formatBRL(totalExits)}</p>
         </div>
-        <div className="bg-bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Saldo</p>
-          <p className={`text-xl font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+        <div className={`bg-bg-card border rounded-lg p-4 ${totalBalance >= 0 ? 'border-accent-green/30' : 'border-accent-red/30'}`}>
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Resultado do período</p>
+          <p className={`text-2xl font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
             {formatBRL(totalBalance)}
           </p>
         </div>
-        <div className="bg-bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Pendente Conciliacao</p>
-          <p className={`text-xl font-bold ${pendingReconciliation > 0 ? 'text-accent' : 'text-accent-green'}`}>
+      </div>
+
+      {/* Secondary summary — Acumulado / Média / Pendentes */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-0.5">Acumulado {currentYear}</p>
+          <p className={`text-lg font-bold ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            {formatBRL(yearBalance)}
+          </p>
+        </div>
+        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-0.5">Média mensal (12 meses)</p>
+          <p className={`text-lg font-bold ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            {formatBRL(avg12months)}
+          </p>
+        </div>
+        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-0.5">Pendentes conciliação</p>
+          <p className={`text-lg font-bold ${pendingReconciliation > 0 ? 'text-accent' : 'text-accent-green'}`}>
             {pendingReconciliation}
           </p>
         </div>
@@ -145,7 +197,7 @@ export function DashboardPage() {
 
       {hasData ? (
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          {/* Left column: 60% */}
+          {/* Left column: 60% — main charts */}
           <div className="lg:col-span-3 space-y-4">
             <CashFlowChart
               data={cashFlowData}
@@ -156,19 +208,49 @@ export function DashboardPage() {
             <ExpensesByCategoryChart data={expensesByCategory} />
           </div>
 
-          {/* Right column: 40% */}
-          <div className="lg:col-span-2">
+          {/* Right column: 40% — budget + projects */}
+          <div className="lg:col-span-2 space-y-4">
             <BudgetProgressPanel
               data={budgetData}
               totalLimit={budgetTotalLimit}
               totalActual={budgetTotalActual}
               totalRemaining={budgetTotalRemaining}
             />
+
+            {/* Projetos em andamento */}
+            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
+              <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Projetos em andamento</h3>
+              {projectsData.length === 0 ? (
+                <p className="text-xs text-text-secondary">Nenhum projeto ativo.</p>
+              ) : (
+                <div className="space-y-2">
+                  {projectsData.map((p) => (
+                    <div key={p.id} className="space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
+                          <span className="text-text-primary truncate">{p.name}</span>
+                        </div>
+                        <span className={`font-bold flex-shrink-0 ml-2 ${p.balance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                          {formatBRL(p.spent)}
+                        </span>
+                      </div>
+                      {p.count > 0 && (
+                        <div className="flex justify-between text-[10px] text-text-secondary pl-4">
+                          {p.income > 0 && <span className="text-accent-green">+{formatBRL(p.income)}</span>}
+                          <span>{p.count} lançamento{p.count !== 1 ? 's' : ''}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       ) : (
         <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
-          Importe seus extratos para comecar a ver dados aqui.
+          Importe seus extratos para começar a ver dados aqui.
         </div>
       )}
     </div>
