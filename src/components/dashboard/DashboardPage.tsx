@@ -8,7 +8,6 @@ import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
-import { BudgetProgressPanel } from './BudgetProgressPanel';
 import { formatBRL, getMonthYear } from '../../lib/utils';
 
 export function DashboardPage() {
@@ -148,6 +147,9 @@ export function DashboardPage() {
 
   const hasData = transactions.length > 0;
 
+  const budgetPct = budgetTotalLimit > 0 ? Math.min((budgetTotalActual / budgetTotalLimit) * 100, 100) : 0;
+  const budgetOver = budgetTotalLimit > 0 && budgetTotalActual > budgetTotalLimit;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -155,88 +157,82 @@ export function DashboardPage() {
         <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
       </div>
 
-      {/* Primary summary — Receitas / Despesas / Resultado do período */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        <div className="bg-bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Receitas do período</p>
-          <p className="text-2xl font-bold text-accent-green">{formatBRL(totalEntries)}</p>
-        </div>
-        <div className="bg-bg-card border border-border rounded-lg p-4">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Despesas do período</p>
-          <p className="text-2xl font-bold text-accent-red">{formatBRL(totalExits)}</p>
-        </div>
-        <div className={`bg-bg-card border rounded-lg p-4 ${totalBalance >= 0 ? 'border-accent-green/30' : 'border-accent-red/30'}`}>
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Resultado do período</p>
-          <p className={`text-2xl font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {formatBRL(totalBalance)}
-          </p>
-        </div>
-      </div>
-
-      {/* Secondary summary — Acumulado / Média / Pendentes */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+      {/* 4 summary cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-0.5">Acumulado {currentYear}</p>
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Acumulado {currentYear}</p>
           <p className={`text-lg font-bold ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
             {formatBRL(yearBalance)}
           </p>
         </div>
         <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-0.5">Média mensal (12 meses)</p>
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Média mensal (12m)</p>
           <p className={`text-lg font-bold ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
             {formatBRL(avg12months)}
           </p>
         </div>
         <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-0.5">Pendentes conciliação</p>
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Pendentes conciliação</p>
           <p className={`text-lg font-bold ${pendingReconciliation > 0 ? 'text-accent' : 'text-accent-green'}`}>
             {pendingReconciliation}
           </p>
         </div>
+        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Metas de despesas</p>
+          {budgetData.length > 0 ? (
+            <>
+              <p className={`text-lg font-bold ${budgetOver ? 'text-accent-red' : 'text-accent-green'}`}>
+                {formatBRL(budgetTotalRemaining)} restante
+              </p>
+              <div className="mt-1.5 w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent-green'}`}
+                  style={{ width: `${budgetPct}%` }}
+                />
+              </div>
+              <p className="text-[10px] text-text-secondary mt-0.5">{budgetPct.toFixed(0)}% utilizado</p>
+            </>
+          ) : (
+            <p className="text-lg font-bold text-text-secondary">—</p>
+          )}
+        </div>
       </div>
 
       {hasData ? (
-        <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-          {/* Left column: 60% — main charts */}
-          <div className="lg:col-span-3 space-y-4">
-            <CashFlowChart
-              data={cashFlowData}
-              totalEntries={totalEntries}
-              totalExits={totalExits}
-              totalBalance={totalBalance}
-            />
-            <ExpensesByCategoryChart data={expensesByCategory} />
-          </div>
+        <div className="space-y-4">
+          {/* Resultados de caixa — full width */}
+          <CashFlowChart
+            data={cashFlowData}
+            totalEntries={totalEntries}
+            totalExits={totalExits}
+            totalBalance={totalBalance}
+          />
 
-          {/* Right column: 40% — budget + projects */}
-          <div className="lg:col-span-2 space-y-4">
-            <BudgetProgressPanel
-              data={budgetData}
-              totalLimit={budgetTotalLimit}
-              totalActual={budgetTotalActual}
-              totalRemaining={budgetTotalRemaining}
-            />
+          {/* Despesas por categoria + Projetos em andamento */}
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
+            <div className="lg:col-span-3">
+              <ExpensesByCategoryChart data={expensesByCategory} />
+            </div>
 
-            {/* Projetos em andamento */}
-            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
+            <div className="lg:col-span-2 bg-bg-card border border-border rounded-lg p-4 space-y-3">
               <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Projetos em andamento</h3>
               {projectsData.length === 0 ? (
                 <p className="text-xs text-text-secondary">Nenhum projeto ativo.</p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-2.5">
                   {projectsData.map((p) => (
-                    <div key={p.id} className="space-y-1">
+                    <div key={p.id}>
                       <div className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                           <span className="text-text-primary truncate">{p.name}</span>
                         </div>
-                        <span className={`font-bold flex-shrink-0 ml-2 ${p.balance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                          {formatBRL(p.spent)}
+                        <span className={`font-bold flex-shrink-0 ml-2 ${p.spent < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
+                          {p.count > 0 ? formatBRL(p.spent) : '—'}
                         </span>
                       </div>
                       {p.count > 0 && (
-                        <div className="flex justify-between text-[10px] text-text-secondary pl-4">
+                        <div className="flex gap-3 text-[10px] text-text-secondary pl-4 mt-0.5">
                           {p.income > 0 && <span className="text-accent-green">+{formatBRL(p.income)}</span>}
                           <span>{p.count} lançamento{p.count !== 1 ? 's' : ''}</span>
                         </div>
