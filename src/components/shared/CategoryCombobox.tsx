@@ -62,7 +62,8 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
 
   useEffect(() => {
     if (highlighted >= 0 && listRef.current) {
-      const el = listRef.current.children[highlighted] as HTMLElement;
+      // children[0] is the "Sem categoria" button, filtered items start at index 1
+      const el = listRef.current.children[highlighted + 1] as HTMLElement;
       if (el) el.scrollIntoView({ block: 'nearest' });
     }
   }, [highlighted]);
