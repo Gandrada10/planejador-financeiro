@@ -31,16 +31,16 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
   const rootCats = useMemo(() => relevantCats.filter((c) => !c.parentId), [relevantCats]);
 
   const allOptions = useMemo(() => {
-    const opts: { id: string; label: string; searchLabel: string; color: string; isChild: boolean }[] = [];
+    const opts: { id: string; label: string; parentLabel: string; searchLabel: string; color: string; isChild: boolean }[] = [];
     for (const cat of rootCats) {
       const subs = relevantCats.filter((c) => c.parentId === cat.id);
       if (subs.length > 0) {
-        opts.push({ id: cat.id, label: cat.name, searchLabel: cat.name, color: cat.color, isChild: false });
+        opts.push({ id: cat.id, label: cat.name, parentLabel: '', searchLabel: cat.name, color: cat.color, isChild: false });
         for (const sub of subs) {
-          opts.push({ id: sub.id, label: `↳ ${sub.name}`, searchLabel: `${cat.name} ${sub.name}`, color: sub.color, isChild: true });
+          opts.push({ id: sub.id, label: sub.name, parentLabel: cat.name, searchLabel: `${cat.name} ${sub.name}`, color: sub.color, isChild: true });
         }
       } else {
-        opts.push({ id: cat.id, label: cat.name, searchLabel: cat.name, color: cat.color, isChild: false });
+        opts.push({ id: cat.id, label: cat.name, parentLabel: '', searchLabel: cat.name, color: cat.color, isChild: false });
       }
     }
     return opts;
@@ -168,14 +168,17 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
                 <button
                   key={opt.id}
                   onClick={() => select(opt.id)}
-                  className={`w-full text-left px-3 py-1.5 text-xs transition-colors ${
+                  className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center justify-between gap-1 ${
                     i === highlighted
                       ? 'bg-accent/20 text-text-primary'
                       : 'text-text-secondary hover:bg-accent/10 hover:text-text-primary'
                   } ${opt.isChild ? 'pl-5' : ''}`}
                   style={{ color: i === highlighted ? undefined : opt.color }}
                 >
-                  {opt.label}
+                  <span className="truncate">{opt.isChild ? `↳ ${opt.label}` : opt.label}</span>
+                  {opt.isChild && opt.parentLabel && (
+                    <span className="flex-shrink-0 text-[10px] text-text-secondary/60 italic">{opt.parentLabel}</span>
+                  )}
                 </button>
               ))
             )}

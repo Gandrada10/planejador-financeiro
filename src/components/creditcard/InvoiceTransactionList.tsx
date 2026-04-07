@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate, getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category, Project } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
@@ -16,14 +16,17 @@ interface Props {
   categories: Category[];
   projects?: Project[];
   totalTransactions: number;
+  availableMonths?: string[];
+  currentMonthYear?: string;
   onUpdate?: (id: string, data: Partial<Transaction>) => void;
   onDelete?: (id: string) => void;
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
+  onBatchMove?: (ids: string[], targetMonthYear: string) => Promise<void>;
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
 }
 
-export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
+export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -31,6 +34,9 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
   const [sortField, setSortField] = useState<'purchaseDate' | 'date'>('purchaseDate');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [filterPending, setFilterPending] = useState(false);
+  const [showMovePanel, setShowMovePanel] = useState(false);
+  const [moveTargetMonth, setMoveTargetMonth] = useState('');
+  const [movingIds, setMovingIds] = useState(false);
 
   function toggleSort(field: 'purchaseDate' | 'date') {
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -173,7 +179,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
           </span>
         </div>
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {onBatchReconcile && (() => {
               const selList = allTransactions.filter((t) => selectedIds.has(t.id));
               const allRec = selList.every((t) => t.reconciled);
@@ -193,6 +199,14 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                 </button>
               );
             })()}
+            {onBatchMove && (
+              <button
+                onClick={() => { setShowMovePanel((v) => !v); setMoveTargetMonth(''); }}
+                className="flex items-center gap-1 text-xs text-accent hover:underline"
+              >
+                <MoveRight size={12} /> Mover para fatura ({selectedIds.size})
+              </button>
+            )}
             {onDelete && (
               <button
                 onClick={() => { selectedIds.forEach((id) => onDelete(id)); setSelectedIds(new Set()); }}
@@ -204,6 +218,46 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
           </div>
         )}
       </div>
+
+      {/* Move to another invoice panel */}
+      {showMovePanel && onBatchMove && (
+        <div className="px-4 py-3 border-b border-border bg-accent/5 flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-text-secondary">Mover {selectedIds.size} lançamento(s) para a fatura de:</span>
+          <select
+            value={moveTargetMonth}
+            onChange={(e) => setMoveTargetMonth(e.target.value)}
+            className="px-2 py-1 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          >
+            <option value="">Selecionar mês...</option>
+            {availableMonths
+              .filter((m) => m !== currentMonthYear)
+              .map((m) => (
+                <option key={m} value={m}>{getMonthLabel(m)}</option>
+              ))}
+          </select>
+          <button
+            disabled={!moveTargetMonth || movingIds}
+            onClick={async () => {
+              if (!moveTargetMonth) return;
+              setMovingIds(true);
+              await onBatchMove([...selectedIds], moveTargetMonth);
+              setSelectedIds(new Set());
+              setShowMovePanel(false);
+              setMoveTargetMonth('');
+              setMovingIds(false);
+            }}
+            className="px-3 py-1 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-40"
+          >
+            {movingIds ? 'Movendo...' : 'Confirmar'}
+          </button>
+          <button
+            onClick={() => { setShowMovePanel(false); setMoveTargetMonth(''); }}
+            className="text-xs text-text-secondary hover:text-text-primary"
+          >
+            Cancelar
+          </button>
+        </div>
+      )}
 
       {displayGroups.length === 0 ? (
         <div className="p-8 text-center text-text-secondary text-xs">
