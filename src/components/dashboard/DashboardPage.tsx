@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
+import { useAccounts } from '../../hooks/useAccounts';
+import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
@@ -13,6 +15,8 @@ export function DashboardPage() {
   const { transactions, loading: loadingTx } = useTransactions();
   const { categories } = useCategories();
   const { getBudgetsForMonth } = useBudgets();
+  const { accounts } = useAccounts();
+  const { getCycleForCard } = useBillingCycles();
 
   const monthTransactions = useMemo(
     () => transactions.filter((t) => getMonthYear(t.date) === monthYear),
@@ -40,14 +44,21 @@ export function DashboardPage() {
       if (t.amount > 0) acc.entries += t.amount;
       else acc.exits += t.amount;
     }
-    return Array.from(map.entries()).map(([name, v]) => ({
-      accountName: name,
-      entries: v.entries,
-      exits: v.exits,
-      balance: v.entries + v.exits,
-      color: '',
-    }));
-  }, [monthTransactions]);
+    return Array.from(map.entries()).map(([name, v]) => {
+      const account = accounts.find((a) => a.name === name);
+      const isCard = account?.type === 'cartao';
+      const cycle = isCard && account ? getCycleForCard(account.id, monthYear) : undefined;
+      return {
+        accountName: name,
+        entries: v.entries,
+        exits: v.exits,
+        balance: v.entries + v.exits,
+        color: '',
+        isCard,
+        cycleStatus: cycle?.status ?? (isCard ? 'open' : undefined),
+      };
+    });
+  }, [monthTransactions, accounts, getCycleForCard, monthYear]);
 
   // Expenses by category
   const expensesByCategory = useMemo(() => {

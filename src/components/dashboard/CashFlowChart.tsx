@@ -8,6 +8,8 @@ interface AccountFlow {
   exits: number;
   balance: number;
   color: string;
+  isCard?: boolean;
+  cycleStatus?: 'open' | 'closed';
 }
 
 interface Props {
@@ -73,9 +75,20 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
           <tbody>
             {data.map((d, i) => (
               <tr key={i} className="border-b border-border/40">
-                <td className="py-1.5 text-text-primary flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length] }} />
-                  {d.accountName}
+                <td className="py-1.5 text-text-primary">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length] }} />
+                    <span>{d.accountName}</span>
+                    {d.isCard && (
+                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold leading-none ${
+                        d.cycleStatus === 'closed'
+                          ? 'bg-text-secondary/15 text-text-secondary'
+                          : 'bg-accent/15 text-accent'
+                      }`}>
+                        {d.cycleStatus === 'closed' ? 'Fechada' : 'Aberta'}
+                      </span>
+                    )}
+                  </div>
                 </td>
                 <td className="py-1.5 text-right text-accent-green">{formatBRL(d.entries)}</td>
                 <td className="py-1.5 text-right text-accent-red">{formatBRL(d.exits)}</td>
