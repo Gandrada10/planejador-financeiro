@@ -157,64 +157,24 @@ export function DashboardPage() {
         <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
       </div>
 
-      {/* 4 summary cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Acumulado {currentYear}</p>
-          <p className={`text-lg font-bold ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {formatBRL(yearBalance)}
-          </p>
-        </div>
-        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Média mensal (12m)</p>
-          <p className={`text-lg font-bold ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            {formatBRL(avg12months)}
-          </p>
-        </div>
-        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Pendentes conciliação</p>
-          <p className={`text-lg font-bold ${pendingReconciliation > 0 ? 'text-accent' : 'text-accent-green'}`}>
-            {pendingReconciliation}
-          </p>
-        </div>
-        <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Metas de despesas</p>
-          {budgetData.length > 0 ? (
-            <>
-              <p className={`text-lg font-bold ${budgetOver ? 'text-accent-red' : 'text-accent-green'}`}>
-                {formatBRL(budgetTotalRemaining)} restante
-              </p>
-              <div className="mt-1.5 w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent-green'}`}
-                  style={{ width: `${budgetPct}%` }}
-                />
-              </div>
-              <p className="text-[10px] text-text-secondary mt-0.5">{budgetPct.toFixed(0)}% utilizado</p>
-            </>
-          ) : (
-            <p className="text-lg font-bold text-text-secondary">—</p>
-          )}
-        </div>
-      </div>
-
+      {/* Main layout: left (cash flow, expenses, projects) + right (4 metric cards) */}
       {hasData ? (
-        <div className="space-y-4">
-          {/* Resultados de caixa — full width */}
-          <CashFlowChart
-            data={cashFlowData}
-            totalEntries={totalEntries}
-            totalExits={totalExits}
-            totalBalance={totalBalance}
-          />
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          {/* LEFT COLUMN: Cash flow, Expenses, Projects */}
+          <div className="lg:col-span-2 space-y-4">
+            {/* Resultado de caixa */}
+            <CashFlowChart
+              data={cashFlowData}
+              totalEntries={totalEntries}
+              totalExits={totalExits}
+              totalBalance={totalBalance}
+            />
 
-          {/* Despesas por categoria + Projetos em andamento */}
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-            <div className="lg:col-span-3">
-              <ExpensesByCategoryChart data={expensesByCategory} />
-            </div>
+            {/* Despesas por categoria */}
+            <ExpensesByCategoryChart data={expensesByCategory} />
 
-            <div className="lg:col-span-2 bg-bg-card border border-border rounded-lg p-4 space-y-3">
+            {/* Projetos em andamento */}
+            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
               <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Projetos em andamento</h3>
               {projectsData.length === 0 ? (
                 <p className="text-xs text-text-secondary">Nenhum projeto ativo.</p>
@@ -240,6 +200,47 @@ export function DashboardPage() {
                     </div>
                   ))}
                 </div>
+              )}
+            </div>
+          </div>
+
+          {/* RIGHT COLUMN: 4 metric cards stacked vertically */}
+          <div className="space-y-3">
+            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Acumulado {currentYear}</p>
+              <p className={`text-lg font-bold ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {formatBRL(yearBalance)}
+              </p>
+            </div>
+            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Média mensal (12m)</p>
+              <p className={`text-lg font-bold ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {formatBRL(avg12months)}
+              </p>
+            </div>
+            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Pendentes conciliação</p>
+              <p className={`text-lg font-bold ${pendingReconciliation > 0 ? 'text-accent' : 'text-accent-green'}`}>
+                {pendingReconciliation}
+              </p>
+            </div>
+            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Metas de despesas</p>
+              {budgetData.length > 0 ? (
+                <>
+                  <p className={`text-lg font-bold ${budgetOver ? 'text-accent-red' : 'text-accent-green'}`}>
+                    {formatBRL(budgetTotalRemaining)} restante
+                  </p>
+                  <div className="mt-1.5 w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent-green'}`}
+                      style={{ width: `${budgetPct}%` }}
+                    />
+                  </div>
+                  <p className="text-[10px] text-text-secondary mt-0.5">{budgetPct.toFixed(0)}% utilizado</p>
+                </>
+              ) : (
+                <p className="text-lg font-bold text-text-secondary">—</p>
               )}
             </div>
           </div>
