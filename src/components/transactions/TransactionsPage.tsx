@@ -285,12 +285,12 @@ export function TransactionsPage() {
         <span className="text-accent-red">
           Despesas: R$ {Math.abs(filtered.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </span>
-        {transactions.filter((t) => !t.reconciled).length > 0 && (
+        {filtered.filter((t) => !t.reconciled).length > 0 && (
           <button
             onClick={() => setFilterReconciled(filterReconciled === 'pending' ? 'all' : 'pending')}
             className={`hover:underline ${filterReconciled === 'pending' ? 'text-accent font-bold' : 'text-accent'}`}
           >
-            {transactions.filter((t) => !t.reconciled).length} pendentes conciliacao
+            {filtered.filter((t) => !t.reconciled).length} pendentes conciliacao
             {filterReconciled === 'pending' && ' ✕'}
           </button>
         )}

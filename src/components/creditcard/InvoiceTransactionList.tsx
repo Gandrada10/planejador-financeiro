@@ -45,7 +45,6 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
   }
 
   const allTransactions = useMemo(() => groups.flatMap((g) => g.transactions), [groups]);
-  const pendingCount = useMemo(() => allTransactions.filter((t) => !t.reconciled).length, [allTransactions]);
 
   // Filtered groups when pending filter is active
   const displayGroups = useMemo(() => {
@@ -54,6 +53,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
       .map((g) => ({ ...g, transactions: g.transactions.filter((t) => !t.reconciled) }))
       .filter((g) => g.transactions.length > 0);
   }, [groups, filterPending]);
+
+  // Pending count based on what's currently visible (before the pending toggle itself)
+  const pendingCount = useMemo(
+    () => allTransactions.filter((t) => !t.reconciled).length,
+    [allTransactions]
+  );
 
   function toggleGroup(titular: string) {
     const next = new Set(collapsed);
