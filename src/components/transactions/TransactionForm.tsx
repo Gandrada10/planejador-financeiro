@@ -2,8 +2,7 @@ import { useState, useMemo } from 'react';
 import { Plus, X } from 'lucide-react';
 
 import type { Transaction, Category, Account } from '../../types';
-import { getMonthYear, getMonthLabel } from '../../lib/utils';
-import { filterCategoriesByAmount } from '../../lib/utils';
+import { getMonthYear, getMonthLabel, filterCategoriesByAmount, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 
 interface Props {
   onSubmit: (data: Omit<Transaction, 'id' | 'createdAt'>) => void;
@@ -44,7 +43,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const value = parseFloat(amount.replace(',', '.'));
+    const value = parseMoneyInput(amount);
     if (!value || !description) return;
     const totalInst = installments ? parseInt(installments, 10) : null;
 
@@ -119,7 +118,16 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
             </div>
             <div>
               <label className={labelClass}>Valor (R$)</label>
-              <input tabIndex={2} type="text" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} placeholder="0,00" required />
+              <input
+                tabIndex={2}
+                type="text"
+                inputMode="numeric"
+                value={amount}
+                onChange={(e) => setAmount(applyMoneyMask(e.target.value))}
+                className={inputClass}
+                placeholder="0,00"
+                required
+              />
             </div>
           </div>
 

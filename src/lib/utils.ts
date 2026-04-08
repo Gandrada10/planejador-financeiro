@@ -48,6 +48,36 @@ export function filterCategoriesByAmount<T extends { type: string }>(categories:
 }
 
 /**
+ * Apply Brazilian money mask as user types.
+ * Transforms raw keypresses into formatted currency: "12345" → "123,45"
+ * Supports negative values for expenses.
+ */
+export function applyMoneyMask(value: string): string {
+  const isNeg = value.startsWith('-');
+  const digits = value.replace(/\D/g, '');
+  if (!digits) return isNeg ? '-' : '';
+  const num = parseInt(digits, 10);
+  const formatted = (num / 100).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return isNeg ? '-' + formatted : formatted;
+}
+
+/**
+ * Parse a money-masked string back to a number.
+ * "1.234,56" → 1234.56 | "-500,00" → -500
+ */
+export function parseMoneyInput(value: string): number {
+  if (!value) return 0;
+  const isNeg = value.startsWith('-');
+  const cleaned = value.replace(/\./g, '').replace(',', '.');
+  const num = parseFloat(cleaned.replace(/[^\d.]/g, ''));
+  if (isNaN(num)) return 0;
+  return isNeg ? -Math.abs(num) : Math.abs(num);
+}
+
+/**
  * Navigate between editable cells marked with [data-tab-cell].
  * Finds the next (or prev) cell in DOM order and activates it.
  * - If the target has a [data-category-trigger], clicks it (opens combobox).
