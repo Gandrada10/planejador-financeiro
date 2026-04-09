@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
 import type { Transaction, Category, Project } from '../../types';
-import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 
@@ -62,59 +62,66 @@ export function TransactionTable({ transactions, categories, projects = [], acco
     setEditValue(currentValue);
   }
 
-  async function commitEdit() {
-    if (!editingCell) return;
-    const { id, field } = editingCell;
+  // Persiste o valor editado no Firestore em background (não bloqueia a UI)
+  async function persistEdit(id: string, field: string, value: string) {
     const t = sorted.find((tx) => tx.id === id);
+    if (!t) return;
 
-    if (t) {
-      const canProceed = await guardClosedCycle(t);
-      if (!canProceed) { setEditingCell(null); return; }
-    }
+    const canProceed = await guardClosedCycle(t);
+    if (!canProceed) return;
 
-    if (field === 'description' && editValue.trim()) {
-      onUpdate(id, { description: editValue.trim() });
+    if (field === 'description' && value.trim()) {
+      onUpdate(id, { description: value.trim() });
     } else if (field === 'amount') {
-      const val = parseFloat(editValue.replace(',', '.'));
-      if (!isNaN(val)) onUpdate(id, { amount: val });
+      const val = parseMoneyInput(value);
+      if (val !== 0) onUpdate(id, { amount: val });
     } else if (field === 'familyMember') {
-      onUpdate(id, { familyMember: editValue.trim() });
+      onUpdate(id, { familyMember: value.trim() });
     } else if (field === 'titular') {
-      onUpdate(id, { titular: editValue.trim() });
-    } else if (field === 'date' && editValue) {
-      const d = new Date(editValue + 'T12:00:00');
+      onUpdate(id, { titular: value.trim() });
+    } else if (field === 'date' && value) {
+      const d = new Date(value + 'T12:00:00');
       if (!isNaN(d.getTime())) onUpdate(id, { date: d });
     } else if (field === 'purchaseDate') {
-      if (!editValue) {
+      if (!value) {
         onUpdate(id, { purchaseDate: null });
       } else {
-        const d = new Date(editValue + 'T12:00:00');
+        const d = new Date(value + 'T12:00:00');
         if (!isNaN(d.getTime())) onUpdate(id, { purchaseDate: d });
       }
     } else if (field === 'installments') {
-      const parts = editValue.split('/');
+      const parts = value.split('/');
       const num = parseInt(parts[0]);
       const total = parseInt(parts[1]);
       if (!isNaN(num) && !isNaN(total)) {
         onUpdate(id, { installmentNumber: num, totalInstallments: total });
-      } else if (!editValue.trim()) {
+      } else if (!value.trim()) {
         onUpdate(id, { installmentNumber: null, totalInstallments: null });
       }
     }
+  }
 
-    setEditingCell(null);
+  // Limpa o estado de edição imediatamente (síncrono) e salva no Firestore em background
+  function commitEdit() {
+    if (!editingCell) return;
+    const { id, field } = editingCell;
+    const value = editValue;
+    setEditingCell(null); // Limpa UI imediatamente — sem await
+    persistEdit(id, field, value); // Salva em background
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Escape') { setEditingCell(null); return; }
     if (e.key === 'Enter' || e.key === 'Tab') {
       e.preventDefault();
       const cell = (e.target as HTMLElement).closest('[data-tab-cell]');
-      commitEdit();
-      if (e.key === 'Tab' && cell) {
-        setTimeout(() => tabNavigate(cell as HTMLElement, e.shiftKey ? 'prev' : 'next'), 50);
+      const direction = e.key === 'Tab' ? (e.shiftKey ? 'prev' : 'next') : null;
+      commitEdit(); // Síncrono: limpa estado imediatamente
+      // Navega após React re-renderizar (requestAnimationFrame = próximo frame)
+      if (direction && cell) {
+        requestAnimationFrame(() => tabNavigate(cell as HTMLElement, direction));
       }
     }
-    if (e.key === 'Escape') setEditingCell(null);
   }
 
   function toggleSelect(id: string) {
@@ -359,13 +366,17 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 <td
                   data-tab-cell
                   className={`p-2 text-right font-bold truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
-                  onClick={() => startEdit(t.id, 'amount', String(t.amount))}
+                  onClick={() => startEdit(t.id, 'amount', t.amount < 0
+                    ? '-' + applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
+                    : applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
+                  )}
                 >
                   {editingCell?.id === t.id && editingCell.field === 'amount' ? (
                     <input
                       autoFocus
+                      inputMode="numeric"
                       value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
+                      onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
                       className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
