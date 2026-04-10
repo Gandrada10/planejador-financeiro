@@ -22,6 +22,7 @@ export interface BillingCycle {
 export interface CategoryRule {
   id: string;
   pattern: string;
+  keywords: string[];
   categoryId: string;
   createdAt: Date;
 }

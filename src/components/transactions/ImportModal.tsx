@@ -3,7 +3,7 @@ import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, Chevron
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
-import type { Transaction, Category, Account } from '../../types';
+import type { Transaction, Category, Account, CategoryRule } from '../../types';
 import { formatBRL, getMonthYear, getMonthLabel, filterCategoriesByAmount, normalizeTitular } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -14,6 +14,7 @@ type ImportRow = ImportItem & {
   installmentType: 'unica' | 'parcelada';
   periodicity: number; // months between installments
   installmentAmount: number | null;
+  aiSuggested?: boolean;
 };
 
 function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
@@ -35,6 +36,7 @@ interface Props {
   allTitulars?: string[];
   titularNames?: string[];
   matchCategory?: (description: string) => string | null;
+  addRule?: (data: Omit<CategoryRule, 'id' | 'createdAt'>) => Promise<void>;
 }
 
 /** Fuzzy match a statement titular name to a registered member name */
@@ -85,7 +87,7 @@ function generateMonthOptions(): string[] {
   return options;
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory }: Props) {
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, addRule }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -94,6 +96,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [fileName, setFileName] = useState('');
   const [aiParsing, setAiParsing] = useState(false);
   const [aiUsage, setAiUsage] = useState<{ input_tokens: number; output_tokens: number } | null>(null);
+
+  // AI categorization
+  const [aiCategorizedDescriptions, setAiCategorizedDescriptions] = useState<Map<string, string>>(new Map());
 
   // Credit card billing month
   const [isCreditCard, setIsCreditCard] = useState(false);
@@ -340,6 +345,50 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         setError(`A IA nao encontrou transacoes no arquivo (${rawText.length} chars extraidos). Verifique o DevTools > Console para ver o texto extraido.`);
         setAiParsing(false);
         return;
+      }
+
+      // AI categorization for uncategorized transactions
+      const uncategorizedDescs = [...new Set(
+        parsed.filter((p) => !p.categoryId).map((p) => p.description)
+      )];
+      if (uncategorizedDescs.length > 0 && categories.length > 0) {
+        try {
+          const categoryInfos = categories.map((c) => ({
+            id: c.id,
+            name: c.name,
+            parentName: c.parentId ? categories.find((p) => p.id === c.parentId)?.name || null : null,
+            type: c.type,
+          }));
+          const aiRes = await fetch('/api/suggest-categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ descriptions: uncategorizedDescs, categories: categoryInfos, apiKey: localKey }),
+          });
+          if (aiRes.ok) {
+            const aiData = await aiRes.json() as {
+              suggestions: Record<string, { categoryId: string | null; confidence: number }>;
+              usage: { input_tokens: number; output_tokens: number };
+            };
+            setAiUsage((prev) => prev ? {
+              input_tokens: prev.input_tokens + (aiData.usage?.input_tokens || 0),
+              output_tokens: prev.output_tokens + (aiData.usage?.output_tokens || 0),
+            } : aiData.usage);
+            const aiMap = new Map<string, string>();
+            for (const p of parsed) {
+              if (!p.categoryId) {
+                const suggestion = aiData.suggestions?.[p.description];
+                if (suggestion?.categoryId && suggestion.confidence >= 0.7) {
+                  p.categoryId = suggestion.categoryId;
+                  p.aiSuggested = true;
+                  aiMap.set(p.description, suggestion.categoryId);
+                }
+              }
+            }
+            setAiCategorizedDescriptions(aiMap);
+          }
+        } catch {
+          // AI categorization failed silently — rules still applied
+        }
       }
 
       // Auto-detect billing month from most common month in transaction dates
@@ -712,30 +761,37 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         </td>
                         {/* Editable: category */}
                         <td className="p-1">
-                          {categories.length > 0 ? (
-                            <select
-                              value={item.categoryId ?? ''}
-                              onChange={(e) => updateRow(i, 'categoryId', e.target.value)}
-                              className={inputClass}
-                            >
-                              <option value="">—</option>
-                              {(() => {
-                                const rel = filterCategoriesByAmount(categories, item.amount);
-                                const roots = rel.filter((c) => !c.parentId);
-                                return roots.map((cat) => {
-                                  const subs = rel.filter((c) => c.parentId === cat.id);
-                                  return (
-                                    <optgroup key={cat.id} label={cat.name}>
-                                      <option value={cat.id}>{cat.name}</option>
-                                      {subs.map((s) => <option key={s.id} value={s.id}>  ↳ {s.name}</option>)}
-                                    </optgroup>
-                                  );
-                                });
-                              })()}
-                            </select>
-                          ) : (
-                            <span className="text-text-secondary">—</span>
-                          )}
+                          <div className="flex items-center gap-1">
+                            {item.aiSuggested && (
+                              <span title="Sugerido por IA" className="flex-shrink-0">
+                                <Sparkles size={12} className="text-purple-400" />
+                              </span>
+                            )}
+                            {categories.length > 0 ? (
+                              <select
+                                value={item.categoryId ?? ''}
+                                onChange={(e) => updateRow(i, 'categoryId', e.target.value)}
+                                className={inputClass + (item.aiSuggested ? ' border-purple-400/30' : '')}
+                              >
+                                <option value="">—</option>
+                                {(() => {
+                                  const rel = filterCategoriesByAmount(categories, item.amount);
+                                  const roots = rel.filter((c) => !c.parentId);
+                                  return roots.map((cat) => {
+                                    const subs = rel.filter((c) => c.parentId === cat.id);
+                                    return (
+                                      <optgroup key={cat.id} label={cat.name}>
+                                        <option value={cat.id}>{cat.name}</option>
+                                        {subs.map((s) => <option key={s.id} value={s.id}>  ↳ {s.name}</option>)}
+                                      </optgroup>
+                                    );
+                                  });
+                                })()}
+                              </select>
+                            ) : (
+                              <span className="text-text-secondary">—</span>
+                            )}
+                          </div>
                         </td>
                         {/* Editable: family member */}
                         <td className="p-1">
@@ -893,10 +949,47 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
           {/* DONE */}
           {step === 'done' && (
-            <div className="text-center py-8">
-              <Check size={32} className="mx-auto mb-3 text-accent-green" />
-              <p className="text-sm text-text-primary">Importacao concluida!</p>
-              <p className="text-xs text-text-secondary mt-1">{selected.size} transacoes importadas</p>
+            <div className="py-8 space-y-6">
+              <div className="text-center">
+                <Check size={32} className="mx-auto mb-3 text-accent-green" />
+                <p className="text-sm text-text-primary">Importacao concluida!</p>
+                <p className="text-xs text-text-secondary mt-1">{selected.size} transacoes importadas</p>
+              </div>
+              {addRule && aiCategorizedDescriptions.size > 0 && (
+                <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-4 max-w-lg mx-auto">
+                  <p className="text-xs font-bold text-text-primary mb-1 flex items-center gap-1.5">
+                    <Sparkles size={14} className="text-purple-400" />
+                    IA categorizou {aiCategorizedDescriptions.size} descricoes
+                  </p>
+                  <p className="text-[10px] text-text-secondary mb-3">Crie regras para que essas descricoes sejam categorizadas automaticamente na proxima importacao, sem custo de IA.</p>
+                  <div className="space-y-1.5">
+                    {[...aiCategorizedDescriptions.entries()].map(([desc, catId]) => {
+                      const cat = categories.find((c) => c.id === catId);
+                      const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : null;
+                      return (
+                        <div key={desc} className="flex items-center gap-2 text-xs bg-bg-card border border-border rounded p-2">
+                          <span className="text-text-primary truncate flex-1" title={desc}>{desc}</span>
+                          <span className="text-text-secondary">→</span>
+                          {cat && <span className="text-text-secondary truncate">{parent ? `${parent.name} > ` : ''}{cat.name}</span>}
+                          <button
+                            onClick={async () => {
+                              await addRule({ pattern: `*${desc}*`, keywords: [], categoryId: catId });
+                              setAiCategorizedDescriptions((prev) => {
+                                const next = new Map(prev);
+                                next.delete(desc);
+                                return next;
+                              });
+                            }}
+                            className="flex-shrink-0 px-2 py-0.5 bg-accent text-bg-primary text-[10px] font-bold rounded hover:opacity-90"
+                          >
+                            Criar Regra
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>

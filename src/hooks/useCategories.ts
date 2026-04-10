@@ -30,6 +30,7 @@ function docToRule(id: string, data: Record<string, unknown>): CategoryRule {
   return {
     id,
     pattern: (data.pattern as string) || '',
+    keywords: Array.isArray(data.keywords) ? (data.keywords as string[]) : [],
     categoryId: (data.categoryId as string) || '',
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
   };
@@ -108,6 +109,15 @@ export function useCategories() {
     });
   }
 
+  async function updateRule(id: string, data: Partial<CategoryRule>) {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const updates = { ...data };
+    delete updates.id;
+    delete updates.createdAt;
+    await updateDoc(doc(db, 'users', uid, 'categoryRules', id), updates);
+  }
+
   async function deleteRule(id: string) {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
@@ -118,20 +128,29 @@ export function useCategories() {
   const rulesRef = useRef(rules);
   rulesRef.current = rules;
 
-  // Match a description against rules and return category ID
+  // Check if a single pattern matches a description (wildcard support)
+  function patternMatches(lower: string, rawPattern: string): boolean {
+    const pattern = rawPattern.toLowerCase();
+    if (pattern.startsWith('*') && pattern.endsWith('*')) {
+      return lower.includes(pattern.slice(1, -1));
+    } else if (pattern.startsWith('*')) {
+      return lower.endsWith(pattern.slice(1));
+    } else if (pattern.endsWith('*')) {
+      return lower.startsWith(pattern.slice(0, -1));
+    } else {
+      return lower.includes(pattern);
+    }
+  }
+
+  // Match a description against rules (pattern + keywords) and return category ID
   const matchCategory = useCallback((description: string): string | null => {
     const lower = description.toLowerCase();
     for (const rule of rulesRef.current) {
-      const pattern = rule.pattern.toLowerCase();
-      // Support wildcards: *uber* matches "UBER TRIP 123"
-      if (pattern.startsWith('*') && pattern.endsWith('*')) {
-        if (lower.includes(pattern.slice(1, -1))) return rule.categoryId;
-      } else if (pattern.startsWith('*')) {
-        if (lower.endsWith(pattern.slice(1))) return rule.categoryId;
-      } else if (pattern.endsWith('*')) {
-        if (lower.startsWith(pattern.slice(0, -1))) return rule.categoryId;
-      } else {
-        if (lower.includes(pattern)) return rule.categoryId;
+      if (patternMatches(lower, rule.pattern)) return rule.categoryId;
+      if (rule.keywords?.length) {
+        for (const kw of rule.keywords) {
+          if (kw && patternMatches(lower, kw)) return rule.categoryId;
+        }
       }
     }
     return null;
@@ -206,5 +225,5 @@ export function useCategories() {
     return { added, updated };
   }
 
-  return { categories, categoriesOrdered, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule, matchCategory, syncCategories };
+  return { categories, categoriesOrdered, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, updateRule, deleteRule, matchCategory, syncCategories };
 }
