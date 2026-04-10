@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Plus, Trash2, Zap, X, ChevronRight, RefreshCw } from 'lucide-react';
+import { Plus, Trash2, Zap, X, ChevronRight, RefreshCw, Pencil } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
-import type { Category } from '../../types';
+import type { Category, CategoryRule } from '../../types';
 import { CategoryIcon, ICON_KEYS } from '../shared/CategoryIcon';
 
 const PRESET_COLORS = ['#f59e0b', '#22c55e', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
 
 export function CategoriesPage() {
-  const { categories, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, deleteRule, syncCategories } = useCategories();
+  const { categories, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, updateRule, deleteRule, syncCategories } = useCategories();
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showRuleForm, setShowRuleForm] = useState(false);
@@ -23,6 +23,9 @@ export function CategoriesPage() {
   // Rule form
   const [rulePattern, setRulePattern] = useState('');
   const [ruleCategoryId, setRuleCategoryId] = useState('');
+  const [ruleKeywords, setRuleKeywords] = useState<string[]>([]);
+  const [keywordInput, setKeywordInput] = useState('');
+  const [editingRuleId, setEditingRuleId] = useState<string | null>(null);
 
   function resetForm() {
     setName(''); setIcon('tag'); setColor('#f59e0b'); setType('despesa'); setParentId('');
@@ -54,11 +57,37 @@ export function CategoriesPage() {
     resetForm();
   }
 
-  async function handleAddRule(e: React.FormEvent) {
+  async function handleSaveRule(e: React.FormEvent) {
     e.preventDefault();
     if (!rulePattern.trim() || !ruleCategoryId) return;
-    await addRule({ pattern: rulePattern, categoryId: ruleCategoryId });
-    setRulePattern(''); setRuleCategoryId(''); setShowRuleForm(false);
+    if (editingRuleId) {
+      await updateRule(editingRuleId, { pattern: rulePattern, keywords: ruleKeywords, categoryId: ruleCategoryId });
+    } else {
+      await addRule({ pattern: rulePattern, keywords: ruleKeywords, categoryId: ruleCategoryId });
+    }
+    resetRuleForm();
+  }
+
+  function resetRuleForm() {
+    setRulePattern(''); setRuleCategoryId(''); setRuleKeywords([]); setKeywordInput('');
+    setEditingRuleId(null); setShowRuleForm(false);
+  }
+
+  function startEditRule(rule: CategoryRule) {
+    setRulePattern(rule.pattern);
+    setRuleCategoryId(rule.categoryId);
+    setRuleKeywords(rule.keywords || []);
+    setKeywordInput('');
+    setEditingRuleId(rule.id);
+    setShowRuleForm(true);
+  }
+
+  function addKeyword() {
+    const kw = keywordInput.trim();
+    if (kw && !ruleKeywords.includes(kw)) {
+      setRuleKeywords([...ruleKeywords, kw]);
+    }
+    setKeywordInput('');
   }
 
   if (loading) return <div className="text-accent text-sm animate-pulse">Carregando...</div>;
@@ -200,19 +229,27 @@ export function CategoriesPage() {
               const cat = categories.find((c) => c.id === rule.categoryId);
               const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : null;
               return (
-                <div key={rule.id} className="flex items-center gap-3 bg-bg-card border border-border rounded p-2 text-xs">
-                  <code className="text-accent bg-bg-secondary px-2 py-0.5 rounded">{rule.pattern}</code>
+                <div key={rule.id} className="flex items-center gap-2 bg-bg-card border border-border rounded p-2 text-xs">
+                  <code className="text-accent bg-bg-secondary px-2 py-0.5 rounded flex-shrink-0">{rule.pattern}</code>
+                  {rule.keywords?.length > 0 && rule.keywords.map((kw, i) => (
+                    <code key={i} className="text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded flex-shrink-0">{kw}</code>
+                  ))}
                   <span className="text-text-secondary">→</span>
                   {cat && (
-                    <span className="flex items-center gap-1 text-text-primary">
-                      {parent && <><CategoryIcon icon={parent.icon} size={12} className="text-text-secondary" /><span className="text-text-secondary">{parent.name}</span><ChevronRight size={10} className="text-text-secondary" /></>}
+                    <span className="flex items-center gap-1 text-text-primary min-w-0">
+                      {parent && <><CategoryIcon icon={parent.icon} size={12} className="text-text-secondary" /><span className="text-text-secondary truncate">{parent.name}</span><ChevronRight size={10} className="text-text-secondary" /></>}
                       <CategoryIcon icon={cat.icon} size={12} className="text-text-primary" />
-                      <span>{cat.name}</span>
+                      <span className="truncate">{cat.name}</span>
                     </span>
                   )}
-                  <button onClick={() => deleteRule(rule.id)} className="ml-auto text-text-secondary hover:text-accent-red">
-                    <Trash2 size={12} />
-                  </button>
+                  <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+                    <button onClick={() => startEditRule(rule)} className="text-text-secondary hover:text-accent">
+                      <Pencil size={12} />
+                    </button>
+                    <button onClick={() => deleteRule(rule.id)} className="text-text-secondary hover:text-accent-red">
+                      <Trash2 size={12} />
+                    </button>
+                  </div>
                 </div>
               );
             })}
@@ -298,19 +335,49 @@ export function CategoriesPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-bg-card border border-border rounded-lg w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-sm font-bold text-text-primary">Nova Regra de Auto-categorizacao</h3>
-              <button onClick={() => setShowRuleForm(false)} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
+              <h3 className="text-sm font-bold text-text-primary">{editingRuleId ? 'Editar' : 'Nova'} Regra de Auto-categorizacao</h3>
+              <button onClick={resetRuleForm} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
             </div>
-            <form onSubmit={handleAddRule} className="p-4 space-y-3">
+            <form onSubmit={handleSaveRule} className="p-4 space-y-3">
               <div>
-                <label className={labelClass}>Padrao (use * como curinga)</label>
+                <label className={labelClass}>Padrao principal (use * como curinga)</label>
                 <input tabIndex={1} type="text" value={rulePattern} onChange={(e) => setRulePattern(e.target.value)}
-                  className={inputClass} placeholder="*UBER*, *NETFLIX*, ALUGUEL*" required autoFocus />
+                  className={inputClass} placeholder="*UBER*" required autoFocus />
                 <p className="text-[10px] text-text-secondary mt-1">Ex: *UBER* reconhece "UBER TRIP", "PAG UBER", etc.</p>
               </div>
               <div>
+                <label className={labelClass}>Palavras alternativas</label>
+                <div className="flex gap-2">
+                  <input
+                    tabIndex={2}
+                    type="text"
+                    value={keywordInput}
+                    onChange={(e) => setKeywordInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(); } }}
+                    className={inputClass}
+                    placeholder="uber do brasil"
+                  />
+                  <button type="button" onClick={addKeyword} className="px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent flex-shrink-0">
+                    <Plus size={14} />
+                  </button>
+                </div>
+                {ruleKeywords.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mt-2">
+                    {ruleKeywords.map((kw, i) => (
+                      <span key={i} className="flex items-center gap-1 bg-bg-secondary text-text-primary text-xs px-2 py-0.5 rounded">
+                        {kw}
+                        <button type="button" onClick={() => setRuleKeywords(ruleKeywords.filter((_, j) => j !== i))} className="text-text-secondary hover:text-accent-red">
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <p className="text-[10px] text-text-secondary mt-1">Palavras alternativas que tambem ativam esta regra. Pressione Enter para adicionar.</p>
+              </div>
+              <div>
                 <label className={labelClass}>Categoria</label>
-                <select tabIndex={2} value={ruleCategoryId} onChange={(e) => setRuleCategoryId(e.target.value)} className={inputClass} required>
+                <select tabIndex={3} value={ruleCategoryId} onChange={(e) => setRuleCategoryId(e.target.value)} className={inputClass} required>
                   <option value="">Selecione...</option>
                   {rootCategories.map((cat) => {
                     const subs = subCategories(cat.id);
@@ -325,8 +392,8 @@ export function CategoriesPage() {
                   })}
                 </select>
               </div>
-              <button tabIndex={3} type="submit" className="w-full py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90">
-                Criar Regra
+              <button tabIndex={4} type="submit" className="w-full py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90">
+                {editingRuleId ? 'Salvar' : 'Criar Regra'}
               </button>
             </form>
           </div>

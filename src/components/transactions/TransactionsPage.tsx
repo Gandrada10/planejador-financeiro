@@ -18,7 +18,7 @@ import type { Transaction } from '../../types';
 
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
-  const { categories, matchCategory } = useCategories();
+  const { categories, matchCategory, addRule } = useCategories();
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
@@ -168,12 +168,51 @@ export function TransactionsPage() {
         if (closed) await reopenCycle(closed.cycleId);
       }
     }
+
+    // 1. Apply rules first
     const categorized = items.map((item) => ({
       ...item,
       categoryId: item.categoryId || matchCategory(item.description),
     }));
+
+    // 2. AI fallback for uncategorized (e.g. PluggySync transactions)
+    const uncategorizedDescs = [...new Set(
+      categorized.filter((i) => !i.categoryId).map((i) => i.description)
+    )];
+    const apiKey = localStorage.getItem('anthropic_api_key') || '';
+    if (uncategorizedDescs.length > 0 && apiKey && categories.length > 0) {
+      try {
+        const categoryInfos = categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          parentName: c.parentId ? categories.find((p) => p.id === c.parentId)?.name || null : null,
+          type: c.type,
+        }));
+        const res = await fetch('/api/suggest-categories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ descriptions: uncategorizedDescs, categories: categoryInfos, apiKey }),
+        });
+        if (res.ok) {
+          const data = await res.json() as {
+            suggestions: Record<string, { categoryId: string | null; confidence: number }>;
+          };
+          for (const item of categorized) {
+            if (!item.categoryId) {
+              const suggestion = data.suggestions?.[item.description];
+              if (suggestion?.categoryId && suggestion.confidence >= 0.7) {
+                item.categoryId = suggestion.categoryId;
+              }
+            }
+          }
+        }
+      } catch {
+        // AI categorization failed silently
+      }
+    }
+
     await importBatch(categorized);
-  }, [accounts, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accounts, categories, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loading) {
     return <div className="text-accent text-sm animate-pulse">Carregando transacoes...</div>;
@@ -380,6 +419,7 @@ export function TransactionsPage() {
           allTitulars={allTitulars}
           titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
           matchCategory={matchCategory}
+          addRule={addRule}
         />
       )}
       {showPluggySync && (
