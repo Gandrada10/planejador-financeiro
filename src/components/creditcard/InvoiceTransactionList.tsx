@@ -293,6 +293,16 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                 {/* Transactions */}
                 {!isCollapsed && (
                   <div className="divide-y divide-border/30">
+                    {/* Column headers */}
+                    <div className="flex items-center px-4 py-1.5 text-text-secondary uppercase tracking-wider text-[10px]">
+                      <div className="w-6 flex-shrink-0" />
+                      <div className="w-[70px] flex-shrink-0">Data</div>
+                      <div className="flex-1 min-w-0 px-2">Descricao</div>
+                      <div className="flex-shrink-0 w-[55px] text-center">Parcelas</div>
+                      <div className="flex-shrink-0 w-[130px] mr-2">Categoria</div>
+                      <div className="flex-shrink-0 w-[80px] mr-1">Projeto</div>
+                      <div className="flex-shrink-0 w-[85px] text-right">Valor</div>
+                    </div>
                     {[...group.transactions].sort((a, b) => {
                       const av = sortField === 'date' ? a.date : (a.purchaseDate || a.date);
                       const bv = sortField === 'date' ? b.date : (b.purchaseDate || b.date);

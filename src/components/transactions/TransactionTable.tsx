@@ -192,11 +192,11 @@ export function TransactionTable({ transactions, categories, projects = [], acco
             <col style={{ width: 82 }} />  {/* competencia */}
             <col style={{ width: 82 }} />  {/* data */}
             <col style={{ width: '22%' }} /> {/* descricao - limitada */}
-            <col style={{ width: 82 }} />  {/* conta */}
-            <col style={{ width: 72 }} />  {/* membro */}
+            <col style={{ width: 115 }} /> {/* categoria */}
             <col style={{ width: 88 }} />  {/* valor */}
             <col style={{ width: 58 }} />  {/* parcelas */}
-            <col style={{ width: 115 }} /> {/* categoria */}
+            <col style={{ width: 82 }} />  {/* conta */}
+            <col style={{ width: 72 }} />  {/* membro */}
             <col style={{ width: 110 }} /> {/* projeto - mais espaço */}
             <col style={{ width: 32 }} />  {/* delete */}
           </colgroup>
@@ -218,11 +218,11 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 Data <SortIcon field="purchaseDate" />
               </th>
               <th className="p-2 text-left">Descricao</th>
-              <th className="p-2 text-left">Conta</th>
-              <th className="p-2 text-left">Membro</th>
+              <th className="p-2 text-left">Categoria</th>
               <th className="p-2 text-right">Valor</th>
               <th className="p-2 text-center">Parcelas</th>
-              <th className="p-2 text-left">Categoria</th>
+              <th className="p-2 text-left">Conta</th>
+              <th className="p-2 text-left">Membro</th>
               <th className="p-2 text-left">Projeto</th>
               <th className="p-2"></th>
             </tr>
@@ -322,44 +322,18 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                   )}
                 </td>
 
-                {/* Conta - select */}
-                <td className="p-2 text-text-secondary overflow-hidden">
-                  <select
-                    tabIndex={-1}
-                    value={t.account}
-                    onChange={async (e) => {
-                      const val = e.target.value;
+                {/* Categoria - combobox with autocomplete + tab navigation */}
+                <td className="p-2 relative">
+                  <CategoryCombobox
+                    categories={categories}
+                    amount={t.amount}
+                    value={t.categoryId}
+                    onChange={async (val) => {
                       const ok = await guardClosedCycle(t);
-                      if (!ok) { e.target.value = t.account; return; }
-                      onUpdate(t.id, { account: val });
+                      if (!ok) return;
+                      onUpdate(t.id, { categoryId: val });
                     }}
-                    className="w-full bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
-                  >
-                    <option value="">—</option>
-                    {accountNames.map((name) => (
-                      <option key={name} value={name}>{name}</option>
-                    ))}
-                  </select>
-                </td>
-
-                {/* Membro - editable */}
-                <td
-                  data-tab-cell
-                  className={`p-2 text-text-secondary truncate overflow-hidden ${editableCell}`}
-                  onClick={() => startEdit(t.id, 'familyMember', t.familyMember || '')}
-                >
-                  {editingCell?.id === t.id && editingCell.field === 'familyMember' ? (
-                    <input
-                      autoFocus
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onBlur={commitEdit}
-                      onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
-                    />
-                  ) : (
-                    t.familyMember || '—'
-                  )}
+                  />
                 </td>
 
                 {/* Valor - editable */}
@@ -409,18 +383,44 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                   ) : '—'}
                 </td>
 
-                {/* Categoria - combobox with autocomplete + tab navigation */}
-                <td className="p-2 relative">
-                  <CategoryCombobox
-                    categories={categories}
-                    amount={t.amount}
-                    value={t.categoryId}
-                    onChange={async (val) => {
+                {/* Conta - select */}
+                <td className="p-2 text-text-secondary overflow-hidden">
+                  <select
+                    tabIndex={-1}
+                    value={t.account}
+                    onChange={async (e) => {
+                      const val = e.target.value;
                       const ok = await guardClosedCycle(t);
-                      if (!ok) return;
-                      onUpdate(t.id, { categoryId: val });
+                      if (!ok) { e.target.value = t.account; return; }
+                      onUpdate(t.id, { account: val });
                     }}
-                  />
+                    className="w-full bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
+                  >
+                    <option value="">—</option>
+                    {accountNames.map((name) => (
+                      <option key={name} value={name}>{name}</option>
+                    ))}
+                  </select>
+                </td>
+
+                {/* Membro - editable */}
+                <td
+                  data-tab-cell
+                  className={`p-2 text-text-secondary truncate overflow-hidden ${editableCell}`}
+                  onClick={() => startEdit(t.id, 'familyMember', t.familyMember || '')}
+                >
+                  {editingCell?.id === t.id && editingCell.field === 'familyMember' ? (
+                    <input
+                      autoFocus
+                      value={editValue}
+                      onChange={(e) => setEditValue(e.target.value)}
+                      onBlur={commitEdit}
+                      onKeyDown={handleKeyDown}
+                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                    />
+                  ) : (
+                    t.familyMember || '—'
+                  )}
                 </td>
 
                 {/* Projeto */}
