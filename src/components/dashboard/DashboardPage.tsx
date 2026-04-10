@@ -177,36 +177,37 @@ export function DashboardPage() {
       </div>
 
       {hasData ? (
-        <>
-          {/* Top KPI strip */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Acumulado {currentYear}</p>
-              <p className={`text-lg font-bold ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {formatBRL(yearBalance)}
-              </p>
-            </div>
-            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Média mensal (12m)</p>
-              <p className={`text-lg font-bold ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {formatBRL(avg12months)}
-              </p>
-            </div>
-          </div>
-
-          {/* Middle row: cash flow + expenses */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* LEFT COLUMN: Cash flow + KPIs */}
+          <div className="space-y-4">
             <CashFlowChart
               data={cashFlowData}
               totalEntries={totalEntries}
               totalExits={totalExits}
               totalBalance={totalBalance}
             />
-            <ExpensesByCategoryChart data={expensesByCategory} />
+
+            {/* Compact KPIs: single card with 2 horizontal rows */}
+            <div className="bg-bg-card border border-border rounded-lg divide-y divide-border">
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <p className="text-[10px] text-text-secondary uppercase tracking-wider">Acumulado {currentYear}</p>
+                <p className={`text-xs font-bold tabular-nums ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  {formatBRL(yearBalance)}
+                </p>
+              </div>
+              <div className="flex items-center justify-between px-4 py-2.5">
+                <p className="text-[10px] text-text-secondary uppercase tracking-wider">Média mensal (12m)</p>
+                <p className={`text-xs font-bold tabular-nums ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  {formatBRL(avg12months)}
+                </p>
+              </div>
+            </div>
           </div>
 
-          {/* Bottom row: projects + budgets */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* RIGHT COLUMN: Expenses + Projects + Metas */}
+          <div className="space-y-4">
+            <ExpensesByCategoryChart data={expensesByCategory} />
+
             {/* Projetos em andamento */}
             <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
               <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Projetos em andamento</h3>
@@ -299,7 +300,7 @@ export function DashboardPage() {
               )}
             </div>
           </div>
-        </>
+        </div>
       ) : (
         <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
           Importe seus extratos para começar a ver dados aqui.
