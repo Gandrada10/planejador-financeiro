@@ -11,7 +11,9 @@ export function CategoriesPage() {
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showRuleForm, setShowRuleForm] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'despesa' | 'receita'>('despesa');
 
   // Category form
   const [name, setName] = useState('');
@@ -112,8 +114,9 @@ export function CategoriesPage() {
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
           </button>
-          <button onClick={() => setShowRuleForm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent">
-            <Zap size={14} /> Nova Regra
+          <button onClick={() => setShowRulesModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent">
+            <Zap size={14} /> Regras de Categorias
+            <span className="text-[10px] text-text-secondary">({rules.length})</span>
           </button>
           <button onClick={() => { setParentId(''); setShowForm(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90">
             <Plus size={14} /> Nova Categoria
@@ -121,145 +124,181 @@ export function CategoriesPage() {
         </div>
       </div>
 
-      {/* Categories grid — grouped by type */}
+      {/* Categories grid — tabs for Despesas / Receitas */}
       {rootCategories.length === 0 ? (
         <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
           Nenhuma categoria. Crie categorias para organizar suas transações.
         </div>
       ) : (
-        <div className="space-y-6">
-          {(
-            [
-              { key: 'despesa', label: 'Despesas', dotColor: 'bg-accent-red' },
-              { key: 'receita', label: 'Receitas', dotColor: 'bg-accent-green' },
-              { key: 'ambos',   label: 'Despesa e Receita', dotColor: 'bg-accent' },
-            ] as const
-          )
-            .filter(({ key }) => rootCategories.some((c) => c.type === key))
-            .map(({ key, label, dotColor }) => {
-              const group = rootCategories.filter((c) => c.type === key);
+        <div className="space-y-4">
+          {/* Tabs */}
+          <div className="flex border-b border-border">
+            {(
+              [
+                { key: 'despesa', label: 'Despesas', dotColor: 'bg-accent-red', activeColor: 'border-accent-red text-accent-red' },
+                { key: 'receita', label: 'Receitas', dotColor: 'bg-accent-green', activeColor: 'border-accent-green text-accent-green' },
+              ] as const
+            ).map(({ key, label, dotColor, activeColor }) => {
+              const count = rootCategories.filter((c) => c.type === key || c.type === 'ambos').length;
               return (
-                <div key={key} className="space-y-2">
-                  <div className="flex items-center gap-2">
-                    <span className={`w-2 h-2 rounded-full ${dotColor}`} />
-                    <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">{label}</h3>
-                    <span className="text-[10px] text-text-secondary">({group.length})</span>
-                  </div>
-                  <div className="space-y-2">
-                    {group.map((cat) => {
-                      const subs = subCategories(cat.id);
-                      return (
-                        <div key={cat.id} className="bg-bg-card border border-border rounded-lg overflow-hidden">
-                          {/* Parent row */}
-                          <div
-                            className="flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
-                            onClick={() => startEdit(cat)}
-                          >
-                            <CategoryIcon icon={cat.icon} size={24} className="text-text-primary" />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2">
-                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                                <span className="text-sm text-text-primary font-bold truncate">{cat.name}</span>
-                              </div>
-                              <div className="flex items-center gap-3 mt-0.5">
-                                <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === cat.id).length} regras</span>
-                                <span className="text-[10px] text-text-secondary">{subs.length} subcategorias</span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); startNewSub(cat.id); }}
-                              title="Nova subcategoria"
-                              className="text-text-secondary hover:text-accent p-1 text-xs"
-                            >
-                              <Plus size={14} />
-                            </button>
-                            <button
-                              onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }}
-                              className="text-text-secondary hover:text-accent-red p-1"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-
-                          {/* Subcategory rows */}
-                          {subs.map((sub) => (
-                            <div
-                              key={sub.id}
-                              className="flex items-center gap-3 p-2.5 pl-8 border-t border-border/40 cursor-pointer hover:bg-bg-secondary/20 transition-colors"
-                              onClick={() => startEdit(sub)}
-                            >
-                              <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
-                              <CategoryIcon icon={sub.icon} size={18} className="text-text-primary" />
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
-                                  <span className="text-xs text-text-primary font-medium truncate">{sub.name}</span>
-                                </div>
-                                <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === sub.id).length} regras</span>
-                              </div>
-                              <button
-                                onClick={(e) => { e.stopPropagation(); deleteCategory(sub.id); }}
-                                className="text-text-secondary hover:text-accent-red p-1"
-                              >
-                                <Trash2 size={12} />
-                              </button>
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+                <button
+                  key={key}
+                  onClick={() => setActiveTab(key)}
+                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-colors -mb-px ${
+                    activeTab === key
+                      ? activeColor
+                      : 'border-transparent text-text-secondary hover:text-text-primary'
+                  }`}
+                >
+                  <span className={`w-2 h-2 rounded-full ${dotColor}`} />
+                  {label}
+                  <span className="text-[10px] text-text-secondary font-normal">({count})</span>
+                </button>
               );
             })}
+          </div>
+
+          {/* Active tab content */}
+          <div className="space-y-2">
+            {rootCategories
+              .filter((c) => c.type === activeTab || c.type === 'ambos')
+              .map((cat) => {
+                const subs = subCategories(cat.id);
+                return (
+                  <div key={cat.id} className="bg-bg-card border border-border rounded-lg overflow-hidden">
+                    {/* Parent row */}
+                    <div
+                      className="flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
+                      onClick={() => startEdit(cat)}
+                    >
+                      <CategoryIcon icon={cat.icon} size={24} className="text-text-primary" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
+                          <span className="text-sm text-text-primary font-bold truncate">{cat.name}</span>
+                          {cat.type === 'ambos' && (
+                            <span className="text-[9px] text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded uppercase tracking-wider">ambos</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3 mt-0.5">
+                          <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === cat.id).length} regras</span>
+                          <span className="text-[10px] text-text-secondary">{subs.length} subcategorias</span>
+                        </div>
+                      </div>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); startNewSub(cat.id); }}
+                        title="Nova subcategoria"
+                        className="text-text-secondary hover:text-accent p-1 text-xs"
+                      >
+                        <Plus size={14} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }}
+                        className="text-text-secondary hover:text-accent-red p-1"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    {/* Subcategory rows */}
+                    {subs.map((sub) => (
+                      <div
+                        key={sub.id}
+                        className="flex items-center gap-3 p-2.5 pl-8 border-t border-border/40 cursor-pointer hover:bg-bg-secondary/20 transition-colors"
+                        onClick={() => startEdit(sub)}
+                      >
+                        <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
+                        <CategoryIcon icon={sub.icon} size={18} className="text-text-primary" />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
+                            <span className="text-xs text-text-primary font-medium truncate">{sub.name}</span>
+                          </div>
+                          <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === sub.id).length} regras</span>
+                        </div>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); deleteCategory(sub.id); }}
+                          className="text-text-secondary hover:text-accent-red p-1"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
+            {rootCategories.filter((c) => c.type === activeTab || c.type === 'ambos').length === 0 && (
+              <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
+                Nenhuma categoria de {activeTab === 'despesa' ? 'despesa' : 'receita'}.
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Rules section */}
-      <div>
-        <h3 className="text-sm font-bold text-text-primary mb-3 flex items-center gap-2">
-          <Zap size={16} className="text-accent" /> Regras de Auto-categorizacao
-        </h3>
-        <p className="text-xs text-text-secondary mb-3">
-          Quando uma transacao importada contem o padrao, ela e categorizada automaticamente. Use * como curinga: *UBER* reconhece qualquer texto com "UBER".
-        </p>
-        {rules.length > 0 ? (
-          <div className="space-y-1">
-            {rules.map((rule) => {
-              const cat = categories.find((c) => c.id === rule.categoryId);
-              const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : null;
-              return (
-                <div key={rule.id} className="flex items-center gap-2 bg-bg-card border border-border rounded p-2 text-xs">
-                  <code className="text-accent bg-bg-secondary px-2 py-0.5 rounded flex-shrink-0">{rule.pattern}</code>
-                  {rule.keywords?.length > 0 && rule.keywords.map((kw, i) => (
-                    <code key={i} className="text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded flex-shrink-0">{kw}</code>
-                  ))}
-                  <span className="text-text-secondary">→</span>
-                  {cat && (
-                    <span className="flex items-center gap-1 text-text-primary min-w-0">
-                      {parent && <><CategoryIcon icon={parent.icon} size={12} className="text-text-secondary" /><span className="text-text-secondary truncate">{parent.name}</span><ChevronRight size={10} className="text-text-secondary" /></>}
-                      <CategoryIcon icon={cat.icon} size={12} className="text-text-primary" />
-                      <span className="truncate">{cat.name}</span>
-                    </span>
-                  )}
-                  <div className="ml-auto flex items-center gap-1 flex-shrink-0">
-                    <button onClick={() => startEditRule(rule)} className="text-text-secondary hover:text-accent">
-                      <Pencil size={12} />
-                    </button>
-                    <button onClick={() => deleteRule(rule.id)} className="text-text-secondary hover:text-accent-red">
-                      <Trash2 size={12} />
-                    </button>
-                  </div>
+      {/* Rules modal */}
+      {showRulesModal && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-40 p-4">
+          <div className="bg-bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                <Zap size={16} className="text-accent" /> Regras de Auto-categorizacao
+                <span className="text-[10px] text-text-secondary font-normal">({rules.length})</span>
+              </h3>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { resetRuleForm(); setShowRuleForm(true); }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+                >
+                  <Plus size={14} /> Nova Regra
+                </button>
+                <button onClick={() => setShowRulesModal(false)} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-auto p-4">
+              <p className="text-xs text-text-secondary mb-3">
+                Quando uma transacao importada contem o padrao, ela e categorizada automaticamente. Use * como curinga: *UBER* reconhece qualquer texto com "UBER".
+              </p>
+              {rules.length > 0 ? (
+                <div className="space-y-1">
+                  {rules.map((rule) => {
+                    const cat = categories.find((c) => c.id === rule.categoryId);
+                    const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : null;
+                    return (
+                      <div key={rule.id} className="flex items-center gap-2 bg-bg-secondary/40 border border-border rounded p-2 text-xs">
+                        <code className="text-accent bg-bg-secondary px-2 py-0.5 rounded flex-shrink-0">{rule.pattern}</code>
+                        {rule.keywords?.length > 0 && rule.keywords.map((kw, i) => (
+                          <code key={i} className="text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded flex-shrink-0">{kw}</code>
+                        ))}
+                        <span className="text-text-secondary">→</span>
+                        {cat && (
+                          <span className="flex items-center gap-1 text-text-primary min-w-0">
+                            {parent && <><CategoryIcon icon={parent.icon} size={12} className="text-text-secondary" /><span className="text-text-secondary truncate">{parent.name}</span><ChevronRight size={10} className="text-text-secondary" /></>}
+                            <CategoryIcon icon={cat.icon} size={12} className="text-text-primary" />
+                            <span className="truncate">{cat.name}</span>
+                          </span>
+                        )}
+                        <div className="ml-auto flex items-center gap-1 flex-shrink-0">
+                          <button onClick={() => startEditRule(rule)} className="text-text-secondary hover:text-accent">
+                            <Pencil size={12} />
+                          </button>
+                          <button onClick={() => deleteRule(rule.id)} className="text-text-secondary hover:text-accent-red">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              ) : (
+                <div className="border border-border rounded-lg p-6 text-center text-text-secondary text-xs">
+                  Nenhuma regra. Clique em "Nova Regra" para criar a primeira.
+                </div>
+              )}
+            </div>
           </div>
-        ) : (
-          <div className="bg-bg-card border border-border rounded-lg p-4 text-center text-text-secondary text-xs">
-            Nenhuma regra.
-          </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Category form modal */}
       {showForm && (

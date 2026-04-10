@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown } from 'lucide-react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
@@ -57,6 +57,8 @@ interface Props {
   titularNames?: string[];
   matchCategory?: (description: string) => string | null;
   addRule?: (data: Omit<CategoryRule, 'id' | 'createdAt'>) => Promise<void>;
+  onCreateRule?: (description: string, categoryId: string) => void;
+  rules?: CategoryRule[];
 }
 
 /** Fuzzy match a statement titular name to a registered member name */
@@ -107,7 +109,7 @@ function generateMonthOptions(): string[] {
   return options;
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, addRule }: Props) {
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, addRule, onCreateRule, rules = [] }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -843,6 +845,19 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             ) : (
                               <span className="text-text-secondary">—</span>
                             )}
+                            {item.categoryId && onCreateRule && (() => {
+                              const hasRule = rules.some((r) => r.pattern.toLowerCase() === item.description.toLowerCase());
+                              return (
+                                <button
+                                  type="button"
+                                  title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                                  onClick={() => onCreateRule(item.description, item.categoryId!)}
+                                  className={`flex-shrink-0 ${hasRule ? 'text-yellow-400' : 'text-text-secondary hover:text-accent'}`}
+                                >
+                                  <Zap size={12} className={hasRule ? 'fill-current' : ''} />
+                                </button>
+                              );
+                            })()}
                           </div>
                         </td>
                         {/* Editable: family member */}

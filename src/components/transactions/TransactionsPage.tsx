@@ -431,6 +431,8 @@ export function TransactionsPage() {
           titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
           matchCategory={matchCategory}
           addRule={addRule}
+          onCreateRule={handleCreateRule}
+          rules={rules}
         />
       )}
       {showPluggySync && (
