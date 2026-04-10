@@ -18,7 +18,7 @@ import type { Transaction } from '../../types';
 
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
-  const { categories, matchCategory, addRule } = useCategories();
+  const { categories, rules, matchCategory, addRule, updateRule } = useCategories();
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
@@ -214,6 +214,15 @@ export function TransactionsPage() {
     await importBatch(categorized);
   }, [accounts, categories, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleCreateRule = useCallback(async (description: string, categoryId: string) => {
+    const existing = rules.find((r) => r.pattern.toLowerCase() === description.toLowerCase());
+    if (existing) {
+      await updateRule(existing.id, { categoryId });
+    } else {
+      await addRule({ pattern: description, keywords: [], categoryId });
+    }
+  }, [rules, addRule, updateRule]);
+
   if (loading) {
     return <div className="text-accent text-sm animate-pulse">Carregando transacoes...</div>;
   }
@@ -405,6 +414,7 @@ export function TransactionsPage() {
         onBatchReconcile={batchUpdateReconciled}
         checkClosedCycle={checkClosedCycle}
         reopenCycle={reopenCycle}
+        onCreateRule={handleCreateRule}
       />
 
       {showForm && <TransactionForm onSubmit={handleAddTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} accounts={accounts} />}

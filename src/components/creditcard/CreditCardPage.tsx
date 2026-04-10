@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { CreditCard } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
@@ -15,7 +15,7 @@ export function CreditCardPage() {
   const [selectedCardId, setSelectedCardId] = useState('');
 
   const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled } = useTransactions();
-  const { categories } = useCategories();
+  const { categories, rules, addRule, updateRule } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
   const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
@@ -130,6 +130,15 @@ export function CreditCardPage() {
     return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
   }
 
+  const handleCreateRule = useCallback(async (description: string, categoryId: string) => {
+    const existing = rules.find((r) => r.pattern.toLowerCase() === description.toLowerCase());
+    if (existing) {
+      await updateRule(existing.id, { categoryId });
+    } else {
+      await addRule({ pattern: description, keywords: [], categoryId });
+    }
+  }, [rules, addRule, updateRule]);
+
   if (loadingTx || loadingAccounts) {
     return <div className="text-accent text-sm animate-pulse">Carregando cartoes...</div>;
   }
@@ -221,6 +230,7 @@ export function CreditCardPage() {
             onBatchMove={handleBatchMove}
             checkClosedCycle={checkClosedCycleForTx}
             reopenCycle={reopenCycle}
+            onCreateRule={handleCreateRule}
           />
         </div>
       </div>

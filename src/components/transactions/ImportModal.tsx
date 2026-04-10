@@ -475,7 +475,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
     for (const [i, row] of items.entries()) {
       if (!selected.has(i)) continue;
-      const { isDuplicate: _, installmentType, periodicity, installmentAmount, ...rest } = row;
+      const { isDuplicate: _, installmentType, periodicity, installmentAmount, aiSuggested: _ai, ...rest } = row;
 
       // Original date is purchase date; billing date is for invoice assignment
       const purchaseDate = rest.purchaseDate || rest.date;
@@ -511,6 +511,17 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         }
       } else {
         toImport.push({ ...rest, date: invoiceDate, purchaseDate });
+      }
+    }
+
+    // Auto-create rules for AI suggestions accepted by the user
+    if (addRule) {
+      const autoRuled = new Set<string>();
+      for (const [i, row] of items.entries()) {
+        if (!selected.has(i) || !row.aiSuggested || !row.categoryId) continue;
+        if (autoRuled.has(row.description)) continue;
+        autoRuled.add(row.description);
+        await addRule({ pattern: row.description, keywords: [], categoryId: row.categoryId });
       }
     }
 
@@ -955,39 +966,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 <p className="text-sm text-text-primary">Importacao concluida!</p>
                 <p className="text-xs text-text-secondary mt-1">{selected.size} transacoes importadas</p>
               </div>
-              {addRule && aiCategorizedDescriptions.size > 0 && (
-                <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-4 max-w-lg mx-auto">
-                  <p className="text-xs font-bold text-text-primary mb-1 flex items-center gap-1.5">
+              {aiCategorizedDescriptions.size > 0 && (
+                <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-3 max-w-sm mx-auto text-center">
+                  <p className="text-xs text-text-primary flex items-center justify-center gap-1.5">
                     <Sparkles size={14} className="text-purple-400" />
-                    IA categorizou {aiCategorizedDescriptions.size} descricoes
+                    {aiCategorizedDescriptions.size} regra{aiCategorizedDescriptions.size > 1 ? 's' : ''} criada{aiCategorizedDescriptions.size > 1 ? 's' : ''} automaticamente a partir da IA
                   </p>
-                  <p className="text-[10px] text-text-secondary mb-3">Crie regras para que essas descricoes sejam categorizadas automaticamente na proxima importacao, sem custo de IA.</p>
-                  <div className="space-y-1.5">
-                    {[...aiCategorizedDescriptions.entries()].map(([desc, catId]) => {
-                      const cat = categories.find((c) => c.id === catId);
-                      const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : null;
-                      return (
-                        <div key={desc} className="flex items-center gap-2 text-xs bg-bg-card border border-border rounded p-2">
-                          <span className="text-text-primary truncate flex-1" title={desc}>{desc}</span>
-                          <span className="text-text-secondary">→</span>
-                          {cat && <span className="text-text-secondary truncate">{parent ? `${parent.name} > ` : ''}{cat.name}</span>}
-                          <button
-                            onClick={async () => {
-                              await addRule({ pattern: `*${desc}*`, keywords: [], categoryId: catId });
-                              setAiCategorizedDescriptions((prev) => {
-                                const next = new Map(prev);
-                                next.delete(desc);
-                                return next;
-                              });
-                            }}
-                            className="flex-shrink-0 px-2 py-0.5 bg-accent text-bg-primary text-[10px] font-bold rounded hover:opacity-90"
-                          >
-                            Criar Regra
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
                 </div>
               )}
             </div>

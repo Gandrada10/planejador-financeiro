@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, tabNavigate, getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category, Project } from '../../types';
@@ -24,9 +24,10 @@ interface Props {
   onBatchMove?: (ids: string[], targetMonthYear: string) => Promise<void>;
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
+  onCreateRule?: (description: string, categoryId: string) => void;
 }
 
-export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle }: Props) {
+export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle, onCreateRule }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -408,7 +409,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Category - combobox with autocomplete + tab navigation */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[130px] mr-2">
+                          <div className="flex-shrink-0 w-[130px] mr-2 flex items-center gap-1">
                             <CategoryCombobox
                               categories={categories}
                               amount={t.amount}
@@ -420,6 +421,15 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                               }}
                               compact
                             />
+                            {t.categoryId && onCreateRule && (
+                              <button
+                                title="Criar regra para esta descrição"
+                                onClick={() => onCreateRule(t.description, t.categoryId!)}
+                                className="text-text-secondary hover:text-accent flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                              >
+                                <Zap size={11} />
+                              </button>
+                            )}
                           </div>
                         ) : null}
 

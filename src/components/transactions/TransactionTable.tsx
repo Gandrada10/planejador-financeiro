@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react';
+import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap } from 'lucide-react';
 import type { Transaction, Category, Project } from '../../types';
 import { formatBRL, formatDate, tabNavigate } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
@@ -15,9 +15,10 @@ interface Props {
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
+  onCreateRule?: (description: string, categoryId: string) => void;
 }
 
-export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -400,16 +401,27 @@ export function TransactionTable({ transactions, categories, projects = [], acco
 
                 {/* Categoria - combobox with autocomplete + tab navigation */}
                 <td className="p-2 relative">
-                  <CategoryCombobox
-                    categories={categories}
-                    amount={t.amount}
-                    value={t.categoryId}
-                    onChange={async (val) => {
-                      const ok = await guardClosedCycle(t);
-                      if (!ok) return;
-                      onUpdate(t.id, { categoryId: val });
-                    }}
-                  />
+                  <div className="flex items-center gap-1">
+                    <CategoryCombobox
+                      categories={categories}
+                      amount={t.amount}
+                      value={t.categoryId}
+                      onChange={async (val) => {
+                        const ok = await guardClosedCycle(t);
+                        if (!ok) return;
+                        onUpdate(t.id, { categoryId: val });
+                      }}
+                    />
+                    {t.categoryId && onCreateRule && (
+                      <button
+                        title="Criar regra para esta descrição"
+                        onClick={() => onCreateRule(t.description, t.categoryId!)}
+                        className="text-text-secondary hover:text-accent flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <Zap size={12} />
+                      </button>
+                    )}
+                  </div>
                 </td>
 
                 {/* Projeto */}
