@@ -191,13 +191,13 @@ export function DashboardPage() {
             <div className="bg-bg-card border border-border rounded-lg divide-y divide-border">
               <div className="flex items-center justify-between px-4 py-2.5">
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">Acumulado {currentYear}</p>
-                <p className={`text-sm font-bold tabular-nums ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                <p className={`text-xs font-bold tabular-nums ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                   {formatBRL(yearBalance)}
                 </p>
               </div>
               <div className="flex items-center justify-between px-4 py-2.5">
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider">Média mensal (12m)</p>
-                <p className={`text-sm font-bold tabular-nums ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                <p className={`text-xs font-bold tabular-nums ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                   {formatBRL(avg12months)}
                 </p>
               </div>
