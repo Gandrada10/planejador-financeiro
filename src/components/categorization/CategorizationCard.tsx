@@ -115,6 +115,8 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
   }, [transaction.id]);
 
   const handleSelect = useCallback(async (categoryId: string) => {
+    // Dismiss keyboard on iOS before animating
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     setSaving(true);
     setExiting(true);
     // Wait for exit animation before processing

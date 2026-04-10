@@ -115,7 +115,16 @@ export function CategorizationPage() {
   if (!currentTx) return null;
 
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col overflow-x-hidden">
+    <div
+      className="min-h-screen bg-bg-primary flex flex-col overflow-x-hidden"
+      onTouchStart={(e) => {
+        // Dismiss keyboard when tapping outside input/textarea on iOS
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        }
+      }}
+    >
       {/* Header */}
       <header className="bg-bg-secondary border-b border-border px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
