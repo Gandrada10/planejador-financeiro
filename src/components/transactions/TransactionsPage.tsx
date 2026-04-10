@@ -342,6 +342,15 @@ export function TransactionsPage() {
             {filterReconciled === 'pending' && ' ✕'}
           </button>
         )}
+        {filtered.filter((t) => !t.categoryId).length > 0 && (
+          <button
+            onClick={() => setFilterCategory(filterCategory === 'uncategorized' ? 'all' : 'uncategorized')}
+            className={`hover:underline ${filterCategory === 'uncategorized' ? 'text-amber-400 font-bold' : 'text-amber-400'}`}
+          >
+            {filtered.filter((t) => !t.categoryId).length} pendentes categorizacao
+            {filterCategory === 'uncategorized' && ' ✕'}
+          </button>
+        )}
       </div>
 
       {(() => {
