@@ -1,11 +1,9 @@
 import { useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Lock, LockOpen, Calendar, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink } from 'lucide-react';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
-import { useBillingCycles } from '../../hooks/useBillingCycles';
 import type { Account } from '../../types';
-import { getMonthLabel } from '../../lib/utils';
 
 const ACCOUNT_TYPES: { value: Account['type']; label: string }[] = [
   { value: 'corrente', label: 'Conta Corrente' },
@@ -16,23 +14,10 @@ const ACCOUNT_TYPES: { value: Account['type']; label: string }[] = [
   { value: 'outro', label: 'Outro' },
 ];
 
-function monthYearOptions(): string[] {
-  const opts: string[] = [];
-  const now = new Date();
-  for (let i = 12; i >= -2; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, '0');
-    opts.push(`${y}-${m}`);
-  }
-  return opts.reverse();
-}
-
 export function SettingsPage() {
   const { mappings, loading, addMapping, deleteMapping } = useTitularMappings();
   const { members, memberNames, loading: loadingMembers, addMember, deleteMember } = useFamilyMembers();
   const { accounts, loading: loadingAccounts, addAccount, updateAccount, deleteAccount } = useAccounts();
-  const { cycles, loading: loadingCycles, createCycle, closeCycle, reopenCycle, deleteCycle } = useBillingCycles();
 
   const [anthropicKey, setAnthropicKey] = useState(() => localStorage.getItem('anthropic_api_key') || '');
   const [showKey, setShowKey] = useState(false);
@@ -61,10 +46,6 @@ export function SettingsPage() {
   const [editClosingDay, setEditClosingDay] = useState('');
   const [editDueDay, setEditDueDay] = useState('');
   const [editCreditLimit, setEditCreditLimit] = useState('');
-
-  // Billing cycle form
-  const [cycleAccountId, setCycleAccountId] = useState('');
-  const [cycleMonth, setCycleMonth] = useState('');
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -107,13 +88,6 @@ export function SettingsPage() {
     setEditingCardId(null);
   }
 
-  async function handleCreateCycle(e: React.FormEvent) {
-    e.preventDefault();
-    if (!cycleAccountId || !cycleMonth) return;
-    await createCycle(cycleAccountId, cycleMonth);
-    setCycleAccountId(''); setCycleMonth('');
-  }
-
   async function testPluggyConnection() {
     setPluggyTesting(true);
     setPluggyTestResult(null);
@@ -136,7 +110,7 @@ export function SettingsPage() {
     }
   }
 
-  if (loading || loadingMembers || loadingAccounts || loadingCycles) {
+  if (loading || loadingMembers || loadingAccounts) {
     return <div className="text-accent text-sm animate-pulse">Carregando configuracoes...</div>;
   }
 
@@ -262,91 +236,6 @@ export function SettingsPage() {
               </div>
             ))}
           </div>
-        )}
-      </div>
-
-      {/* Billing Cycles */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
-        <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-            <Calendar size={16} className="text-accent" /> Faturas de Cartao de Credito
-          </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
-            Gerencie o status de cada fatura por cartao e mes. Faturas encerradas emitem alerta ao tentar adicionar lancamentos.
-          </p>
-        </div>
-
-        {cardAccounts.length === 0 ? (
-          <p className="text-xs text-text-secondary">Nenhum cartao de credito cadastrado. Adicione uma conta do tipo "Cartao de Credito" acima.</p>
-        ) : (
-          <>
-            <form onSubmit={handleCreateCycle} className="flex gap-2 flex-wrap">
-              <select value={cycleAccountId} onChange={(e) => setCycleAccountId(e.target.value)} className={`${inputClass} flex-1 min-w-[150px]`} required>
-                <option value="">Selecione o cartao...</option>
-                {cardAccounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
-              </select>
-              <select value={cycleMonth} onChange={(e) => setCycleMonth(e.target.value)} className={`${inputClass} w-44`} required>
-                <option value="">Selecione o mes...</option>
-                {monthYearOptions().map((m) => <option key={m} value={m}>{getMonthLabel(m)}</option>)}
-              </select>
-              <button type="submit" disabled={!cycleAccountId || !cycleMonth}
-                className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
-                <Plus size={14} /> Criar Fatura
-              </button>
-            </form>
-
-            {cycles.length === 0 ? (
-              <p className="text-xs text-text-secondary">Nenhuma fatura criada.</p>
-            ) : (
-              <div className="space-y-1">
-                {cycles.map((cycle) => {
-                  const account = accounts.find((a) => a.id === cycle.accountId);
-                  return (
-                    <div key={cycle.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
-                      <div className="flex items-center gap-3">
-                        <span className="text-text-primary font-bold">{account?.name ?? '—'}</span>
-                        <span className="text-text-secondary">{getMonthLabel(cycle.monthYear)}</span>
-                        <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                          cycle.status === 'closed'
-                            ? 'bg-accent-red/10 text-accent-red'
-                            : 'bg-accent-green/10 text-accent-green'
-                        }`}>
-                          {cycle.status === 'closed'
-                            ? <><Lock size={10} /> Encerrada</>
-                            : <><LockOpen size={10} /> Aberta</>
-                          }
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        {cycle.status === 'open' ? (
-                          <button
-                            onClick={() => {
-                              if (confirm(`Encerrar fatura de ${account?.name} — ${getMonthLabel(cycle.monthYear)}?`)) {
-                                closeCycle(cycle.id);
-                              }
-                            }}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] bg-accent-red/10 text-accent-red rounded hover:bg-accent-red/20"
-                          >
-                            <Lock size={10} /> Encerrar
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => reopenCycle(cycle.id)}
-                            className="flex items-center gap-1 px-2 py-1 text-[10px] bg-accent-green/10 text-accent-green rounded hover:bg-accent-green/20"
-                          >
-                            <LockOpen size={10} /> Reabrir
-                          </button>
-                        )}
-                        <button onClick={() => deleteCycle(cycle.id)} className="text-text-secondary hover:text-accent-red p-1">
-                          <Trash2 size={13} />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </>
         )}
       </div>
 
