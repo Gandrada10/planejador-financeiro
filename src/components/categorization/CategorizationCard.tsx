@@ -227,7 +227,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
         </div>
 
         {/* Category list — vertical, grouped, no horizontal scroll */}
-        <div ref={listRef} className="p-3 max-h-[50vh] overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div ref={listRef} className="p-3 max-h-[40vh] overflow-y-auto overflow-x-hidden overscroll-contain">
           {!hasResults ? (
             <p className={`${silver} text-xs text-center py-4`}>
               Nenhuma categoria encontrada

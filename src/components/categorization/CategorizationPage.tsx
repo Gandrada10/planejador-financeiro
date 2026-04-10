@@ -116,7 +116,7 @@ export function CategorizationPage() {
 
   return (
     <div
-      className="min-h-screen bg-bg-primary flex flex-col overflow-x-hidden"
+      className="h-[100dvh] bg-bg-primary flex flex-col overflow-hidden"
       onTouchStart={(e) => {
         // Dismiss keyboard when tapping outside input/textarea on iOS
         const tag = (e.target as HTMLElement).tagName;
@@ -156,7 +156,7 @@ export function CategorizationPage() {
       </div>
 
       {/* Card */}
-      <div className="flex-1 flex items-start justify-center p-4 pt-6 overflow-x-hidden">
+      <div className="flex-1 flex items-start justify-center px-5 pt-4 pb-[env(safe-area-inset-bottom)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
         <div className="w-full max-w-lg">
           <CategorizationCard
             transaction={currentTx}
