@@ -1,9 +1,18 @@
-import { useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink } from 'lucide-react';
+import { useRef, useState } from 'react';
+import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink, Download, Upload, Database, AlertTriangle } from 'lucide-react';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
 import type { Account } from '../../types';
+import {
+  exportBackup,
+  downloadBackup,
+  readBackupFile,
+  restoreBackup,
+  summarizeBackup,
+  USER_COLLECTIONS,
+  type BackupFile,
+} from '../../lib/backup';
 
 const ACCOUNT_TYPES: { value: Account['type']; label: string }[] = [
   { value: 'corrente', label: 'Conta Corrente' },
@@ -46,6 +55,62 @@ export function SettingsPage() {
   const [editClosingDay, setEditClosingDay] = useState('');
   const [editDueDay, setEditDueDay] = useState('');
   const [editCreditLimit, setEditCreditLimit] = useState('');
+
+  // Backup / Restore state
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupMsg, setBackupMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
+  const [pendingBackup, setPendingBackup] = useState<BackupFile | null>(null);
+  const [restoreBusy, setRestoreBusy] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  async function handleExportBackup() {
+    setBackupBusy(true);
+    setBackupMsg(null);
+    try {
+      const backup = await exportBackup();
+      downloadBackup(backup);
+      const total = Object.values(backup.collections).reduce((sum, arr) => sum + arr.length, 0);
+      setBackupMsg({ type: 'ok', text: `Backup gerado com sucesso (${total} registro(s) em ${USER_COLLECTIONS.length} colecoes).` });
+    } catch (err) {
+      setBackupMsg({ type: 'err', text: err instanceof Error ? err.message : 'Erro ao gerar backup.' });
+    } finally {
+      setBackupBusy(false);
+    }
+  }
+
+  async function handleFilePicked(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file
+    if (!file) return;
+    setBackupMsg(null);
+    try {
+      const parsed = await readBackupFile(file);
+      setPendingBackup(parsed);
+    } catch (err) {
+      setBackupMsg({ type: 'err', text: err instanceof Error ? err.message : 'Arquivo invalido.' });
+    }
+  }
+
+  async function handleConfirmRestore() {
+    if (!pendingBackup) return;
+    setRestoreBusy(true);
+    setBackupMsg(null);
+    try {
+      const result = await restoreBackup(pendingBackup, { wipeExisting: true });
+      const total = Object.values(result.written).reduce((s, n) => s + n, 0);
+      setBackupMsg({ type: 'ok', text: `Restauracao concluida. ${total} registro(s) gravado(s). Recarregue a pagina para ver os dados.` });
+      setPendingBackup(null);
+    } catch (err) {
+      setBackupMsg({ type: 'err', text: err instanceof Error ? err.message : 'Erro ao restaurar backup.' });
+    } finally {
+      setRestoreBusy(false);
+    }
+  }
+
+  function handleCancelRestore() {
+    setPendingBackup(null);
+    setBackupMsg(null);
+  }
 
   async function handleAdd(e: React.FormEvent) {
     e.preventDefault();
@@ -442,6 +507,101 @@ export function SettingsPage() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      {/* Backup & Restore */}
+      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <Database size={16} className="text-accent" /> Backup e Restauracao
+          </h3>
+          <p className="text-[10px] text-text-secondary mt-1">
+            Exporte um arquivo JSON com <strong>todos</strong> os seus dados (lancamentos, categorias, contas, cartoes, orcamentos, projetos, ciclos de fatura, familia, mapeamentos de titular e configuracoes locais). Guarde esse arquivo em local seguro — se o sistema perder o banco de dados, voce pode recarrega-lo por aqui e voltar exatamente de onde parou.
+          </p>
+        </div>
+
+        <div className="bg-bg-secondary rounded p-3 space-y-1 text-[10px] text-text-secondary">
+          <p className="font-bold text-text-primary text-xs">O que o backup inclui:</p>
+          <p>• Todas as transacoes ({USER_COLLECTIONS.join(', ')})</p>
+          <p>• Chaves e credenciais salvas neste navegador (Anthropic, Pluggy)</p>
+          <p>• IDs originais dos documentos — ao restaurar, as referencias entre lancamentos e categorias/projetos continuam validas</p>
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleExportBackup}
+            disabled={backupBusy || restoreBusy}
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+          >
+            {backupBusy ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
+            Gerar backup completo
+          </button>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/json,.json"
+            onChange={handleFilePicked}
+            className="hidden"
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={backupBusy || restoreBusy}
+            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-50"
+          >
+            <Upload size={13} /> Restaurar de arquivo...
+          </button>
+        </div>
+
+        {backupMsg && (
+          <p className={`text-[11px] font-bold ${backupMsg.type === 'ok' ? 'text-accent-green' : 'text-accent-red'}`}>
+            {backupMsg.type === 'ok' ? '✓' : '✗'} {backupMsg.text}
+          </p>
+        )}
+
+        {pendingBackup && (
+          <div className="border border-accent-red/50 bg-accent-red/5 rounded p-3 space-y-2">
+            <div className="flex items-start gap-2">
+              <AlertTriangle size={14} className="text-accent-red flex-shrink-0 mt-0.5" />
+              <div className="flex-1 space-y-1">
+                <p className="text-xs font-bold text-text-primary">Confirmar restauracao</p>
+                <p className="text-[10px] text-text-secondary">
+                  Esta acao vai <strong>apagar todos os dados atuais</strong> da sua conta e substituir pelos dados do arquivo. Nao pode ser desfeita. Tenha certeza de que o arquivo esta correto antes de continuar.
+                </p>
+                {pendingBackup.exportedAt && (
+                  <p className="text-[10px] text-text-secondary">
+                    Backup gerado em: <strong>{new Date(pendingBackup.exportedAt).toLocaleString('pt-BR')}</strong>
+                  </p>
+                )}
+                <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-text-secondary">
+                  {summarizeBackup(pendingBackup).map((row) => (
+                    <div key={row.collection} className="flex justify-between">
+                      <span>{row.collection}</span>
+                      <span className="text-text-primary font-bold">{row.count}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={handleConfirmRestore}
+                disabled={restoreBusy}
+                className="flex items-center gap-1.5 px-3 py-2 bg-accent-red text-white text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+              >
+                {restoreBusy ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
+                Sim, apagar e restaurar
+              </button>
+              <button
+                onClick={handleCancelRestore}
+                disabled={restoreBusy}
+                className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-50"
+              >
+                <X size={13} /> Cancelar
+              </button>
+            </div>
           </div>
         )}
       </div>
