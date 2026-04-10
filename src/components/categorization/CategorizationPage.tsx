@@ -156,8 +156,8 @@ export function CategorizationPage() {
       </div>
 
       {/* Card */}
-      <div className="flex-1 flex items-start justify-center px-5 pt-4 pb-[env(safe-area-inset-bottom)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
-        <div className="w-full max-w-lg">
+      <div className="flex-1 flex items-start justify-center px-4 pt-4 pb-[env(safe-area-inset-bottom)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div className="w-full max-w-xs">
           <CategorizationCard
             transaction={currentTx}
             categories={categories}
