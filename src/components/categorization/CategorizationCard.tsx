@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from 'react';
+import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, MessageSquare, Search, X } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
@@ -26,6 +26,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
   const [showNotes, setShowNotes] = useState(false);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
+  const [exiting, setExiting] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(-1);
   const searchRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -113,15 +114,21 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
     setHighlightedIndex(-1);
   }, [transaction.id]);
 
-  async function handleSelect(categoryId: string) {
+  const handleSelect = useCallback(async (categoryId: string) => {
+    // Dismiss keyboard on iOS before animating
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
     setSaving(true);
+    setExiting(true);
+    // Wait for exit animation before processing
+    await new Promise((r) => setTimeout(r, 250));
     await onCategorize(categoryId, notes);
     setNotes('');
     setShowNotes(false);
     setSearch('');
     setHighlightedIndex(-1);
+    setExiting(false);
     setSaving(false);
-  }
+  }, [onCategorize, notes]);
 
   function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === 'ArrowDown') {
@@ -172,10 +179,10 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
   let flatIndex = 0;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className={`flex flex-col gap-3 transition-all duration-200 ease-out ${exiting ? 'opacity-0 -translate-x-8 scale-[0.97]' : 'opacity-100 translate-x-0 scale-100'}`}>
       {/* Transaction info — compact */}
       <div className="bg-bg-card border border-border rounded-xl p-4 text-center space-y-1">
-        <p className="text-text-primary text-sm font-bold leading-tight truncate">
+        <p className="text-white text-base font-bold leading-tight truncate">
           {transaction.description}
         </p>
         <p className="text-accent-red text-xl font-bold font-mono">
@@ -220,7 +227,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
         </div>
 
         {/* Category list — vertical, grouped, no horizontal scroll */}
-        <div ref={listRef} className="p-3 max-h-[50vh] overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div ref={listRef} className="p-3 max-h-[40vh] overflow-y-auto overflow-x-hidden overscroll-contain">
           {!hasResults ? (
             <p className={`${silver} text-xs text-center py-4`}>
               Nenhuma categoria encontrada

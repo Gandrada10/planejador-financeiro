@@ -115,7 +115,16 @@ export function CategorizationPage() {
   if (!currentTx) return null;
 
   return (
-    <div className="min-h-screen bg-bg-primary flex flex-col overflow-x-hidden">
+    <div
+      className="h-[100dvh] bg-bg-primary flex flex-col overflow-hidden"
+      onTouchStart={(e) => {
+        // Dismiss keyboard when tapping outside input/textarea on iOS
+        const tag = (e.target as HTMLElement).tagName;
+        if (tag !== 'INPUT' && tag !== 'TEXTAREA') {
+          if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+        }
+      }}
+    >
       {/* Header */}
       <header className="bg-bg-secondary border-b border-border px-4 py-3">
         <div className="max-w-lg mx-auto flex items-center justify-between">
@@ -147,8 +156,8 @@ export function CategorizationPage() {
       </div>
 
       {/* Card */}
-      <div className="flex-1 flex items-start justify-center p-4 pt-6 overflow-x-hidden">
-        <div className="w-full max-w-lg">
+      <div className="flex-1 flex items-start justify-center px-4 pt-4 pb-[env(safe-area-inset-bottom)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div className="w-full max-w-xs">
           <CategorizationCard
             transaction={currentTx}
             categories={categories}
