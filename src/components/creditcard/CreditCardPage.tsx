@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { CreditCard, Calendar, Lock, LockOpen, Trash2 } from 'lucide-react';
+import { CreditCard, Lock } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -8,7 +8,7 @@ import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
-import { getMonthYear, getMonthYearOffset, getMonthLabel } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel } from '../../lib/utils';
 
 export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
@@ -17,7 +17,7 @@ export function CreditCardPage() {
   const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled } = useTransactions();
   const { categories, rules, addRule, updateRule } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
-  const { cycles, getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle, deleteCycle } = useBillingCycles();
+  const { cycles, getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
 
   // Auto-select first card
@@ -236,63 +236,93 @@ export function CreditCardPage() {
         </div>
       </div>
 
-      {/* Invoice history for selected card */}
-      {activeCard && (() => {
-        const cardCycles = cycles
-          .filter((c) => c.accountId === activeCard.id)
-          .sort((a, b) => b.monthYear.localeCompare(a.monthYear));
-        if (cardCycles.length === 0) return null;
+      {/* Closed invoices overview — all cards */}
+      {(() => {
+        const closedItems = cycles
+          .filter((c) => c.status === 'closed')
+          .map((cycle) => {
+            const account = cardAccounts.find((a) => a.id === cycle.accountId);
+            if (!account) return null;
+            const cycleTxs = transactions.filter(
+              (t) => t.account === account.name && getMonthYear(t.date) === cycle.monthYear
+            );
+            const total = cycleTxs.reduce((s, t) => s + t.amount, 0);
+            const paid = cycle.paidAmount || 0;
+            const remaining = total + paid; // total is negative, paid is positive
+            return { cycle, account, total, paid, remaining };
+          })
+          .filter((x): x is NonNullable<typeof x> => x !== null)
+          .sort((a, b) => b.cycle.monthYear.localeCompare(a.cycle.monthYear));
+
+        const grandTotal = closedItems.reduce((s, i) => s + i.total, 0);
+
         return (
           <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-            <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-              <Calendar size={15} className="text-accent" /> Historico de Faturas — {activeCard.name}
-            </h3>
-            <div className="space-y-1">
-              {cardCycles.map((cycle) => (
-                <div key={cycle.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
-                  <div className="flex items-center gap-3">
-                    <span className="text-text-primary font-bold">{getMonthLabel(cycle.monthYear)}</span>
-                    <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                      cycle.status === 'closed'
-                        ? 'bg-accent-red/10 text-accent-red'
-                        : 'bg-accent-green/10 text-accent-green'
-                    }`}>
-                      {cycle.status === 'closed'
-                        ? <><Lock size={10} /> Encerrada</>
-                        : <><LockOpen size={10} /> Aberta</>
-                      }
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {cycle.status === 'open' ? (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Encerrar fatura de ${getMonthLabel(cycle.monthYear)}?`)) {
-                            closeCycle(cycle.id);
-                          }
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] bg-accent-red/10 text-accent-red rounded hover:bg-accent-red/20"
-                      >
-                        <Lock size={10} /> Encerrar
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => reopenCycle(cycle.id)}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] bg-accent-green/10 text-accent-green rounded hover:bg-accent-green/20"
-                      >
-                        <LockOpen size={10} /> Reabrir
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteCycle(cycle.id)}
-                      className="text-text-secondary hover:text-accent-red p-1"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+                <Lock size={15} className="text-accent" /> Visao Geral das Faturas Fechadas
+              </h3>
+              {closedItems.length > 0 && (
+                <div className="flex items-center gap-3 text-[10px] text-text-secondary">
+                  <span>
+                    {closedItems.length} fatura{closedItems.length !== 1 ? 's' : ''} encerrada{closedItems.length !== 1 ? 's' : ''}
+                  </span>
+                  <span className="text-accent-red font-bold">{formatBRL(grandTotal)}</span>
                 </div>
-              ))}
+              )}
             </div>
+
+            {closedItems.length === 0 ? (
+              <p className="text-xs text-text-secondary">Nenhuma fatura encerrada ate o momento.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                {closedItems.map(({ cycle, account, total, paid, remaining }) => (
+                  <div
+                    key={cycle.id}
+                    className="bg-bg-secondary rounded p-3 space-y-2 border border-border/40"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-text-primary truncate">{account.name}</p>
+                        <p className="text-[10px] text-text-secondary uppercase tracking-wider">
+                          {getMonthLabel(cycle.monthYear)}
+                        </p>
+                      </div>
+                      <span className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-accent-red/10 text-accent-red flex-shrink-0">
+                        <Lock size={10} /> Encerrada
+                      </span>
+                    </div>
+
+                    <div className="space-y-1 pt-2 border-t border-border/40 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-text-secondary">Total</span>
+                        <span className="text-accent-red font-bold">{formatBRL(total)}</span>
+                      </div>
+                      {paid > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-text-secondary">Pago</span>
+                          <span className="text-accent-green font-bold">{formatBRL(paid)}</span>
+                        </div>
+                      )}
+                      {paid > 0 && (
+                        <div className="flex justify-between pt-1 border-t border-border/30">
+                          <span className="text-text-secondary">Saldo</span>
+                          <span className={`font-bold ${remaining < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
+                            {formatBRL(remaining)}
+                          </span>
+                        </div>
+                      )}
+                      {cycle.closedAt && (
+                        <div className="flex justify-between text-[10px] text-text-secondary pt-1">
+                          <span>Encerrada em</span>
+                          <span>{new Intl.DateTimeFormat('pt-BR').format(cycle.closedAt)}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         );
       })()}
