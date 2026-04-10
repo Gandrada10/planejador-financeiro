@@ -231,6 +231,7 @@ export function CreditCardPage() {
             checkClosedCycle={checkClosedCycleForTx}
             reopenCycle={reopenCycle}
             onCreateRule={handleCreateRule}
+            rules={rules}
           />
         </div>
       </div>

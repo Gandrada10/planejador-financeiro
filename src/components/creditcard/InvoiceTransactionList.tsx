@@ -1,7 +1,7 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, tabNavigate, getMonthLabel } from '../../lib/utils';
-import type { Transaction, Category, Project } from '../../types';
+import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 
@@ -25,9 +25,10 @@ interface Props {
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
+  rules?: CategoryRule[];
 }
 
-export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle, onCreateRule }: Props) {
+export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle, onCreateRule, rules = [] }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -299,8 +300,8 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                       <div className="w-6 flex-shrink-0" />
                       <div className="w-[70px] flex-shrink-0">Data</div>
                       <div className="flex-1 min-w-0 px-2">Descricao</div>
-                      <div className="flex-shrink-0 w-[55px] text-center">Parcelas</div>
-                      <div className="flex-shrink-0 w-[130px] mr-2">Categoria</div>
+                      <div className="flex-shrink-0 w-[138px] mr-2">Categoria</div>
+                      <div className="flex-shrink-0 w-[55px] text-center mr-2">Parcelas</div>
                       <div className="flex-shrink-0 w-[80px] mr-1">Projeto</div>
                       <div className="flex-shrink-0 w-[85px] text-right">Valor</div>
                     </div>
@@ -391,10 +392,41 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                           )}
                         </div>
 
+                        {/* Category - combobox with autocomplete + tab navigation */}
+                        {onUpdate ? (
+                          <div className="flex-shrink-0 w-[138px] mr-2 flex items-center gap-1 min-w-0">
+                            <div className="flex-1 min-w-0">
+                              <CategoryCombobox
+                                categories={categories}
+                                amount={t.amount}
+                                value={t.categoryId}
+                                onChange={async (val) => {
+                                  const ok = await guardClosedCycle(t);
+                                  if (!ok) return;
+                                  onUpdate(t.id, { categoryId: val });
+                                }}
+                                compact
+                              />
+                            </div>
+                            {t.categoryId && onCreateRule && (() => {
+                              const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
+                              return (
+                                <button
+                                  title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                                  onClick={() => onCreateRule(t.description, t.categoryId!)}
+                                  className={`flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${hasRule ? 'text-yellow-400' : 'text-text-secondary hover:text-accent'}`}
+                                >
+                                  <Zap size={11} className={hasRule ? 'fill-current' : ''} />
+                                </button>
+                              );
+                            })()}
+                          </div>
+                        ) : null}
+
                         {/* Parcelas - editable, separate column */}
                         <div
                           data-tab-cell
-                          className={`flex-shrink-0 w-[55px] text-center overflow-hidden ${editable}`}
+                          className={`flex-shrink-0 w-[55px] text-center overflow-hidden mr-2 ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'installments' ? (
@@ -416,32 +448,6 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                             <span className="text-[10px] text-text-secondary">—</span>
                           )}
                         </div>
-
-                        {/* Category - combobox with autocomplete + tab navigation */}
-                        {onUpdate ? (
-                          <div className="flex-shrink-0 w-[130px] mr-2 flex items-center gap-1">
-                            <CategoryCombobox
-                              categories={categories}
-                              amount={t.amount}
-                              value={t.categoryId}
-                              onChange={async (val) => {
-                                const ok = await guardClosedCycle(t);
-                                if (!ok) return;
-                                onUpdate(t.id, { categoryId: val });
-                              }}
-                              compact
-                            />
-                            {t.categoryId && onCreateRule && (
-                              <button
-                                title="Criar regra para esta descrição"
-                                onClick={() => onCreateRule(t.description, t.categoryId!)}
-                                className="text-text-secondary hover:text-accent flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <Zap size={11} />
-                              </button>
-                            )}
-                          </div>
-                        ) : null}
 
                         {/* Projeto */}
                         {onUpdate ? (

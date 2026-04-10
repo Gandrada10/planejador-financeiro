@@ -415,6 +415,7 @@ export function TransactionsPage() {
         checkClosedCycle={checkClosedCycle}
         reopenCycle={reopenCycle}
         onCreateRule={handleCreateRule}
+        rules={rules}
       />
 
       {showForm && <TransactionForm onSubmit={handleAddTransaction} onClose={() => setShowForm(false)} titularNames={allTitulars} categories={categories} accountNames={accountNames} accounts={accounts} />}
