@@ -6,7 +6,6 @@ import {
   onSnapshot,
   addDoc,
   updateDoc,
-  deleteDoc,
   doc,
   Timestamp,
 } from 'firebase/firestore';
@@ -41,18 +40,20 @@ export function useBillingCycles() {
     });
   }, []);
 
-  async function createCycle(accountId: string, monthYear: string) {
+  async function createCycle(accountId: string, monthYear: string): Promise<string | undefined> {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     // Avoid duplicates
-    if (cycles.find((c) => c.accountId === accountId && c.monthYear === monthYear)) return;
-    await addDoc(collection(db, 'users', uid, 'billingCycles'), {
+    const existing = cycles.find((c) => c.accountId === accountId && c.monthYear === monthYear);
+    if (existing) return existing.id;
+    const ref = await addDoc(collection(db, 'users', uid, 'billingCycles'), {
       accountId,
       monthYear,
       status: 'open',
       closedAt: null,
       createdAt: Timestamp.now(),
     });
+    return ref.id;
   }
 
   async function closeCycle(id: string) {
@@ -71,12 +72,6 @@ export function useBillingCycles() {
       status: 'open',
       closedAt: null,
     });
-  }
-
-  async function deleteCycle(id: string) {
-    const uid = auth.currentUser?.uid;
-    if (!uid) return;
-    await deleteDoc(doc(db, 'users', uid, 'billingCycles', id));
   }
 
   async function registerPayment(cycleId: string, amount: number, date: Date) {
@@ -100,13 +95,13 @@ export function useBillingCycles() {
     ) ?? null;
   }
 
-  /** Ensure a cycle exists for account + date (open by default) */
-  async function ensureCycle(accountId: string, date: Date) {
+  /** Ensure a cycle exists for account + date (open by default). Returns the cycle id. */
+  async function ensureCycle(accountId: string, date: Date): Promise<string | undefined> {
     const monthYear = getMonthYear(date);
-    if (!cycles.find((c) => c.accountId === accountId && c.monthYear === monthYear)) {
-      await createCycle(accountId, monthYear);
-    }
+    const existing = cycles.find((c) => c.accountId === accountId && c.monthYear === monthYear);
+    if (existing) return existing.id;
+    return createCycle(accountId, monthYear);
   }
 
-  return { cycles, loading, createCycle, closeCycle, reopenCycle, deleteCycle, registerPayment, getCycleForCard, getClosedCycle, ensureCycle };
+  return { cycles, loading, createCycle, closeCycle, reopenCycle, registerPayment, getCycleForCard, getClosedCycle, ensureCycle };
 }
