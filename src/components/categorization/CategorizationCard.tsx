@@ -151,14 +151,14 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
     }
   }
 
-  function CategoryButton({ cat, indent, index, parentName }: { cat: Category; indent?: boolean; index: number; parentName?: string }) {
+  function CategoryButton({ cat, index, parentName }: { cat: Category; index: number; parentName?: string }) {
     const isHighlighted = index === highlightedIndex;
     return (
       <button
         ref={isHighlighted ? highlightedRef : undefined}
         onClick={() => handleSelect(cat.id)}
         disabled={saving}
-        className={`w-full flex items-center gap-3 px-4 py-3 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'ml-6' : ''} ${
+        className={`w-full flex items-center gap-3 px-3 py-3 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${
           isHighlighted
             ? 'border-accent bg-accent/10 text-text-primary'
             : 'border-border hover:border-accent hover:bg-accent/5'
@@ -227,7 +227,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
         </div>
 
         {/* Category list — vertical, grouped, no horizontal scroll */}
-        <div ref={listRef} className="p-3 max-h-[40vh] overflow-y-auto overflow-x-hidden overscroll-contain">
+        <div ref={listRef} className="p-2 max-h-[40vh] overflow-y-auto overflow-x-hidden overscroll-contain">
           {!hasResults ? (
             <p className={`${silver} text-xs text-center py-4`}>
               Nenhuma categoria encontrada
@@ -245,7 +245,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
                   {/* Subcategories */}
                   {group.subs.map((sub) => {
                     const idx = flatIndex++;
-                    return <CategoryButton key={sub.id} cat={sub} indent index={idx} parentName={search.trim() ? group.parent.name : undefined} />;
+                    return <CategoryButton key={sub.id} cat={sub} index={idx} parentName={search.trim() ? group.parent.name : undefined} />;
                   })}
                 </div>
               ))}
