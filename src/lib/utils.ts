@@ -39,6 +39,76 @@ export function normalizeTitular(name: string): string {
 }
 
 /**
+ * Detect and extract a trailing installment marker from a description.
+ * Spreadsheets often embed the parcel at the end of the description column
+ * (e.g. "DA CAPO       02/02", "MERCADOLIVRE*MERCA05/05", "PARC 3/10 NETFLIX").
+ * Returns the cleaned description plus current/total installment numbers, or
+ * null if no trailing marker was found.
+ */
+export function extractTrailingInstallment(desc: string): {
+  description: string;
+  installmentNumber: number;
+  totalInstallments: number;
+} | null {
+  if (!desc) return null;
+
+  // Patterns ordered from most specific to most permissive. All anchor the
+  // installment marker at the END of the string so we never strip markers that
+  // happen to appear in the middle of a description.
+  const patterns: RegExp[] = [
+    // "PARC X/Y", "PARCELA X/Y", "PARCELA X de Y"
+    /^(.*?)\s+PARC(?:ELA)?\.?\s*(\d{1,2})\s*(?:\/|de)\s*(\d{1,2})\s*$/i,
+    // "(X/Y)"
+    /^(.*?)\s*\((\d{1,2})\s*\/\s*(\d{1,2})\)\s*$/,
+    // "X de Y"
+    /^(.*?)\s+(\d{1,2})\s*de\s*(\d{1,2})\s*$/i,
+    // "X/Y" preceded by whitespace (any width)
+    /^(.*?)\s+(\d{1,2})\/(\d{1,2})\s*$/,
+    // Glued variant: NN/NN directly after a letter or symbol (e.g. "MERCA05/05")
+    /^(.*?[A-Za-z*])(\d{2})\/(\d{2})\s*$/,
+  ];
+
+  for (const re of patterns) {
+    const m = desc.match(re);
+    if (!m) continue;
+    const cleaned = m[1].replace(/\s+$/, '').trim();
+    const current = parseInt(m[2], 10);
+    const total = parseInt(m[3], 10);
+    if (
+      Number.isFinite(current) &&
+      Number.isFinite(total) &&
+      current >= 1 &&
+      total >= 2 &&
+      total <= 48 &&
+      current <= total &&
+      cleaned.length >= 2
+    ) {
+      return {
+        description: cleaned.replace(/\s{2,}/g, ' '),
+        installmentNumber: current,
+        totalInstallments: total,
+      };
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Normalize a transaction description for duplicate detection.
+ * Strips a trailing installment marker (if any), collapses multiple spaces,
+ * and lowercases. This makes duplicate matching tolerant to inconsistent
+ * parser output across re-imports — e.g. "DA CAPO       02/02", "DA CAPO 02/02",
+ * and "DA CAPO" all normalize to "da capo".
+ */
+export function normalizeDescriptionForDedup(desc: string): string {
+  if (!desc) return '';
+  const extracted = extractTrailingInstallment(desc);
+  const base = extracted ? extracted.description : desc;
+  return base.trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+/**
  * Filter categories so the dropdown only shows relevant types for a given amount.
  * amount >= 0 → receita + ambos; amount < 0 → despesa + ambos
  */

@@ -4,7 +4,15 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account, CategoryRule } from '../../types';
-import { formatBRL, getMonthYear, getMonthLabel, filterCategoriesByAmount, normalizeTitular } from '../../lib/utils';
+import {
+  formatBRL,
+  getMonthYear,
+  getMonthLabel,
+  filterCategoriesByAmount,
+  normalizeTitular,
+  extractTrailingInstallment,
+  normalizeDescriptionForDedup,
+} from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
@@ -17,13 +25,25 @@ type ImportRow = ImportItem & {
   aiSuggested?: boolean;
 };
 
+function datesMatch(a: Date | null, b: Date | null): boolean {
+  if (!a || !b) return false;
+  return a.toDateString() === b.toDateString();
+}
+
 function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
-  return existing.some(
-    (t) =>
-      t.date.toDateString() === item.date.toDateString() &&
-      Math.abs(t.amount - item.amount) < 0.01 &&
-      t.description.toLowerCase() === item.description.toLowerCase()
-  );
+  const itemDescNorm = normalizeDescriptionForDedup(item.description);
+  return existing.some((t) => {
+    if (Math.abs(t.amount - item.amount) >= 0.01) return false;
+    if (normalizeDescriptionForDedup(t.description) !== itemDescNorm) return false;
+    // Match if any date pair aligns — handles the case where one side stores
+    // the billing/invoice date while the other stores the original purchase date.
+    return (
+      datesMatch(t.date, item.date) ||
+      datesMatch(t.purchaseDate, item.purchaseDate) ||
+      datesMatch(t.date, item.purchaseDate) ||
+      datesMatch(t.purchaseDate, item.date)
+    );
+  });
 }
 
 interface Props {
@@ -304,23 +324,38 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       setIsCreditCard(detectedCreditCard);
 
       const parsed: ImportRow[] = data.transactions.map((t) => {
+        // Post-process: spreadsheet rows often glue the parcel marker at the end
+        // of the description (e.g. "DA CAPO       02/02" or "MERCA05/05"). When
+        // the AI missed it, extract it ourselves; in any case strip the trailing
+        // marker so descriptions are clean and duplicates match across imports.
+        const extracted = extractTrailingInstallment(t.description);
+        const cleanDescription = (extracted ? extracted.description : (t.description || ''))
+          .replace(/\s+/g, ' ')
+          .trim();
+        const installmentNumber = t.installmentNumber ?? extracted?.installmentNumber ?? null;
+        const totalInstallments = t.totalInstallments ?? extracted?.totalInstallments ?? null;
+        // True when the parcel came from our regex rather than the AI —
+        // these rows are already one-row-per-parcel-occurrence, so we must
+        // NOT auto-expand them into future installments.
+        const installmentFromDescription = extracted !== null && t.totalInstallments == null;
+
         const date = new Date(t.date + 'T12:00:00');
         const matchedMember = fuzzyMatchMember(t.titular || '', memberOptions);
-        const hasInstallments = t.totalInstallments != null && t.totalInstallments > 1;
+        const hasInstallments = totalInstallments != null && totalInstallments > 1;
         const item: ImportItem = {
           date,
           purchaseDate: t.purchaseDate ? new Date(t.purchaseDate + 'T12:00:00') : null,
-          description: t.description,
+          description: cleanDescription,
           amount: t.amount,
-          categoryId: matchCategory ? matchCategory(t.description) : null,
+          categoryId: matchCategory ? matchCategory(cleanDescription) : null,
           account: accountNames[0] ?? '',
           familyMember: matchedMember,
           // Use canonical member name as titular when matched; otherwise normalize to Title Case.
           // This prevents duplicates in the titular filter when the same person's name
           // appears in slightly different formats across different PDF imports.
           titular: matchedMember || normalizeTitular(t.titular || ''),
-          installmentNumber: t.installmentNumber,
-          totalInstallments: t.totalInstallments,
+          installmentNumber,
+          totalInstallments,
           cardNumber: t.cardNumber,
           projectId: null,
           pluggyTransactionId: null,
@@ -333,9 +368,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         return {
           ...item,
           isDuplicate: isDuplicate(item, existingTransactions),
-          // For credit card imports each row is already one installment for one month
-          // — never auto-expand. Only expand installments for bank account statements.
-          installmentType: (hasInstallments && !detectedCreditCard) ? 'parcelada' as const : 'unica' as const,
+          // Only auto-expand future installments for bank statements where the AI
+          // itself identified the parcel. Credit card imports and parcels that we
+          // recovered from a trailing marker in the description are already
+          // one-row-per-occurrence and must stay as 'unica' to avoid creating
+          // phantom future transactions on every re-import.
+          installmentType:
+            hasInstallments && !detectedCreditCard && !installmentFromDescription
+              ? ('parcelada' as const)
+              : ('unica' as const),
           periodicity: 1,
           installmentAmount: hasInstallments ? t.amount : null,
         };

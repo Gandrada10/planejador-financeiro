@@ -86,6 +86,7 @@ Regras CRITICAS sobre datas:
 
 Regras gerais:
 - Detecte parcelas em qualquer formato: "PARC 3/10", "PARCELA 3 DE 10", "3/10", "(3/10)", "parcelado em 10x", etc.
+- IMPORTANTE - parcelas compactas ao final da descricao: em extratos de CSV/Excel, e muito comum ver um marcador de parcela zero-padded colado no final do nome do estabelecimento, como "DA CAPO       02/02", "MERCADOLIVRE*MERCA05/05", "AMAZON PRIME BR         12/12", "COMPRA DE PONTOS L08/10". Sempre interprete esse "XX/YY" no final como parcela (installmentNumber=XX, totalInstallments=YY), NUNCA como data. Remova esse sufixo da "description" — a descricao limpa deve conter apenas o nome do estabelecimento (ex: "DA CAPO", "MERCADOLIVRE*MERCA", "AMAZON PRIME BR", "COMPRA DE PONTOS L"). Ja existe uma coluna de data separada na linha; o marcador XX/YY no final nao e data.
 - Valores de debito/saida devem ser NEGATIVOS, credito/entrada POSITIVOS
 - Ignore linhas de saldo, totais, cabecalhos, rodapes e linhas em branco
 - Se o extrato for de cartao de credito, todas as compras sao negativas (despesas)
