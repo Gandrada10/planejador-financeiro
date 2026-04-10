@@ -48,14 +48,14 @@ export function ExpensesByCategoryChart({ data }: Props) {
       <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Despesas por categoria</h3>
 
       {data.length > 0 ? (
-        <div className="flex flex-col lg:flex-row items-center gap-4">
-          <div className="w-[180px] h-[180px] flex-shrink-0">
+        <div className="flex flex-col sm:flex-row items-center gap-4">
+          <div className="w-[150px] h-[150px] flex-shrink-0">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
                   data={chartData}
-                  innerRadius={50}
-                  outerRadius={80}
+                  innerRadius={42}
+                  outerRadius={68}
                   paddingAngle={2}
                   dataKey="value"
                   stroke="none"
@@ -72,7 +72,7 @@ export function ExpensesByCategoryChart({ data }: Props) {
             </ResponsiveContainer>
           </div>
 
-          <div className="flex-1 space-y-0.5 w-full">
+          <div className="flex-1 space-y-0.5 w-full max-w-sm">
             {data.map((d, i) => {
               const isExpanded = expanded.has(d.name);
               const hasSubs = d.subs.length > 0;
@@ -80,7 +80,7 @@ export function ExpensesByCategoryChart({ data }: Props) {
                 <div key={i}>
                   {/* Category row */}
                   <div
-                    className={`flex items-center justify-between text-xs rounded px-1 py-1 ${hasSubs ? 'cursor-pointer hover:bg-bg-secondary/50' : ''}`}
+                    className={`grid grid-cols-[1fr_auto] items-center gap-2 text-xs rounded px-1 py-1 ${hasSubs ? 'cursor-pointer hover:bg-bg-secondary/50' : ''}`}
                     onClick={() => hasSubs && toggleExpand(d.name)}
                   >
                     <div className="flex items-center gap-1.5 min-w-0">
@@ -92,27 +92,27 @@ export function ExpensesByCategoryChart({ data }: Props) {
                         <span className="w-[11px] flex-shrink-0" />
                       )}
                       <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color || CHART_COLORS[i % CHART_COLORS.length] }} />
-                      <span className="text-text-primary flex items-center gap-1 truncate">
+                      <span className="text-text-primary flex items-center gap-1 min-w-0">
                         <CategoryIcon icon={d.icon} size={12} className="text-text-primary flex-shrink-0" />
-                        {d.name}
+                        <span className="truncate">{d.name}</span>
                       </span>
                       <span className="text-text-secondary flex-shrink-0">{d.percentage.toFixed(1)}%</span>
                     </div>
-                    <span className="text-accent-red font-bold flex-shrink-0 ml-2">{formatBRL(d.amount)}</span>
+                    <span className="text-accent-red font-bold whitespace-nowrap">{formatBRL(d.amount)}</span>
                   </div>
 
                   {/* Subcategory rows (expanded) */}
                   {isExpanded && d.subs.map((sub, j) => (
-                    <div key={j} className="flex items-center justify-between text-xs pl-7 pr-1 py-0.5">
+                    <div key={j} className="grid grid-cols-[1fr_auto] items-center gap-2 text-xs pl-7 pr-1 py-0.5">
                       <div className="flex items-center gap-1.5 min-w-0">
                         <span className="w-2 h-2 rounded-full flex-shrink-0 opacity-70" style={{ backgroundColor: sub.color || d.color }} />
-                        <span className="text-text-secondary flex items-center gap-1 truncate">
+                        <span className="text-text-secondary flex items-center gap-1 min-w-0">
                           <CategoryIcon icon={sub.icon} size={11} className="text-text-secondary flex-shrink-0" />
-                          {sub.name}
+                          <span className="truncate">{sub.name}</span>
                         </span>
                         <span className="text-text-secondary/60 flex-shrink-0">{sub.percentage.toFixed(1)}%</span>
                       </div>
-                      <span className="text-accent-red/80 flex-shrink-0 ml-2">{formatBRL(sub.amount)}</span>
+                      <span className="text-accent-red/80 whitespace-nowrap">{formatBRL(sub.amount)}</span>
                     </div>
                   ))}
                 </div>
@@ -121,7 +121,7 @@ export function ExpensesByCategoryChart({ data }: Props) {
           </div>
         </div>
       ) : (
-        <div className="h-[180px] flex items-center justify-center text-text-secondary text-xs">
+        <div className="h-[150px] flex items-center justify-center text-text-secondary text-xs">
           Sem despesas neste mes
         </div>
       )}

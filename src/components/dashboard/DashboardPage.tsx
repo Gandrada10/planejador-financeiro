@@ -6,6 +6,7 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
+import { CategoryIcon } from '../shared/CategoryIcon';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
 import { formatBRL, getMonthYear } from '../../lib/utils';
@@ -33,7 +34,6 @@ export function DashboardPage() {
   const totalEntries = useMemo(() => monthTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0), [monthTransactions]);
   const totalExits = useMemo(() => monthTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0), [monthTransactions]);
   const totalBalance = totalEntries + totalExits;
-  const pendingReconciliation = useMemo(() => transactions.filter((t) => !t.reconciled).length, [transactions]);
 
   // YTD accumulated result (year of selected month)
   const currentYear = monthYear.split('-')[0];
@@ -159,7 +159,6 @@ export function DashboardPage() {
 
   const budgetTotalLimit = budgetData.reduce((s, b) => s + b.limit, 0);
   const budgetTotalActual = budgetData.reduce((s, b) => s + Math.abs(b.actual), 0);
-  const budgetTotalRemaining = budgetData.reduce((s, b) => s + b.remaining, 0);
 
   if (loadingTx) {
     return <div className="text-accent text-sm animate-pulse">Carregando dashboard...</div>;
@@ -177,22 +176,37 @@ export function DashboardPage() {
         <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
       </div>
 
-      {/* Main layout: left (cash flow, expenses, projects) + right (4 metric cards) */}
       {hasData ? (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          {/* LEFT COLUMN: Cash flow, Expenses, Projects */}
-          <div className="lg:col-span-2 space-y-4">
-            {/* Resultado de caixa */}
+        <>
+          {/* Top KPI strip */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Acumulado {currentYear}</p>
+              <p className={`text-lg font-bold ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {formatBRL(yearBalance)}
+              </p>
+            </div>
+            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
+              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Média mensal (12m)</p>
+              <p className={`text-lg font-bold ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {formatBRL(avg12months)}
+              </p>
+            </div>
+          </div>
+
+          {/* Middle row: cash flow + expenses */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <CashFlowChart
               data={cashFlowData}
               totalEntries={totalEntries}
               totalExits={totalExits}
               totalBalance={totalBalance}
             />
-
-            {/* Despesas por categoria */}
             <ExpensesByCategoryChart data={expensesByCategory} />
+          </div>
 
+          {/* Bottom row: projects + budgets */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
             {/* Projetos em andamento */}
             <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
               <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Projetos em andamento</h3>
@@ -202,12 +216,12 @@ export function DashboardPage() {
                 <div className="space-y-2.5">
                   {projectsData.map((p) => (
                     <div key={p.id}>
-                      <div className="flex items-center justify-between text-xs">
+                      <div className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
                           <span className="text-text-primary truncate">{p.name}</span>
                         </div>
-                        <span className={`font-bold flex-shrink-0 ml-2 ${p.spent < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
+                        <span className={`font-bold ${p.spent < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
                           {p.count > 0 ? formatBRL(p.spent) : '—'}
                         </span>
                       </div>
@@ -222,49 +236,70 @@ export function DashboardPage() {
                 </div>
               )}
             </div>
-          </div>
 
-          {/* RIGHT COLUMN: 4 metric cards stacked vertically */}
-          <div className="space-y-3">
-            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Acumulado {currentYear}</p>
-              <p className={`text-lg font-bold ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {formatBRL(yearBalance)}
-              </p>
-            </div>
-            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Média mensal (12m)</p>
-              <p className={`text-lg font-bold ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {formatBRL(avg12months)}
-              </p>
-            </div>
-            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Pendentes conciliação</p>
-              <p className={`text-lg font-bold ${pendingReconciliation > 0 ? 'text-accent' : 'text-accent-green'}`}>
-                {pendingReconciliation}
-              </p>
-            </div>
-            <div className="bg-bg-card border border-border rounded-lg px-4 py-3">
-              <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Metas de despesas</p>
-              {budgetData.length > 0 ? (
-                <>
-                  <p className={`text-lg font-bold ${budgetOver ? 'text-accent-red' : 'text-accent-green'}`}>
-                    {formatBRL(budgetTotalRemaining)} restante
-                  </p>
-                  <div className="mt-1.5 w-full h-1.5 bg-bg-secondary rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent-green'}`}
-                      style={{ width: `${budgetPct}%` }}
-                    />
-                  </div>
-                  <p className="text-[10px] text-text-secondary mt-0.5">{budgetPct.toFixed(0)}% utilizado</p>
-                </>
+            {/* Metas de despesas */}
+            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
+              <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Metas de despesas</h3>
+              {budgetData.length === 0 ? (
+                <p className="text-xs text-text-secondary">Nenhuma meta definida para este mês.</p>
               ) : (
-                <p className="text-lg font-bold text-text-secondary">—</p>
+                <div className="space-y-2.5">
+                  {budgetData.map((b, i) => {
+                    const spent = Math.abs(b.actual);
+                    const pct = b.limit > 0 ? (spent / b.limit) * 100 : 0;
+                    const over = spent > b.limit;
+                    const barPct = Math.min(pct, 100);
+                    return (
+                      <div key={i} className="space-y-1">
+                        <div className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <CategoryIcon icon={b.icon} size={12} className="text-text-primary flex-shrink-0" />
+                            <span className="text-text-primary truncate">{b.categoryName}</span>
+                          </div>
+                          <span className={`font-bold whitespace-nowrap ${over ? 'text-accent-red' : 'text-text-primary'}`}>
+                            {formatBRL(spent)} <span className="text-text-secondary font-normal">/ {formatBRL(b.limit)}</span>
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${over ? 'bg-accent-red' : 'bg-accent-green'}`}
+                              style={{ width: `${barPct}%` }}
+                            />
+                          </div>
+                          <span className={`text-[10px] w-9 text-right ${over ? 'text-accent-red' : 'text-text-secondary'}`}>
+                            {pct.toFixed(0)}%
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {budgetData.length > 1 && (
+                    <div className="pt-2 border-t border-border space-y-1">
+                      <div className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
+                        <span className="text-text-primary font-bold">Total</span>
+                        <span className={`font-bold whitespace-nowrap ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>
+                          {formatBRL(budgetTotalActual)} <span className="text-text-secondary font-normal">/ {formatBRL(budgetTotalLimit)}</span>
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent-green'}`}
+                            style={{ width: `${budgetPct}%` }}
+                          />
+                        </div>
+                        <span className={`text-[10px] w-9 text-right ${budgetOver ? 'text-accent-red' : 'text-text-secondary'}`}>
+                          {budgetPct.toFixed(0)}%
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>
-        </div>
+        </>
       ) : (
         <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
           Importe seus extratos para começar a ver dados aqui.

@@ -43,12 +43,12 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
               {...TOOLTIP_STYLE}
               formatter={(value) => [formatBRL(Number(value)), '']}
             />
-            <Bar dataKey="Entradas" radius={[3, 3, 0, 0]}>
+            <Bar dataKey="Entradas" radius={[3, 3, 0, 0]} maxBarSize={48}>
               {chartData.map((_, i) => (
                 <Cell key={i} fill="#22c55e" fillOpacity={0.8} />
               ))}
             </Bar>
-            <Bar dataKey="Saidas" radius={[3, 3, 0, 0]}>
+            <Bar dataKey="Saidas" radius={[3, 3, 0, 0]} maxBarSize={48}>
               {chartData.map((_, i) => (
                 <Cell key={i} fill="#ef4444" fillOpacity={0.8} />
               ))}
@@ -63,7 +63,13 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
 
       {/* Table */}
       <div className="overflow-auto">
-        <table className="w-full text-xs">
+        <table className="w-full text-xs table-fixed">
+          <colgroup>
+            <col />
+            <col className="w-24" />
+            <col className="w-24" />
+            <col className="w-24" />
+          </colgroup>
           <thead>
             <tr className="border-b border-border text-text-secondary">
               <th className="py-1.5 text-left">Conta</th>
