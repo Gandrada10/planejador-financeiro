@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
-import { CreditCard, Calendar, Lock, LockOpen, Trash2 } from 'lucide-react';
+import { CreditCard, LockOpen } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -8,7 +8,7 @@ import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
-import { getMonthYear, getMonthYearOffset, getMonthLabel } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel } from '../../lib/utils';
 
 export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
@@ -17,7 +17,7 @@ export function CreditCardPage() {
   const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled } = useTransactions();
   const { categories, rules, addRule, updateRule } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
-  const { cycles, getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle, deleteCycle } = useBillingCycles();
+  const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
 
   // Auto-select first card
@@ -92,11 +92,36 @@ export function CreditCardPage() {
   // Current cycle
   const currentCycle = activeCard ? getCycleForCard(activeCard.id, monthYear) : undefined;
 
+  // Other open invoices (any card+month combo with transactions that aren't closed, excluding current view)
+  const otherOpenInvoices = useMemo(() => {
+    const combos = new Map<string, { accountId: string; accountName: string; monthYear: string; total: number }>();
+    for (const t of transactions) {
+      const account = cardAccounts.find((a) => a.name === t.account);
+      if (!account) continue;
+      const my = getMonthYear(t.date);
+      const key = `${account.id}|${my}`;
+      if (!combos.has(key)) {
+        combos.set(key, { accountId: account.id, accountName: account.name, monthYear: my, total: 0 });
+      }
+      combos.get(key)!.total += t.amount;
+    }
+    return Array.from(combos.values())
+      .filter((c) => {
+        // Exclude current view
+        if (c.accountId === activeCardId && c.monthYear === monthYear) return false;
+        // Exclude closed cycles
+        const cycle = getCycleForCard(c.accountId, c.monthYear);
+        if (cycle?.status === 'closed') return false;
+        return true;
+      })
+      .sort((a, b) => b.monthYear.localeCompare(a.monthYear));
+  }, [transactions, cardAccounts, activeCardId, monthYear, getCycleForCard]);
+
   async function handleCloseCycle() {
     if (!activeCard) return;
-    await ensureCycle(activeCard.id, new Date(parseInt(monthYear.split('-')[0]), parseInt(monthYear.split('-')[1]) - 1, 1));
-    const cycle = getCycleForCard(activeCard.id, monthYear);
-    if (cycle) await closeCycle(cycle.id);
+    const [y, m] = monthYear.split('-').map(Number);
+    const cycleId = await ensureCycle(activeCard.id, new Date(y, m - 1, 1));
+    if (cycleId) await closeCycle(cycleId);
   }
 
   async function handleReopenCycle() {
@@ -105,9 +130,9 @@ export function CreditCardPage() {
 
   async function handleRegisterPayment(amount: number, date: Date) {
     if (!activeCard) return;
-    await ensureCycle(activeCard.id, new Date(parseInt(monthYear.split('-')[0]), parseInt(monthYear.split('-')[1]) - 1, 1));
-    const cycle = getCycleForCard(activeCard.id, monthYear);
-    if (cycle) await registerPayment(cycle.id, amount, date);
+    const [y, m] = monthYear.split('-').map(Number);
+    const cycleId = await ensureCycle(activeCard.id, new Date(y, m - 1, 1));
+    if (cycleId) await registerPayment(cycleId, amount, date);
   }
 
   async function handleBatchMove(ids: string[], targetMonthYear: string) {
@@ -195,7 +220,7 @@ export function CreditCardPage() {
       {/* Main layout */}
       <div className="grid grid-cols-1 lg:grid-cols-7 gap-4">
         {/* Left: Summary */}
-        <div className="lg:col-span-2">
+        <div className="lg:col-span-2 space-y-4">
           {activeCard && (
             <InvoiceSummaryPanel
               account={activeCard}
@@ -213,6 +238,40 @@ export function CreditCardPage() {
               onRegisterPayment={handleRegisterPayment}
             />
           )}
+
+          {/* Other open invoices */}
+          <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
+            <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+              <LockOpen size={13} className="text-accent-green" /> Outras faturas em aberto
+            </h3>
+            {otherOpenInvoices.length === 0 ? (
+              <p className="text-[11px] text-text-secondary">Nenhuma outra fatura em aberto.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {otherOpenInvoices.map((inv) => {
+                  const isSameCard = inv.accountId === activeCardId;
+                  return (
+                    <button
+                      key={`${inv.accountId}|${inv.monthYear}`}
+                      onClick={() => {
+                        if (!isSameCard) setSelectedCardId(inv.accountId);
+                        setMonthYear(inv.monthYear);
+                      }}
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-bg-secondary rounded border border-border/40 hover:border-accent text-left transition-colors"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] font-bold text-text-primary truncate">{inv.accountName}</p>
+                        <p className="text-[10px] text-text-secondary capitalize">{getMonthLabel(inv.monthYear)}</p>
+                      </div>
+                      <span className={`text-[11px] font-bold font-mono flex-shrink-0 ${inv.total < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
+                        {formatBRL(inv.total)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Right: Transaction list */}
@@ -236,66 +295,6 @@ export function CreditCardPage() {
         </div>
       </div>
 
-      {/* Invoice history for selected card */}
-      {activeCard && (() => {
-        const cardCycles = cycles
-          .filter((c) => c.accountId === activeCard.id)
-          .sort((a, b) => b.monthYear.localeCompare(a.monthYear));
-        if (cardCycles.length === 0) return null;
-        return (
-          <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-            <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
-              <Calendar size={15} className="text-accent" /> Historico de Faturas — {activeCard.name}
-            </h3>
-            <div className="space-y-1">
-              {cardCycles.map((cycle) => (
-                <div key={cycle.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
-                  <div className="flex items-center gap-3">
-                    <span className="text-text-primary font-bold">{getMonthLabel(cycle.monthYear)}</span>
-                    <span className={`flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-                      cycle.status === 'closed'
-                        ? 'bg-accent-red/10 text-accent-red'
-                        : 'bg-accent-green/10 text-accent-green'
-                    }`}>
-                      {cycle.status === 'closed'
-                        ? <><Lock size={10} /> Encerrada</>
-                        : <><LockOpen size={10} /> Aberta</>
-                      }
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    {cycle.status === 'open' ? (
-                      <button
-                        onClick={() => {
-                          if (confirm(`Encerrar fatura de ${getMonthLabel(cycle.monthYear)}?`)) {
-                            closeCycle(cycle.id);
-                          }
-                        }}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] bg-accent-red/10 text-accent-red rounded hover:bg-accent-red/20"
-                      >
-                        <Lock size={10} /> Encerrar
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => reopenCycle(cycle.id)}
-                        className="flex items-center gap-1 px-2 py-1 text-[10px] bg-accent-green/10 text-accent-green rounded hover:bg-accent-green/20"
-                      >
-                        <LockOpen size={10} /> Reabrir
-                      </button>
-                    )}
-                    <button
-                      onClick={() => deleteCycle(cycle.id)}
-                      className="text-text-secondary hover:text-accent-red p-1"
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        );
-      })()}
     </div>
   );
 }
