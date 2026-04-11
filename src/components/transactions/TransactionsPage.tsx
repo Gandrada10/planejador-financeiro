@@ -18,7 +18,7 @@ import type { Transaction } from '../../types';
 
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
-  const { categories, rules, matchCategory, addRule, updateRule } = useCategories();
+  const { categories, rules, matchCategory, addRule, deleteRule } = useCategories();
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
@@ -217,11 +217,19 @@ export function TransactionsPage() {
   const handleCreateRule = useCallback(async (description: string, categoryId: string) => {
     const existing = rules.find((r) => r.pattern.toLowerCase() === description.toLowerCase());
     if (existing) {
-      await updateRule(existing.id, { categoryId });
+      const confirmDelete = window.confirm(
+        `Já existe uma regra para "${description}".\n\nDeseja remover a regra?`
+      );
+      if (!confirmDelete) return;
+      await deleteRule(existing.id);
     } else {
+      const confirmCreate = window.confirm(
+        `Deseja criar uma regra para categorizar automaticamente transações com a descrição "${description}"?`
+      );
+      if (!confirmCreate) return;
       await addRule({ pattern: description, keywords: [], categoryId });
     }
-  }, [rules, addRule, updateRule]);
+  }, [rules, addRule, deleteRule]);
 
   if (loading) {
     return <div className="text-accent text-sm animate-pulse">Carregando transacoes...</div>;

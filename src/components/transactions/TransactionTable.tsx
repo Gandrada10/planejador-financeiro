@@ -342,7 +342,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
                       return (
                         <button
-                          title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                          title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}
                           onClick={() => onCreateRule(t.description, t.categoryId!)}
                           className={`flex-shrink-0 transition-colors ${
                             hasRule

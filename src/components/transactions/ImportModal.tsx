@@ -850,7 +850,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               return (
                                 <button
                                   type="button"
-                                  title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                                  title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}
                                   onClick={() => onCreateRule(item.description, item.categoryId!)}
                                   className={`flex-shrink-0 transition-colors ${
                                     hasRule

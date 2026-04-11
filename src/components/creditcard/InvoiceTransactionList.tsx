@@ -411,7 +411,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                               const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
                               return (
                                 <button
-                                  title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                                  title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}
                                   onClick={() => onCreateRule(t.description, t.categoryId!)}
                                   className={`flex-shrink-0 transition-colors ${
                                     hasRule
