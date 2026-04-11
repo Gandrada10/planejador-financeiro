@@ -479,18 +479,16 @@ export function ReportsPage() {
                           {sub.transactions.map((t) => (
                             <div
                               key={t.id}
-                              className="flex items-center gap-3 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/10 text-xs"
+                              className="flex items-center gap-4 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/10 text-xs"
                             >
-                              <span className="text-text-secondary w-16 flex-shrink-0 font-mono">
+                              <span className="text-text-secondary w-16 flex-shrink-0 font-mono border-r border-border/40 pr-2">
                                 {formatDate(t.date)}
                               </span>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-text-primary truncate">{t.description}</p>
-                                <p className="text-[10px] text-text-secondary truncate">
-                                  {t.account}
-                                  {t.titular && ` · ${t.titular}`}
-                                  {t.totalInstallments && ` · ${t.installmentNumber}/${t.totalInstallments}`}
-                                </p>
+                              <div className="flex-1 min-w-0 flex items-baseline gap-2 overflow-hidden">
+                                <span className="text-text-primary truncate min-w-0 shrink">{t.description}</span>
+                                <span className="text-[10px] text-text-secondary flex-shrink-0 whitespace-nowrap">
+                                  {t.account}{t.titular && ` · ${t.titular}`}{t.totalInstallments && ` · ${t.installmentNumber}/${t.totalInstallments}`}
+                                </span>
                               </div>
                               <span className={`font-mono font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                 {formatBRL(t.amount)}
