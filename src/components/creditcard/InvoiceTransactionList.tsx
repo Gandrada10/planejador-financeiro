@@ -156,7 +156,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
   const editable = onUpdate ? 'cursor-pointer hover:bg-bg-secondary/50 transition-colors' : '';
 
   return (
-    <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
+    <div className="bg-bg-card border border-border rounded-lg overflow-hidden max-w-[960px]">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
@@ -299,8 +299,8 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                     <div className="flex items-center px-4 py-1.5 text-text-secondary uppercase tracking-wider text-[10px]">
                       <div className="w-6 flex-shrink-0" />
                       <div className="w-[80px] flex-shrink-0">Data</div>
-                      <div className="flex-1 min-w-0 max-w-[420px] px-2">Descricao</div>
-                      <div className="flex-shrink-0 w-[200px] mr-2 ml-auto">Categoria</div>
+                      <div className="flex-1 min-w-0 max-w-[280px] px-2">Descricao</div>
+                      <div className="flex-shrink-0 w-[200px] mr-2">Categoria</div>
                       <div className="flex-shrink-0 w-[110px] text-right mr-2">Valor</div>
                       <div className="flex-shrink-0 w-[65px] text-center mr-2">Parcelas</div>
                       <div className="flex-shrink-0 w-[110px]">Projeto</div>
@@ -362,7 +362,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         {/* Description - editable */}
                         <div
                           data-tab-cell
-                          className={`flex-1 min-w-0 max-w-[420px] px-2 overflow-hidden ${editable}`}
+                          className={`flex-1 min-w-0 max-w-[280px] px-2 overflow-hidden ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'description', t.description)}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'description' ? (
@@ -394,7 +394,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Category - combobox with autocomplete + tab navigation */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[200px] mr-2 ml-auto flex items-center gap-1 min-w-0">
+                          <div className="flex-shrink-0 w-[200px] mr-2 flex items-center gap-1 min-w-0">
                             <CategoryCombobox
                               className="min-w-0 flex-1"
                               categories={categories}
