@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Download, FileSpreadsheet, ChevronDown, ChevronRight, TrendingUp, BarChart2, Tags } from 'lucide-react';
+import { Download, FileSpreadsheet, ChevronDown, ChevronRight, TrendingUp, BarChart2, Tags, FileBarChart } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
@@ -8,6 +8,7 @@ import { CategoryIcon } from '../shared/CategoryIcon';
 import { CashFlowReport } from './CashFlowReport';
 import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
+import { ExportFullReportModal } from './ExportFullReportModal';
 import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
@@ -40,6 +41,7 @@ export function ReportsPage() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<'all' | 'despesa' | 'receita'>('all');
+  const [fullReportOpen, setFullReportOpen] = useState(false);
 
   const availableMonths = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));
@@ -310,7 +312,18 @@ export function ReportsPage() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
+        <button
+          onClick={() => setFullReportOpen(true)}
+          disabled={transactions.length === 0}
+          className="flex items-center gap-2 px-3 py-1.5 bg-accent/10 border border-accent/30 text-accent text-xs font-bold rounded hover:bg-accent/20 transition-colors disabled:opacity-30"
+          title="Gerar PDF consolidado com dashboard + relatórios no padrão McKinsey"
+        >
+          <FileBarChart size={13} />
+          Exportar Relatório Completo
+        </button>
+      </div>
 
       {/* Tab navigation */}
       <div className="flex gap-1 border-b border-border pb-0">
@@ -508,6 +521,8 @@ export function ReportsPage() {
       </>}
 
       <FinancialChat transactions={transactions} categories={categories} budgets={budgets} />
+
+      <ExportFullReportModal open={fullReportOpen} onClose={() => setFullReportOpen(false)} />
     </div>
   );
 }
