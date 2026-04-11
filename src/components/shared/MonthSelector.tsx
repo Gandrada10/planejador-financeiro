@@ -23,7 +23,7 @@ export function MonthSelector({ value, onChange, months }: Props) {
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="text-sm font-bold text-text-primary bg-bg-secondary border border-border rounded px-2 py-1 focus:outline-none focus:border-accent cursor-pointer capitalize min-w-[160px] text-center"
+          className="text-xs text-text-primary bg-bg-secondary border border-border rounded px-2 py-1 focus:outline-none focus:border-accent cursor-pointer capitalize min-w-[160px] text-center"
         >
           {months.includes(value) ? null : (
             <option value={value}>{getMonthLabel(value)}</option>
@@ -35,7 +35,7 @@ export function MonthSelector({ value, onChange, months }: Props) {
           ))}
         </select>
       ) : (
-        <span className="text-sm font-bold text-text-primary min-w-[140px] text-center capitalize">
+        <span className="text-xs text-text-primary min-w-[140px] text-center capitalize">
           {getMonthLabel(value)}
         </span>
       )}

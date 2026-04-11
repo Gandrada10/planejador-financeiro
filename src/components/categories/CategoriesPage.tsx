@@ -175,7 +175,7 @@ export function CategoriesPage() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                          <span className="text-sm text-text-primary font-bold truncate">{cat.name}</span>
+                          <span className="text-xs text-text-primary truncate">{cat.name}</span>
                           {cat.type === 'ambos' && (
                             <span className="text-[9px] text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded uppercase tracking-wider">ambos</span>
                           )}
@@ -212,7 +212,7 @@ export function CategoriesPage() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
                             <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
-                            <span className="text-xs text-text-primary font-medium truncate">{sub.name}</span>
+                            <span className="text-xs text-text-primary truncate">{sub.name}</span>
                           </div>
                           <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === sub.id).length} regras</span>
                         </div>

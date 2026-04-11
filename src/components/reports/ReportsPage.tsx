@@ -442,7 +442,7 @@ export function ReportsPage() {
                 >
                   {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
                   <CategoryIcon icon={group.icon} size={16} className="text-text-primary" />
-                  <span className="text-sm font-bold text-text-primary">{group.label}</span>
+                  <span className="text-xs" style={{ color: group.category?.color || 'var(--text-primary)' }}>{group.label}</span>
                   <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
                   <span className={`ml-auto text-sm font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                     {formatBRL(group.total)}
@@ -465,7 +465,7 @@ export function ReportsPage() {
                         >
                           {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
                           <CategoryIcon icon={sub.icon} size={14} className="text-text-secondary" />
-                          <span className="text-xs text-text-primary">{sub.label}</span>
+                          <span className="text-xs" style={{ color: sub.category?.color || 'var(--text-primary)' }}>{sub.label}</span>
                           <span className="text-[10px] text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
                           <span className={`ml-auto text-xs font-bold font-mono ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                             {formatBRL(sub.total)}
