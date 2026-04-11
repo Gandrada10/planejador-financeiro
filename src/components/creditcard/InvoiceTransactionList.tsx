@@ -299,11 +299,11 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                     <div className="flex items-center px-4 py-1.5 text-text-secondary uppercase tracking-wider text-[10px]">
                       <div className="w-6 flex-shrink-0" />
                       <div className="w-[80px] flex-shrink-0">Data</div>
-                      <div className="flex-1 min-w-0 px-2">Descricao</div>
-                      <div className="flex-shrink-0 w-[170px] mr-2">Categoria</div>
-                      <div className="flex-shrink-0 w-[100px] text-right mr-2">Valor</div>
-                      <div className="flex-shrink-0 w-[60px] text-center mr-2">Parcelas</div>
-                      <div className="flex-shrink-0 w-[100px]">Projeto</div>
+                      <div className="flex-1 min-w-0 max-w-[420px] px-2">Descricao</div>
+                      <div className="flex-shrink-0 w-[200px] mr-2 ml-auto">Categoria</div>
+                      <div className="flex-shrink-0 w-[110px] text-right mr-2">Valor</div>
+                      <div className="flex-shrink-0 w-[65px] text-center mr-2">Parcelas</div>
+                      <div className="flex-shrink-0 w-[110px]">Projeto</div>
                     </div>
                     {[...group.transactions].sort((a, b) => {
                       const av = sortField === 'date' ? a.date : (a.purchaseDate || a.date);
@@ -362,7 +362,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         {/* Description - editable */}
                         <div
                           data-tab-cell
-                          className={`flex-1 min-w-0 px-2 overflow-hidden ${editable}`}
+                          className={`flex-1 min-w-0 max-w-[420px] px-2 overflow-hidden ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'description', t.description)}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'description' ? (
@@ -394,7 +394,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Category - combobox with autocomplete + tab navigation */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[170px] mr-2 flex items-center gap-1 min-w-0">
+                          <div className="flex-shrink-0 w-[200px] mr-2 ml-auto flex items-center gap-1 min-w-0">
                             <CategoryCombobox
                               className="min-w-0 flex-1"
                               categories={categories}
@@ -429,7 +429,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         {/* Amount - editable */}
                         <div
                           data-tab-cell
-                          className={`text-xs font-bold flex-shrink-0 w-[100px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
+                          className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'amount' ? (
@@ -449,7 +449,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         {/* Parcelas - editable, separate column */}
                         <div
                           data-tab-cell
-                          className={`flex-shrink-0 w-[60px] text-center overflow-hidden mr-2 ${editable}`}
+                          className={`flex-shrink-0 w-[65px] text-center overflow-hidden mr-2 ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'installments' ? (
@@ -474,7 +474,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Projeto */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[100px] overflow-hidden">
+                          <div className="flex-shrink-0 w-[110px] overflow-hidden">
                             <select
                               tabIndex={-1}
                               value={t.projectId || ''}
