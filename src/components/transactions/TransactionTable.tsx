@@ -325,7 +325,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 </td>
 
                 {/* Categoria - combobox with autocomplete + tab navigation */}
-                <td className="p-2 relative overflow-hidden">
+                <td className="p-2 relative">
                   <div className="flex items-center gap-1 min-w-0">
                     <CategoryCombobox
                       className="min-w-0 flex-1"
