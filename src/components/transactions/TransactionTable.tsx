@@ -187,15 +187,15 @@ export function TransactionTable({ transactions, categories, projects = [], acco
         </div>
       )}
 
-      <div className="overflow-x-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full min-w-[980px] text-xs table-fixed">
+      <div className="overflow-auto bg-bg-card border border-border rounded-lg">
+        <table className="w-full min-w-[965px] text-xs table-fixed">
           <colgroup>
             <col style={{ width: 32 }} />  {/* dot */}
             <col style={{ width: 82 }} />  {/* competencia */}
             <col style={{ width: 82 }} />  {/* data */}
-            <col /> {/* descricao - takes remaining space */}
-            <col style={{ width: 120 }} /> {/* categoria */}
-            <col style={{ width: 100 }} /> {/* valor */}
+            <col style={{ width: '22%' }} /> {/* descricao - limitada */}
+            <col style={{ width: 115 }} /> {/* categoria */}
+            <col style={{ width: 88 }} />  {/* valor */}
             <col style={{ width: 58 }} />  {/* parcelas */}
             <col style={{ width: 82 }} />  {/* conta */}
             <col style={{ width: 72 }} />  {/* membro */}
@@ -344,13 +344,13 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         <button
                           title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
                           onClick={() => onCreateRule(t.description, t.categoryId!)}
-                          className={`flex-shrink-0 transition-opacity ${
+                          className={`flex-shrink-0 transition-colors ${
                             hasRule
-                              ? 'text-yellow-400'
-                              : 'text-text-secondary hover:text-accent lg:opacity-0 lg:group-hover:opacity-100'
+                              ? 'text-yellow-400 hover:text-yellow-300'
+                              : 'text-text-secondary/30 hover:text-text-secondary'
                           }`}
                         >
-                          <Zap size={12} className={hasRule ? 'fill-current' : ''} />
+                          <Zap size={12} />
                         </button>
                       );
                     })()}

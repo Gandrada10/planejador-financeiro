@@ -414,13 +414,13 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                                 <button
                                   title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
                                   onClick={() => onCreateRule(t.description, t.categoryId!)}
-                                  className={`flex-shrink-0 transition-opacity ${
+                                  className={`flex-shrink-0 transition-colors ${
                                     hasRule
-                                      ? 'text-yellow-400'
-                                      : 'text-text-secondary hover:text-accent lg:opacity-0 lg:group-hover:opacity-100'
+                                      ? 'text-yellow-400 hover:text-yellow-300'
+                                      : 'text-text-secondary/30 hover:text-text-secondary'
                                   }`}
                                 >
-                                  <Zap size={11} className={hasRule ? 'fill-current' : ''} />
+                                  <Zap size={11} />
                                 </button>
                               );
                             })()}

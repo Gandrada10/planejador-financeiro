@@ -852,9 +852,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                   type="button"
                                   title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
                                   onClick={() => onCreateRule(item.description, item.categoryId!)}
-                                  className={`flex-shrink-0 ${hasRule ? 'text-yellow-400' : 'text-text-secondary hover:text-accent'}`}
+                                  className={`flex-shrink-0 transition-colors ${
+                                    hasRule
+                                      ? 'text-yellow-400 hover:text-yellow-300'
+                                      : 'text-text-secondary/30 hover:text-text-secondary'
+                                  }`}
                                 >
-                                  <Zap size={12} className={hasRule ? 'fill-current' : ''} />
+                                  <Zap size={12} />
                                 </button>
                               );
                             })()}
