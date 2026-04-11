@@ -314,15 +314,6 @@ export function ReportsPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h2 className="text-lg font-bold text-text-primary">Relatorios</h2>
-        <button
-          onClick={() => setFullReportOpen(true)}
-          disabled={transactions.length === 0}
-          className="flex items-center gap-2 px-3 py-1.5 bg-accent/10 border border-accent/30 text-accent text-xs font-bold rounded hover:bg-accent/20 transition-colors disabled:opacity-30"
-          title="Gerar PDF consolidado com dashboard + relatórios no padrão McKinsey"
-        >
-          <FileBarChart size={13} />
-          Exportar Relatório Completo
-        </button>
       </div>
 
       {/* Tab navigation */}
@@ -392,6 +383,14 @@ export function ReportsPage() {
             title="Exportar PDF"
           >
             <Download size={13} /> PDF
+          </button>
+          <button
+            onClick={() => setFullReportOpen(true)}
+            disabled={transactions.length === 0}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            title="Gerar PDF consolidado com dashboard + relatórios no padrão McKinsey"
+          >
+            <FileBarChart size={13} /> Exportar Relatório Completo
           </button>
         </div>
       </div>
