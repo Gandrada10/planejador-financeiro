@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Download, FileSpreadsheet, ChevronDown, ChevronRight, TrendingUp, BarChart2, Tags, FileBarChart } from 'lucide-react';
+import { Download, FileSpreadsheet, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, TrendingUp, BarChart2, Tags, FileBarChart } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
@@ -362,7 +362,21 @@ export function ReportsPage() {
           <span className="text-text-secondary">Mes:</span>
           <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
         </div>
-        <div className="ml-auto flex gap-1">
+        <div className="ml-auto flex gap-1 flex-wrap">
+          <button
+            onClick={expandAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent"
+            title="Expandir tudo"
+          >
+            <ChevronsUpDown size={13} /> Expandir tudo
+          </button>
+          <button
+            onClick={collapseAll}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent"
+            title="Recolher tudo"
+          >
+            <ChevronsDownUp size={13} /> Recolher tudo
+          </button>
           <button
             onClick={exportExcel}
             disabled={filteredTransactions.length === 0}
@@ -403,7 +417,7 @@ export function ReportsPage() {
         </div>
 
         {/* Type filter */}
-        <div className="flex gap-1">
+        <div className="flex gap-1 ml-auto">
           {([['all', 'Todos'], ['despesa', 'Despesas'], ['receita', 'Receitas']] as const).map(([value, label]) => (
             <button
               key={value}
@@ -417,16 +431,6 @@ export function ReportsPage() {
               {label}
             </button>
           ))}
-        </div>
-
-        {/* Expand/Collapse */}
-        <div className="flex gap-1 ml-auto">
-          <button onClick={expandAll} className="px-2 py-1.5 text-[10px] text-text-secondary hover:text-text-primary bg-bg-secondary border border-border rounded">
-            Expandir tudo
-          </button>
-          <button onClick={collapseAll} className="px-2 py-1.5 text-[10px] text-text-secondary hover:text-text-primary bg-bg-secondary border border-border rounded">
-            Recolher tudo
-          </button>
         </div>
       </div>
 

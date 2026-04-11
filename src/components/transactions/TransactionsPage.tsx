@@ -234,13 +234,13 @@ export function TransactionsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
           >
             <Plus size={14} /> Nova
           </button>
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
           >
             <Upload size={14} /> Importar Extrato
           </button>
