@@ -156,7 +156,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
   const editable = onUpdate ? 'cursor-pointer hover:bg-bg-secondary/50 transition-colors' : '';
 
   return (
-    <div className="bg-bg-card border border-border rounded-lg overflow-hidden max-w-[960px]">
+    <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
