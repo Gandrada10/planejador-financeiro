@@ -164,9 +164,9 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
             : 'border-border hover:border-accent hover:bg-accent/5'
         }`}
       >
-        <CategoryIcon icon={cat.icon} size={18} className="text-text-primary flex-shrink-0" />
+        <CategoryIcon icon={cat.icon} size={18} className="flex-shrink-0" style={{ color: cat.color }} />
         <div className="flex flex-col text-left min-w-0">
-          <span className="text-sm text-text-primary">{cat.name}</span>
+          <span className="text-sm" style={{ color: cat.color }}>{cat.name}</span>
           {parentName && (
             <span className={`text-[11px] ${silver} leading-tight`}>{parentName}</span>
           )}
@@ -238,8 +238,8 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
               {filteredGroups.groups.map((group) => (
                 <div key={group.parent.id} className="flex flex-col gap-1.5">
                   {/* Parent label */}
-                  <div className={`flex items-center gap-2 px-2 pt-2 pb-1 ${silver} text-[11px] uppercase tracking-wider font-bold`}>
-                    <CategoryIcon icon={group.parent.icon} size={14} className={silver} />
+                  <div className="flex items-center gap-2 px-2 pt-2 pb-1 text-[11px] uppercase tracking-wider font-bold" style={{ color: group.parent.color }}>
+                    <CategoryIcon icon={group.parent.icon} size={14} style={{ color: group.parent.color }} />
                     <span className="truncate">{group.parent.name}</span>
                   </div>
                   {/* Subcategories */}
