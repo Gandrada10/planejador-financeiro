@@ -344,7 +344,11 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         <button
                           title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
                           onClick={() => onCreateRule(t.description, t.categoryId!)}
-                          className={`flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${hasRule ? 'text-yellow-400' : 'text-text-secondary hover:text-accent'}`}
+                          className={`flex-shrink-0 transition-opacity ${
+                            hasRule
+                              ? 'text-yellow-400'
+                              : 'text-text-secondary hover:text-accent lg:opacity-0 lg:group-hover:opacity-100'
+                          }`}
                         >
                           <Zap size={12} className={hasRule ? 'fill-current' : ''} />
                         </button>

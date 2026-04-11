@@ -135,6 +135,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
         tabIndex={-1}
         data-category-trigger
         onClick={openDropdown}
+        title={currentLabel || 'Sem categoria'}
         className={`w-full text-left bg-transparent border-none ${textSize} cursor-pointer focus:outline-none hover:text-text-primary rounded px-1 ${py} truncate`}
         style={{ color: currentColor }}
       >
