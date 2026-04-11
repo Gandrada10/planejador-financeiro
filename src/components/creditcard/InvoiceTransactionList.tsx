@@ -298,12 +298,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                     {/* Column headers */}
                     <div className="flex items-center px-4 py-1.5 text-text-secondary uppercase tracking-wider text-[10px]">
                       <div className="w-6 flex-shrink-0" />
-                      <div className="w-[70px] flex-shrink-0">Data</div>
+                      <div className="w-[80px] flex-shrink-0">Data</div>
                       <div className="flex-1 min-w-0 px-2">Descricao</div>
-                      <div className="flex-shrink-0 w-[138px] mr-2">Categoria</div>
-                      <div className="flex-shrink-0 w-[55px] text-center mr-2">Parcelas</div>
-                      <div className="flex-shrink-0 w-[80px] mr-1">Projeto</div>
-                      <div className="flex-shrink-0 w-[85px] text-right">Valor</div>
+                      <div className="flex-shrink-0 w-[170px] mr-2">Categoria</div>
+                      <div className="flex-shrink-0 w-[100px] text-right mr-2">Valor</div>
+                      <div className="flex-shrink-0 w-[60px] text-center mr-2">Parcelas</div>
+                      <div className="flex-shrink-0 w-[100px]">Projeto</div>
                     </div>
                     {[...group.transactions].sort((a, b) => {
                       const av = sortField === 'date' ? a.date : (a.purchaseDate || a.date);
@@ -343,7 +343,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         {/* Purchase date - editable */}
                         <div
                           data-tab-cell
-                          className={`text-xs text-text-secondary w-[70px] flex-shrink-0 overflow-hidden truncate ${editable}`}
+                          className={`text-xs text-text-secondary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'purchaseDate', (t.purchaseDate || t.date).toISOString().split('T')[0])}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
@@ -394,20 +394,19 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Category - combobox with autocomplete + tab navigation */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[138px] mr-2 flex items-center gap-1 min-w-0">
-                            <div className="flex-1 min-w-0">
-                              <CategoryCombobox
-                                categories={categories}
-                                amount={t.amount}
-                                value={t.categoryId}
-                                onChange={async (val) => {
-                                  const ok = await guardClosedCycle(t);
-                                  if (!ok) return;
-                                  onUpdate(t.id, { categoryId: val });
-                                }}
-                                compact
-                              />
-                            </div>
+                          <div className="flex-shrink-0 w-[170px] mr-2 flex items-center gap-1 min-w-0">
+                            <CategoryCombobox
+                              className="min-w-0 flex-1"
+                              categories={categories}
+                              amount={t.amount}
+                              value={t.categoryId}
+                              onChange={async (val) => {
+                                const ok = await guardClosedCycle(t);
+                                if (!ok) return;
+                                onUpdate(t.id, { categoryId: val });
+                              }}
+                              compact
+                            />
                             {t.categoryId && onCreateRule && (() => {
                               const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
                               return (
@@ -420,17 +419,37 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                                       : 'text-text-secondary/30 hover:text-text-secondary'
                                   }`}
                                 >
-                                  <Zap size={11} />
+                                  <Zap size={12} />
                                 </button>
                               );
                             })()}
                           </div>
                         ) : null}
 
+                        {/* Amount - editable */}
+                        <div
+                          data-tab-cell
+                          className={`text-xs font-bold flex-shrink-0 w-[100px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'amount' ? (
+                            <input
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                            />
+                          ) : (
+                            formatBRL(t.amount)
+                          )}
+                        </div>
+
                         {/* Parcelas - editable, separate column */}
                         <div
                           data-tab-cell
-                          className={`flex-shrink-0 w-[55px] text-center overflow-hidden mr-2 ${editable}`}
+                          className={`flex-shrink-0 w-[60px] text-center overflow-hidden mr-2 ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'installments' ? (
@@ -455,7 +474,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Projeto */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[80px] mr-1 overflow-hidden">
+                          <div className="flex-shrink-0 w-[100px] overflow-hidden">
                             <select
                               tabIndex={-1}
                               value={t.projectId || ''}
@@ -475,26 +494,6 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                             </select>
                           </div>
                         ) : null}
-
-                        {/* Amount - editable */}
-                        <div
-                          data-tab-cell
-                          className={`text-xs font-bold flex-shrink-0 w-[85px] text-right overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
-                          onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
-                        >
-                          {editingCell?.id === t.id && editingCell.field === 'amount' ? (
-                            <input
-                              autoFocus
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => commitEdit(t)}
-                              onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
-                            />
-                          ) : (
-                            formatBRL(t.amount)
-                          )}
-                        </div>
 
                         {/* Delete */}
                         {onDelete && (
