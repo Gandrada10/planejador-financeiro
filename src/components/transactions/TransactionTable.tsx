@@ -187,15 +187,15 @@ export function TransactionTable({ transactions, categories, projects = [], acco
         </div>
       )}
 
-      <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full text-xs table-fixed">
+      <div className="overflow-x-auto bg-bg-card border border-border rounded-lg">
+        <table className="w-full min-w-[980px] text-xs table-fixed">
           <colgroup>
             <col style={{ width: 32 }} />  {/* dot */}
             <col style={{ width: 82 }} />  {/* competencia */}
             <col style={{ width: 82 }} />  {/* data */}
-            <col style={{ width: '22%' }} /> {/* descricao - limitada */}
-            <col style={{ width: 115 }} /> {/* categoria */}
-            <col style={{ width: 88 }} />  {/* valor */}
+            <col /> {/* descricao - takes remaining space */}
+            <col style={{ width: 120 }} /> {/* categoria */}
+            <col style={{ width: 100 }} /> {/* valor */}
             <col style={{ width: 58 }} />  {/* parcelas */}
             <col style={{ width: 82 }} />  {/* conta */}
             <col style={{ width: 72 }} />  {/* membro */}
@@ -325,9 +325,10 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 </td>
 
                 {/* Categoria - combobox with autocomplete + tab navigation */}
-                <td className="p-2 relative">
-                  <div className="flex items-center gap-1">
+                <td className="p-2 relative overflow-hidden">
+                  <div className="flex items-center gap-1 min-w-0">
                     <CategoryCombobox
+                      className="min-w-0 flex-1"
                       categories={categories}
                       amount={t.amount}
                       value={t.categoryId}
