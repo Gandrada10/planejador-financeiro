@@ -158,7 +158,7 @@ export function CategorizationCard({ transaction, categories, onCategorize, onSk
         ref={isHighlighted ? highlightedRef : undefined}
         onClick={() => handleSelect(cat.id)}
         disabled={saving}
-        className={`w-full flex items-center gap-3 px-4 py-3 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'ml-6' : ''} ${
+        className={`w-full flex items-center gap-3 py-3 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'pl-9 pr-4' : 'px-4'} ${
           isHighlighted
             ? 'border-accent bg-accent/10 text-text-primary'
             : 'border-border hover:border-accent hover:bg-accent/5'
