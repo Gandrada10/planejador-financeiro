@@ -1,3 +1,4 @@
+import React from 'react';
 import {
   Car,
   Landmark,
@@ -168,13 +169,13 @@ export const ICON_MAP: Record<string, LucideIcon> = {
 export const ICON_KEYS = Object.keys(ICON_MAP);
 
 // Render a Lucide icon by its key string. Falls back to Tag for unknown keys/emojis.
-export function CategoryIcon({ icon, size = 16, className = '' }: { icon: string; size?: number; className?: string }) {
+export function CategoryIcon({ icon, size = 16, className = '', style }: { icon: string; size?: number; className?: string; style?: React.CSSProperties }) {
   const IconComponent = ICON_MAP[icon];
   if (IconComponent) {
-    return <IconComponent size={size} className={className} />;
+    return <IconComponent size={size} className={className} style={style} />;
   }
   // Fallback: if it's an old emoji, show Tag icon
-  return <Tag size={size} className={className} />;
+  return <Tag size={size} className={className} style={style} />;
 }
 
 // Auto-suggest an icon key based on category name (Portuguese)

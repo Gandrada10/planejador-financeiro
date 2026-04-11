@@ -441,7 +441,7 @@ export function ReportsPage() {
                   className="w-full flex items-center gap-3 px-4 py-3 hover:bg-bg-secondary/40 transition-colors"
                 >
                   {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
-                  <CategoryIcon icon={group.icon} size={16} className="text-text-primary" />
+                  <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
                   <span className="text-xs" style={{ color: group.category?.color || 'var(--text-primary)' }}>{group.label}</span>
                   <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
                   <span className={`ml-auto text-sm font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
@@ -464,7 +464,7 @@ export function ReportsPage() {
                           className="w-full flex items-center gap-3 px-4 py-2 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
                         >
                           {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
-                          <CategoryIcon icon={sub.icon} size={14} className="text-text-secondary" />
+                          <CategoryIcon icon={sub.icon} size={14} style={{ color: sub.category?.color || 'var(--text-primary)' }} />
                           <span className="text-xs" style={{ color: sub.category?.color || 'var(--text-primary)' }}>{sub.label}</span>
                           <span className="text-[10px] text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
                           <span className={`ml-auto text-xs font-bold font-mono ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
