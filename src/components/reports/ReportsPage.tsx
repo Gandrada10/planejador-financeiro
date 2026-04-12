@@ -440,7 +440,7 @@ export function ReportsPage() {
                       <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
                       <span className="text-xs" style={{ color: group.category?.color || 'var(--text-primary)' }}>{group.label}</span>
                       <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
-                      <span className={`ml-auto text-sm font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      <span className={`ml-auto text-xs font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                         {formatBRL(group.total)}
                       </span>
                     </button>
