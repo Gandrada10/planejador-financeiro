@@ -450,6 +450,7 @@ export function TransactionsPage() {
           addRule={addRule}
           onCreateRule={handleCreateRule}
           rules={rules}
+          projects={activeProjects}
         />
       )}
       {showPluggySync && (
