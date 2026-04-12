@@ -4,6 +4,7 @@ import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account, CategoryRule, Project } from '../../types';
+import { NoteTag } from '../shared/NoteTag';
 import {
   formatBRL,
   getMonthYear,
@@ -750,6 +751,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       <th className="p-2 text-left min-w-[120px]">Categoria</th>
                       <th className="p-2 text-left min-w-[100px]">Membro</th>
                       {projects.length > 0 && <th className="p-2 text-left min-w-[100px]">Projeto</th>}
+                      <th className="p-2 text-center w-12">Nota</th>
                       <th className="p-2 w-6"></th>
                     </tr>
                   </thead>
@@ -904,6 +906,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             </select>
                           </td>
                         )}
+                        <td className="p-1 text-center">
+                          <div className="flex justify-center group">
+                            <NoteTag
+                              note={item.notes || ''}
+                              onSave={(note) => updateInstallmentConfig(i, { notes: note })}
+                            />
+                          </div>
+                        </td>
                         <td className="p-2 text-center">
                           {item.isDuplicate && (
                             <span title="Possivel duplicata — ja existe transacao com mesma data, valor e descricao">
