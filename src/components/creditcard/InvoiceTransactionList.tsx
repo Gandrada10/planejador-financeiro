@@ -80,6 +80,16 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
     setSelectedIds(next);
   }
 
+  function toggleSelectAll() {
+    const visible = displayGroups.flatMap((g) => g.transactions);
+    const allSelected = visible.every((t) => selectedIds.has(t.id));
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visible.map((t) => t.id)));
+    }
+  }
+
   function getCategoryLabel(catId: string | null): string {
     if (!catId) return '';
     const cat = categories.find((c) => c.id === catId);
@@ -297,7 +307,29 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                   <div className="divide-y divide-border/30">
                     {/* Column headers */}
                     <div className="flex items-center px-4 py-1.5 text-text-secondary uppercase tracking-wider text-[10px]">
-                      <div className="w-6 flex-shrink-0" />
+                      <div className="w-6 flex-shrink-0 flex justify-center">
+                        <div
+                          tabIndex={0}
+                          role="checkbox"
+                          aria-checked={(() => {
+                            const visible = displayGroups.flatMap((g) => g.transactions);
+                            return visible.length > 0 && visible.every((t) => selectedIds.has(t.id));
+                          })()}
+                          className={`w-3 h-3 rounded-sm border cursor-pointer transition-colors ${
+                            (() => {
+                              const visible = displayGroups.flatMap((g) => g.transactions);
+                              return visible.length > 0 && visible.every((t) => selectedIds.has(t.id))
+                                ? 'bg-accent border-accent'
+                                : selectedIds.size > 0
+                                ? 'bg-accent/40 border-accent'
+                                : 'border-text-secondary hover:border-accent';
+                            })()
+                          }`}
+                          onClick={toggleSelectAll}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSelectAll(); } }}
+                          title="Selecionar todas"
+                        />
+                      </div>
                       <div className="w-[80px] flex-shrink-0">Data</div>
                       <div className="flex-1 min-w-0 max-w-[320px] px-2">Descricao</div>
                       <div className="flex-1 min-w-[200px] mr-2">Categoria</div>
