@@ -40,7 +40,6 @@ export function ReportsPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
-  const [filterType, setFilterType] = useState<'all' | 'despesa' | 'receita'>('all');
   const [fullReportOpen, setFullReportOpen] = useState(false);
 
   const availableMonths = useMemo(() => {
@@ -64,12 +63,7 @@ export function ReportsPage() {
   );
   const totalBalance = totalEntries + totalExits;
 
-  // Filter transactions by type
-  const filteredTransactions = useMemo(() => {
-    if (filterType === 'despesa') return monthTransactions.filter((t) => t.amount < 0);
-    if (filterType === 'receita') return monthTransactions.filter((t) => t.amount > 0);
-    return monthTransactions;
-  }, [monthTransactions, filterType]);
+  const filteredTransactions = monthTransactions;
 
   const totalFiltered = useMemo(
     () => filteredTransactions.reduce((s, t) => s + Math.abs(t.amount), 0),
@@ -395,132 +389,120 @@ export function ReportsPage() {
         </div>
       </div>
 
-      {/* Summary + filters */}
-      <div className="flex gap-4 flex-wrap items-start">
-        {/* Summary card */}
-        <div className="bg-bg-card border border-border rounded-lg p-4 space-y-2 min-w-[200px]">
-          <div className="flex justify-between text-xs">
-            <span className="text-text-secondary">Receitas</span>
-            <span className="text-accent-green font-bold">{formatBRL(totalEntries)}</span>
+      {/* Main content - side by side layout */}
+      <div className="flex gap-4 items-start">
+        {/* Left column - Summary */}
+        <div className="space-y-3 w-[220px] flex-shrink-0">
+          {/* Summary card */}
+          <div className="bg-bg-card border border-border rounded-lg p-4 space-y-2">
+            <div className="flex justify-between text-xs">
+              <span className="text-text-secondary">Receitas</span>
+              <span className="text-accent-green font-bold">{formatBRL(totalEntries)}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-text-secondary">Despesas</span>
+              <span className="text-accent-red font-bold">{formatBRL(totalExits)}</span>
+            </div>
+            <div className="border-t border-border pt-2 flex justify-between text-xs">
+              <span className="text-text-secondary">Total</span>
+              <span className={`font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {formatBRL(totalBalance)}
+              </span>
+            </div>
           </div>
-          <div className="flex justify-between text-xs">
-            <span className="text-text-secondary">Despesas</span>
-            <span className="text-accent-red font-bold">{formatBRL(totalExits)}</span>
-          </div>
-          <div className="border-t border-border pt-2 flex justify-between text-xs">
-            <span className="text-text-secondary">Total</span>
-            <span className={`font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-              {formatBRL(totalBalance)}
-            </span>
+
+          {/* Transaction count */}
+          <div className="text-xs text-text-secondary">
+            {filteredTransactions.length} lancamentos em {grouped.length} categorias
           </div>
         </div>
 
-        {/* Type filter */}
-        <div className="flex gap-1 ml-auto">
-          {([['all', 'Todos'], ['despesa', 'Despesas'], ['receita', 'Receitas']] as const).map(([value, label]) => (
-            <button
-              key={value}
-              onClick={() => setFilterType(value)}
-              className={`px-3 py-1.5 text-xs rounded ${
-                filterType === value
-                  ? 'bg-accent text-bg-primary font-bold'
-                  : 'bg-bg-secondary border border-border text-text-secondary hover:text-text-primary'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
+        {/* Right column - Categories */}
+        <div className="flex-1 min-w-0">
+          {grouped.length === 0 ? (
+            <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-sm">
+              Nenhum lancamento neste periodo.
+            </div>
+          ) : (
+            <div className="space-y-1">
+              {grouped.map((group) => {
+                const catKey = group.category?.id || group.label;
+                const isCatExpanded = expandedCats.has(catKey);
 
-      {/* Transaction count */}
-      <div className="text-xs text-text-secondary">
-        {filteredTransactions.length} lancamentos em {grouped.length} categorias
-      </div>
+                return (
+                  <div key={catKey} className="bg-bg-card border border-border rounded-lg overflow-hidden">
+                    {/* Category header */}
+                    <button
+                      onClick={() => toggleCat(catKey)}
+                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-bg-secondary/40 transition-colors"
+                    >
+                      {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
+                      <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
+                      <span className="text-xs" style={{ color: group.category?.color || 'var(--text-primary)' }}>{group.label}</span>
+                      <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
+                      <span className={`ml-auto text-sm font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                        {formatBRL(group.total)}
+                      </span>
+                    </button>
 
-      {/* Category groups */}
-      {grouped.length === 0 ? (
-        <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-sm">
-          Nenhum lancamento neste periodo.
-        </div>
-      ) : (
-        <div className="space-y-1">
-          {grouped.map((group) => {
-            const catKey = group.category?.id || group.label;
-            const isCatExpanded = expandedCats.has(catKey);
+                    {/* Subcategories */}
+                    {isCatExpanded && group.subs.map((sub) => {
+                      const subKey = sub.category?.id || sub.label;
+                      const isSubExpanded = expandedSubs.has(subKey);
+                      const showSubHeader = group.subs.length > 1 || sub.label !== group.label;
 
-            return (
-              <div key={catKey} className="bg-bg-card border border-border rounded-lg overflow-hidden">
-                {/* Category header */}
-                <button
-                  onClick={() => toggleCat(catKey)}
-                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-bg-secondary/40 transition-colors"
-                >
-                  {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
-                  <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
-                  <span className="text-xs" style={{ color: group.category?.color || 'var(--text-primary)' }}>{group.label}</span>
-                  <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
-                  <span className={`ml-auto text-sm font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                    {formatBRL(group.total)}
-                  </span>
-                </button>
-
-                {/* Subcategories */}
-                {isCatExpanded && group.subs.map((sub) => {
-                  const subKey = sub.category?.id || sub.label;
-                  const isSubExpanded = expandedSubs.has(subKey);
-                  const showSubHeader = group.subs.length > 1 || sub.label !== group.label;
-
-                  return (
-                    <div key={subKey}>
-                      {/* Subcategory header */}
-                      {showSubHeader && (
-                        <button
-                          onClick={() => toggleSub(subKey)}
-                          className="w-full flex items-center gap-3 px-4 py-2 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
-                        >
-                          {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
-                          <CategoryIcon icon={sub.icon} size={14} style={{ color: sub.category?.color || 'var(--text-primary)' }} />
-                          <span className="text-xs" style={{ color: sub.category?.color || 'var(--text-primary)' }}>{sub.label}</span>
-                          <span className="text-[10px] text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
-                          <span className={`ml-auto text-xs font-bold font-mono ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                            {formatBRL(sub.total)}
-                          </span>
-                        </button>
-                      )}
-
-                      {/* Transactions */}
-                      {(showSubHeader ? isSubExpanded : isCatExpanded) && (
-                        <div className="border-t border-border/30">
-                          {sub.transactions.map((t) => (
-                            <div
-                              key={t.id}
-                              className="flex items-center gap-4 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/10 text-xs"
+                      return (
+                        <div key={subKey}>
+                          {/* Subcategory header */}
+                          {showSubHeader && (
+                            <button
+                              onClick={() => toggleSub(subKey)}
+                              className="w-full flex items-center gap-3 px-4 py-2 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
                             >
-                              <span className="text-text-secondary w-16 flex-shrink-0 font-mono border-r border-border/40 pr-2">
-                                {formatDate(t.date)}
+                              {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
+                              <CategoryIcon icon={sub.icon} size={14} style={{ color: sub.category?.color || 'var(--text-primary)' }} />
+                              <span className="text-xs" style={{ color: sub.category?.color || 'var(--text-primary)' }}>{sub.label}</span>
+                              <span className="text-[10px] text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
+                              <span className={`ml-auto text-xs font-bold font-mono ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                {formatBRL(sub.total)}
                               </span>
-                              <div className="flex-1 min-w-0 flex items-baseline gap-2 overflow-hidden">
-                                <span className="text-text-primary truncate min-w-0 shrink">{t.description}</span>
-                                <span className="text-[10px] text-text-secondary flex-shrink-0 whitespace-nowrap">
-                                  {t.account}{t.titular && ` · ${t.titular}`}{t.totalInstallments && ` · ${t.installmentNumber}/${t.totalInstallments}`}
-                                </span>
-                              </div>
-                              <span className={`font-mono font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                                {formatBRL(t.amount)}
-                              </span>
+                            </button>
+                          )}
+
+                          {/* Transactions */}
+                          {(showSubHeader ? isSubExpanded : isCatExpanded) && (
+                            <div className="border-t border-border/30">
+                              {sub.transactions.map((t) => (
+                                <div
+                                  key={t.id}
+                                  className="flex items-center gap-4 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/10 text-xs"
+                                >
+                                  <span className="text-text-secondary w-16 flex-shrink-0 font-mono border-r border-border/40 pr-2">
+                                    {formatDate(t.date)}
+                                  </span>
+                                  <div className="flex-1 min-w-0 flex items-baseline gap-2 overflow-hidden">
+                                    <span className="text-text-primary truncate min-w-0 shrink">{t.description}</span>
+                                    <span className="text-[10px] text-text-secondary flex-shrink-0 whitespace-nowrap">
+                                      {t.account}{t.titular && ` · ${t.titular}`}{t.totalInstallments && ` · ${t.installmentNumber}/${t.totalInstallments}`}
+                                    </span>
+                                  </div>
+                                  <span className={`font-mono font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                    {formatBRL(t.amount)}
+                                  </span>
+                                </div>
+                              ))}
                             </div>
-                          ))}
+                          )}
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            );
-          })}
+                      );
+                    })}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
-      )}
+      </div>
       </>}
 
       <FinancialChat transactions={transactions} categories={categories} budgets={budgets} />
