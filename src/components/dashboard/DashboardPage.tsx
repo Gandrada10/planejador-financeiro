@@ -138,27 +138,74 @@ export function DashboardPage() {
       .sort((a, b) => a.amount - b.amount); // most negative first
   }, [monthTransactions, categories, totalExits]);
 
-  // Budget progress
+  // Budget progress - group by parent category, aggregate sub spending
   const budgetData = useMemo(() => {
     const monthBudgets = getBudgetsForMonth(monthYear);
-    return monthBudgets.map((b) => {
+
+    // Actual spending per category (absolute values)
+    const actualByCategory = new Map<string, number>();
+    for (const t of monthTransactions) {
+      if (t.amount >= 0) continue;
+      const catId = t.categoryId || '__uncategorized';
+      actualByCategory.set(catId, (actualByCategory.get(catId) || 0) + Math.abs(t.amount));
+    }
+
+    // Build rows: parent budgets aggregate all sub spending, sub budgets are individual
+    const processedParents = new Set<string>();
+    const rows: Array<{
+      categoryName: string;
+      icon: string;
+      color: string;
+      limit: number;
+      spent: number;
+      remaining: number;
+      isParent: boolean;
+    }> = [];
+
+    for (const b of monthBudgets) {
       const cat = categories.find((c) => c.id === b.categoryId);
-      const actual = monthTransactions
-        .filter((t) => t.categoryId === b.categoryId && t.amount < 0)
-        .reduce((s, t) => s + t.amount, 0);
-      const remaining = Math.max(b.limitAmount - Math.abs(actual), 0);
-      return {
-        categoryName: cat?.name || 'Categoria',
-        icon: cat?.icon || '',
-        limit: b.limitAmount,
-        actual,
-        remaining,
-      };
-    });
+      if (!cat) continue;
+
+      const isParent = !cat.parentId;
+
+      if (isParent) {
+        // Parent: sum spending from self + all subcategories
+        let totalSpent = actualByCategory.get(cat.id) || 0;
+        const subs = categories.filter((c) => c.parentId === cat.id);
+        for (const sub of subs) {
+          totalSpent += actualByCategory.get(sub.id) || 0;
+        }
+        rows.push({
+          categoryName: cat.name,
+          icon: cat.icon,
+          color: cat.color || '#737373',
+          limit: b.limitAmount,
+          spent: totalSpent,
+          remaining: Math.max(b.limitAmount - totalSpent, 0),
+          isParent: true,
+        });
+        processedParents.add(cat.id);
+      } else {
+        // Subcategory: only its own spending
+        const spent = actualByCategory.get(cat.id) || 0;
+        rows.push({
+          categoryName: cat.name,
+          icon: cat.icon,
+          color: cat.color || '#737373',
+          limit: b.limitAmount,
+          spent,
+          remaining: Math.max(b.limitAmount - spent, 0),
+          isParent: false,
+        });
+      }
+    }
+
+    return rows;
   }, [monthYear, categories, monthTransactions, getBudgetsForMonth]);
 
-  const budgetTotalLimit = budgetData.reduce((s, b) => s + b.limit, 0);
-  const budgetTotalActual = budgetData.reduce((s, b) => s + Math.abs(b.actual), 0);
+  // Grand totals - only parent-level budgets
+  const budgetTotalLimit = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.limit, 0);
+  const budgetTotalActual = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.spent, 0);
 
   if (loadingTx) {
     return <div className="text-accent text-sm animate-pulse">Carregando dashboard...</div>;
@@ -240,62 +287,74 @@ export function DashboardPage() {
 
             {/* Metas de despesas */}
             <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-              <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Metas de despesas</h3>
+              <div className="flex items-center justify-between">
+                <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Metas de despesas</h3>
+                <span className="text-[10px] text-accent-green">Situacao confirmada</span>
+              </div>
               {budgetData.length === 0 ? (
-                <p className="text-xs text-text-secondary">Nenhuma meta definida para este mês.</p>
+                <p className="text-xs text-text-secondary">Nenhuma meta definida para este mes.</p>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
+                  {/* Column headers */}
+                  <div className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 text-[10px] text-text-secondary uppercase tracking-wider">
+                    <span />
+                    <span className="text-right">Meta</span>
+                    <span className="text-right">Realizado</span>
+                    <span className="text-right">A realizar</span>
+                  </div>
+
                   {budgetData.map((b, i) => {
-                    const spent = Math.abs(b.actual);
-                    const pct = b.limit > 0 ? (spent / b.limit) * 100 : 0;
-                    const over = spent > b.limit;
+                    const pct = b.limit > 0 ? (b.spent / b.limit) * 100 : 0;
+                    const over = b.spent > b.limit;
                     const barPct = Math.min(pct, 100);
                     return (
-                      <div key={i} className="space-y-1">
-                        <div className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <CategoryIcon icon={b.icon} size={12} className="text-text-primary flex-shrink-0" />
-                            <span className="text-text-primary truncate">{b.categoryName}</span>
+                      <div key={i} className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 items-center">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-0.5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: b.color }} />
+                            <span className={`text-xs truncate ${b.isParent ? 'text-text-primary font-medium' : 'text-text-secondary'}`}>
+                              {b.categoryName}
+                            </span>
                           </div>
-                          <span className={`font-bold whitespace-nowrap ${over ? 'text-accent-red' : 'text-text-primary'}`}>
-                            {formatBRL(spent)} <span className="text-text-secondary font-normal">/ {formatBRL(b.limit)}</span>
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${over ? 'bg-accent-red' : 'bg-accent-green'}`}
-                              style={{ width: `${barPct}%` }}
-                            />
+                          <div className="flex items-center gap-1.5 pl-2.5">
+                            <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                              <div
+                                className={`h-full rounded-full ${over ? 'bg-accent-red' : 'bg-accent'}`}
+                                style={{ width: `${barPct}%` }}
+                              />
+                            </div>
+                            <span className={`text-[10px] font-mono ${over ? 'text-accent-red' : 'text-text-secondary'}`}>
+                              {pct.toFixed(0)}%
+                            </span>
                           </div>
-                          <span className={`text-[10px] w-9 text-right ${over ? 'text-accent-red' : 'text-text-secondary'}`}>
-                            {pct.toFixed(0)}%
-                          </span>
                         </div>
+                        <span className="text-xs font-mono text-text-primary text-right">{formatBRL(b.limit)}</span>
+                        <span className={`text-xs font-mono text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
+                        <span className="text-xs font-mono text-text-secondary text-right">{formatBRL(b.remaining)}</span>
                       </div>
                     );
                   })}
-                  {budgetData.length > 1 && (
-                    <div className="pt-2 border-t border-border space-y-1">
-                      <div className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
-                        <span className="text-text-primary font-bold">Total</span>
-                        <span className={`font-bold whitespace-nowrap ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>
-                          {formatBRL(budgetTotalActual)} <span className="text-text-secondary font-normal">/ {formatBRL(budgetTotalLimit)}</span>
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
+
+                  {/* Total */}
+                  <div className="pt-2 border-t border-border grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 items-center">
+                    <div className="space-y-1">
+                      <span className="text-xs font-bold text-text-primary">Total</span>
+                      <div className="flex items-center gap-1.5">
                         <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
                           <div
-                            className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent-green'}`}
+                            className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent'}`}
                             style={{ width: `${budgetPct}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] w-9 text-right ${budgetOver ? 'text-accent-red' : 'text-text-secondary'}`}>
+                        <span className={`text-[10px] font-mono ${budgetOver ? 'text-accent-red' : 'text-text-secondary'}`}>
                           {budgetPct.toFixed(0)}%
                         </span>
                       </div>
                     </div>
-                  )}
+                    <span className="text-xs font-mono font-bold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
+                    <span className={`text-xs font-mono font-bold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
+                    <span className="text-xs font-mono text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
+                  </div>
                 </div>
               )}
             </div>

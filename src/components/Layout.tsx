@@ -6,7 +6,7 @@ import {
   ArrowLeftRight,
   CreditCard,
   Tags,
-  Wallet,
+  Target,
   Settings,
   LogOut,
   Menu,
@@ -25,7 +25,7 @@ const navItems = [
   { to: '/categorias', icon: Tags, label: 'Categorias' },
   { to: '/projetos', icon: FolderKanban, label: 'Projetos' },
   { to: '/relatorios', icon: FileBarChart, label: 'Relatorios' },
-  { to: '/orcamento', icon: Wallet, label: 'Orcamento' },
+  { to: '/orcamento', icon: Target, label: 'Metas' },
   { to: '/configuracoes', icon: Settings, label: 'Configuracoes' },
 ];
 
