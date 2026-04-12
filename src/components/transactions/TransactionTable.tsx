@@ -16,10 +16,11 @@ interface Props {
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
+  onDeleteRule?: (ruleId: string) => Promise<void>;
   rules?: CategoryRule[];
 }
 
-export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule, rules = [] }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -335,6 +336,14 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onChange={async (val) => {
                         const ok = await guardClosedCycle(t);
                         if (!ok) return;
+                        const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
+                        if (existingRule && onDeleteRule && val !== t.categoryId) {
+                          const confirm = window.confirm(
+                            `Existe uma regra de categorização para "${t.description}".\n\nAo mudar a categoria, a regra será removida. Deseja continuar?`
+                          );
+                          if (!confirm) return;
+                          await onDeleteRule(existingRule.id);
+                        }
                         onUpdate(t.id, { categoryId: val });
                       }}
                     />

@@ -25,10 +25,11 @@ interface Props {
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
+  onDeleteRule?: (ruleId: string) => Promise<void>;
   rules?: CategoryRule[];
 }
 
-export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle, onCreateRule, rules = [] }: Props) {
+export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -435,7 +436,15 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                               onChange={async (val) => {
                                 const ok = await guardClosedCycle(t);
                                 if (!ok) return;
-                                onUpdate(t.id, { categoryId: val });
+                                const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
+                                if (existingRule && onDeleteRule && val !== t.categoryId) {
+                                  const confirm = window.confirm(
+                                    `Existe uma regra de categorização para "${t.description}".\n\nAo mudar a categoria, a regra será removida. Deseja continuar?`
+                                  );
+                                  if (!confirm) return;
+                                  await onDeleteRule(existingRule.id);
+                                }
+                                onUpdate && onUpdate(t.id, { categoryId: val });
                               }}
                               compact
                             />

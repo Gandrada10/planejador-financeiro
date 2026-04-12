@@ -432,6 +432,7 @@ export function TransactionsPage() {
         checkClosedCycle={checkClosedCycle}
         reopenCycle={reopenCycle}
         onCreateRule={handleCreateRule}
+        onDeleteRule={deleteRule}
         rules={rules}
       />
 
