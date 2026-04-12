@@ -53,7 +53,10 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
   }, [allOptions, search]);
 
   const currentCat = categories.find((c) => c.id === value);
-  const currentLabel = currentCat ? currentCat.name : '';
+  const currentParent = currentCat?.parentId ? categories.find((c) => c.id === currentCat.parentId) : null;
+  const currentLabel = currentCat
+    ? currentParent ? `${currentParent.name}/${currentCat.name}` : currentCat.name
+    : '';
   const currentColor = currentCat?.color || 'var(--color-text-secondary)';
 
   useEffect(() => {
