@@ -143,7 +143,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-56 bg-[#1a1a1a] border border-border rounded-lg shadow-xl overflow-hidden" style={{ left: 0 }}>
+        <div className="absolute z-50 mt-1 min-w-[18rem] max-w-[22rem] bg-[#1a1a1a] border border-border rounded-lg shadow-xl overflow-hidden" style={{ left: 0 }}>
           <div className="p-1.5 border-b border-border">
             <input
               ref={inputRef}
