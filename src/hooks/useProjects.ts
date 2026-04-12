@@ -19,6 +19,8 @@ function docToProject(id: string, data: Record<string, unknown>): Project {
     name: (data.name as string) || '',
     color: (data.color as string) || '#f59e0b',
     status: (data.status as Project['status']) || 'active',
+    startDate: (data.startDate as Timestamp)?.toDate() || null,
+    endDate: (data.endDate as Timestamp)?.toDate() || null,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
   };
 }
@@ -45,6 +47,8 @@ export function useProjects() {
     if (!uid) return;
     await addDoc(collection(db, 'users', uid, 'projects'), {
       ...data,
+      startDate: data.startDate ? Timestamp.fromDate(data.startDate) : null,
+      endDate: data.endDate ? Timestamp.fromDate(data.endDate) : null,
       createdAt: Timestamp.now(),
     });
   }
@@ -52,9 +56,15 @@ export function useProjects() {
   async function updateProject(id: string, data: Partial<Project>) {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    const updates = { ...data };
+    const updates: Record<string, unknown> = { ...data };
     delete updates.id;
     delete updates.createdAt;
+    if (updates.startDate !== undefined) {
+      updates.startDate = updates.startDate ? Timestamp.fromDate(updates.startDate as Date) : null;
+    }
+    if (updates.endDate !== undefined) {
+      updates.endDate = updates.endDate ? Timestamp.fromDate(updates.endDate as Date) : null;
+    }
     await updateDoc(doc(db, 'users', uid, 'projects', id), updates);
   }
 

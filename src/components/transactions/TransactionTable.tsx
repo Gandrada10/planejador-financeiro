@@ -16,10 +16,11 @@ interface Props {
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
+  onDeleteRule?: (ruleId: string) => Promise<void>;
   rules?: CategoryRule[];
 }
 
-export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule, rules = [] }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -188,18 +189,18 @@ export function TransactionTable({ transactions, categories, projects = [], acco
       )}
 
       <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full text-xs table-fixed">
+        <table className="w-full min-w-[1117px] text-xs table-fixed">
           <colgroup>
             <col style={{ width: 32 }} />  {/* dot */}
-            <col style={{ width: 82 }} />  {/* competencia */}
-            <col style={{ width: 82 }} />  {/* data */}
-            <col style={{ width: '22%' }} /> {/* descricao - limitada */}
-            <col style={{ width: 115 }} /> {/* categoria */}
-            <col style={{ width: 88 }} />  {/* valor */}
-            <col style={{ width: 58 }} />  {/* parcelas */}
-            <col style={{ width: 82 }} />  {/* conta */}
-            <col style={{ width: 72 }} />  {/* membro */}
-            <col style={{ width: 110 }} /> {/* projeto - mais espaço */}
+            <col style={{ width: 95 }} />  {/* competencia */}
+            <col style={{ width: 95 }} />  {/* data */}
+            <col style={{ width: 210 }} /> {/* descricao - fixa e estreita */}
+            <col style={{ width: 160 }} /> {/* categoria */}
+            <col style={{ width: 105 }} /> {/* valor */}
+            <col style={{ width: 68 }} />  {/* parcelas */}
+            <col style={{ width: 95 }} />  {/* conta */}
+            <col style={{ width: 90 }} />  {/* membro */}
+            <col style={{ width: 135 }} /> {/* projeto */}
             <col style={{ width: 32 }} />  {/* delete */}
           </colgroup>
           <thead>
@@ -326,14 +327,23 @@ export function TransactionTable({ transactions, categories, projects = [], acco
 
                 {/* Categoria - combobox with autocomplete + tab navigation */}
                 <td className="p-2 relative">
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 min-w-0">
                     <CategoryCombobox
+                      className="min-w-0 flex-1"
                       categories={categories}
                       amount={t.amount}
                       value={t.categoryId}
                       onChange={async (val) => {
                         const ok = await guardClosedCycle(t);
                         if (!ok) return;
+                        const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
+                        if (existingRule && onDeleteRule && val !== t.categoryId) {
+                          const confirm = window.confirm(
+                            `Existe uma regra de categorização para "${t.description}".\n\nAo mudar a categoria, a regra será removida. Deseja continuar?`
+                          );
+                          if (!confirm) return;
+                          await onDeleteRule(existingRule.id);
+                        }
                         onUpdate(t.id, { categoryId: val });
                       }}
                     />
@@ -341,11 +351,15 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
                       return (
                         <button
-                          title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                          title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}
                           onClick={() => onCreateRule(t.description, t.categoryId!)}
-                          className={`flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${hasRule ? 'text-yellow-400' : 'text-text-secondary hover:text-accent'}`}
+                          className={`flex-shrink-0 transition-colors ${
+                            hasRule
+                              ? 'text-yellow-400 hover:text-yellow-300'
+                              : 'text-text-secondary/30 hover:text-text-secondary'
+                          }`}
                         >
-                          <Zap size={12} className={hasRule ? 'fill-current' : ''} />
+                          <Zap size={12} />
                         </button>
                       );
                     })()}

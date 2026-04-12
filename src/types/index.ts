@@ -95,6 +95,8 @@ export interface Project {
   name: string;
   color: string;
   status: 'active' | 'archived';
+  startDate: Date | null;
+  endDate: Date | null;
   createdAt: Date;
 }
 

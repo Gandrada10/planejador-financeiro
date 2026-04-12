@@ -25,10 +25,11 @@ interface Props {
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
+  onDeleteRule?: (ruleId: string) => Promise<void>;
   rules?: CategoryRule[];
 }
 
-export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle, onCreateRule, rules = [] }: Props) {
+export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, onUpdate, onDelete, onBatchReconcile, onBatchMove, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -78,6 +79,16 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
     const next = new Set(selectedIds);
     if (next.has(id)) next.delete(id); else next.add(id);
     setSelectedIds(next);
+  }
+
+  function toggleSelectAll() {
+    const visible = displayGroups.flatMap((g) => g.transactions);
+    const allSelected = visible.every((t) => selectedIds.has(t.id));
+    if (allSelected) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(visible.map((t) => t.id)));
+    }
   }
 
   function getCategoryLabel(catId: string | null): string {
@@ -297,13 +308,35 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                   <div className="divide-y divide-border/30">
                     {/* Column headers */}
                     <div className="flex items-center px-4 py-1.5 text-text-secondary uppercase tracking-wider text-[10px]">
-                      <div className="w-6 flex-shrink-0" />
-                      <div className="w-[70px] flex-shrink-0">Data</div>
-                      <div className="flex-1 min-w-0 px-2">Descricao</div>
-                      <div className="flex-shrink-0 w-[138px] mr-2">Categoria</div>
-                      <div className="flex-shrink-0 w-[55px] text-center mr-2">Parcelas</div>
-                      <div className="flex-shrink-0 w-[80px] mr-1">Projeto</div>
-                      <div className="flex-shrink-0 w-[85px] text-right">Valor</div>
+                      <div className="w-6 flex-shrink-0 flex justify-center">
+                        <div
+                          tabIndex={0}
+                          role="checkbox"
+                          aria-checked={(() => {
+                            const visible = displayGroups.flatMap((g) => g.transactions);
+                            return visible.length > 0 && visible.every((t) => selectedIds.has(t.id));
+                          })()}
+                          className={`w-3 h-3 rounded-sm border cursor-pointer transition-colors ${
+                            (() => {
+                              const visible = displayGroups.flatMap((g) => g.transactions);
+                              return visible.length > 0 && visible.every((t) => selectedIds.has(t.id))
+                                ? 'bg-accent border-accent'
+                                : selectedIds.size > 0
+                                ? 'bg-accent/40 border-accent'
+                                : 'border-text-secondary hover:border-accent';
+                            })()
+                          }`}
+                          onClick={toggleSelectAll}
+                          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSelectAll(); } }}
+                          title="Selecionar todas"
+                        />
+                      </div>
+                      <div className="w-[80px] flex-shrink-0">Data</div>
+                      <div className="flex-1 min-w-0 max-w-[320px] px-2">Descricao</div>
+                      <div className="flex-1 min-w-[200px] mr-2">Categoria</div>
+                      <div className="flex-shrink-0 w-[110px] text-right mr-2">Valor</div>
+                      <div className="flex-shrink-0 w-[65px] text-center mr-2">Parcelas</div>
+                      <div className="flex-1 min-w-[130px]">Projeto</div>
                     </div>
                     {[...group.transactions].sort((a, b) => {
                       const av = sortField === 'date' ? a.date : (a.purchaseDate || a.date);
@@ -343,7 +376,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         {/* Purchase date - editable */}
                         <div
                           data-tab-cell
-                          className={`text-xs text-text-secondary w-[70px] flex-shrink-0 overflow-hidden truncate ${editable}`}
+                          className={`text-xs text-text-secondary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'purchaseDate', (t.purchaseDate || t.date).toISOString().split('T')[0])}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
@@ -362,7 +395,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         {/* Description - editable */}
                         <div
                           data-tab-cell
-                          className={`flex-1 min-w-0 px-2 overflow-hidden ${editable}`}
+                          className={`flex-1 min-w-0 max-w-[320px] px-2 overflow-hidden ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'description', t.description)}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'description' ? (
@@ -394,39 +427,70 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Category - combobox with autocomplete + tab navigation */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[138px] mr-2 flex items-center gap-1 min-w-0">
-                            <div className="flex-1 min-w-0">
-                              <CategoryCombobox
-                                categories={categories}
-                                amount={t.amount}
-                                value={t.categoryId}
-                                onChange={async (val) => {
-                                  const ok = await guardClosedCycle(t);
-                                  if (!ok) return;
-                                  onUpdate(t.id, { categoryId: val });
-                                }}
-                                compact
-                              />
-                            </div>
+                          <div className="flex-1 min-w-[200px] mr-2 flex items-center gap-1">
+                            <CategoryCombobox
+                              className="min-w-0 flex-1"
+                              categories={categories}
+                              amount={t.amount}
+                              value={t.categoryId}
+                              onChange={async (val) => {
+                                const ok = await guardClosedCycle(t);
+                                if (!ok) return;
+                                const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
+                                if (existingRule && onDeleteRule && val !== t.categoryId) {
+                                  const confirm = window.confirm(
+                                    `Existe uma regra de categorização para "${t.description}".\n\nAo mudar a categoria, a regra será removida. Deseja continuar?`
+                                  );
+                                  if (!confirm) return;
+                                  await onDeleteRule(existingRule.id);
+                                }
+                                onUpdate && onUpdate(t.id, { categoryId: val });
+                              }}
+                              compact
+                            />
                             {t.categoryId && onCreateRule && (() => {
                               const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
                               return (
                                 <button
-                                  title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                                  title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}
                                   onClick={() => onCreateRule(t.description, t.categoryId!)}
-                                  className={`flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity ${hasRule ? 'text-yellow-400' : 'text-text-secondary hover:text-accent'}`}
+                                  className={`flex-shrink-0 transition-colors ${
+                                    hasRule
+                                      ? 'text-yellow-400 hover:text-yellow-300'
+                                      : 'text-text-secondary/30 hover:text-text-secondary'
+                                  }`}
                                 >
-                                  <Zap size={11} className={hasRule ? 'fill-current' : ''} />
+                                  <Zap size={12} />
                                 </button>
                               );
                             })()}
                           </div>
                         ) : null}
 
+                        {/* Amount - editable */}
+                        <div
+                          data-tab-cell
+                          className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'amount' ? (
+                            <input
+                              autoFocus
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                            />
+                          ) : (
+                            formatBRL(t.amount)
+                          )}
+                        </div>
+
                         {/* Parcelas - editable, separate column */}
                         <div
                           data-tab-cell
-                          className={`flex-shrink-0 w-[55px] text-center overflow-hidden mr-2 ${editable}`}
+                          className={`flex-shrink-0 w-[65px] text-center overflow-hidden mr-2 ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'installments', t.totalInstallments ? `${t.installmentNumber ?? 1}/${t.totalInstallments}` : '')}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'installments' ? (
@@ -451,7 +515,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
 
                         {/* Projeto */}
                         {onUpdate ? (
-                          <div className="flex-shrink-0 w-[80px] mr-1 overflow-hidden">
+                          <div className="flex-1 min-w-[130px] overflow-hidden">
                             <select
                               tabIndex={-1}
                               value={t.projectId || ''}
@@ -471,26 +535,6 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                             </select>
                           </div>
                         ) : null}
-
-                        {/* Amount - editable */}
-                        <div
-                          data-tab-cell
-                          className={`text-xs font-bold flex-shrink-0 w-[85px] text-right overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
-                          onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
-                        >
-                          {editingCell?.id === t.id && editingCell.field === 'amount' ? (
-                            <input
-                              autoFocus
-                              value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              onBlur={() => commitEdit(t)}
-                              onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
-                            />
-                          ) : (
-                            formatBRL(t.amount)
-                          )}
-                        </div>
 
                         {/* Delete */}
                         {onDelete && (

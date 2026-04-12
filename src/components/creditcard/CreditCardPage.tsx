@@ -15,7 +15,7 @@ export function CreditCardPage() {
   const [selectedCardId, setSelectedCardId] = useState('');
 
   const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled } = useTransactions();
-  const { categories, rules, addRule, updateRule } = useCategories();
+  const { categories, rules, addRule, deleteRule } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
   const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
@@ -158,11 +158,19 @@ export function CreditCardPage() {
   const handleCreateRule = useCallback(async (description: string, categoryId: string) => {
     const existing = rules.find((r) => r.pattern.toLowerCase() === description.toLowerCase());
     if (existing) {
-      await updateRule(existing.id, { categoryId });
+      const confirmDelete = window.confirm(
+        `Já existe uma regra para "${description}".\n\nDeseja remover a regra?`
+      );
+      if (!confirmDelete) return;
+      await deleteRule(existing.id);
     } else {
+      const confirmCreate = window.confirm(
+        `Deseja criar uma regra para categorizar automaticamente transações com a descrição "${description}"?`
+      );
+      if (!confirmCreate) return;
       await addRule({ pattern: description, keywords: [], categoryId });
     }
-  }, [rules, addRule, updateRule]);
+  }, [rules, addRule, deleteRule]);
 
   if (loadingTx || loadingAccounts) {
     return <div className="text-accent text-sm animate-pulse">Carregando cartoes...</div>;
@@ -290,6 +298,7 @@ export function CreditCardPage() {
             checkClosedCycle={checkClosedCycleForTx}
             reopenCycle={reopenCycle}
             onCreateRule={handleCreateRule}
+            onDeleteRule={deleteRule}
             rules={rules}
           />
         </div>

@@ -53,7 +53,10 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
   }, [allOptions, search]);
 
   const currentCat = categories.find((c) => c.id === value);
-  const currentLabel = currentCat ? currentCat.name : '';
+  const currentParent = currentCat?.parentId ? categories.find((c) => c.id === currentCat.parentId) : null;
+  const currentLabel = currentCat
+    ? currentParent ? `${currentParent.name}/${currentCat.name}` : currentCat.name
+    : '';
   const currentColor = currentCat?.color || 'var(--color-text-secondary)';
 
   useEffect(() => {
@@ -135,6 +138,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
         tabIndex={-1}
         data-category-trigger
         onClick={openDropdown}
+        title={currentLabel || 'Sem categoria'}
         className={`w-full text-left bg-transparent border-none ${textSize} cursor-pointer focus:outline-none hover:text-text-primary rounded px-1 ${py} truncate`}
         style={{ color: currentColor }}
       >
@@ -142,7 +146,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-56 bg-[#1a1a1a] border border-border rounded-lg shadow-xl overflow-hidden" style={{ left: 0 }}>
+        <div className="absolute z-50 mt-1 min-w-[18rem] max-w-[22rem] bg-[#1a1a1a] border border-border rounded-lg shadow-xl overflow-hidden" style={{ left: 0 }}>
           <div className="p-1.5 border-b border-border">
             <input
               ref={inputRef}

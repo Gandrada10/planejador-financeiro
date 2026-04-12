@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Plus, Trash2, Archive, RotateCcw, Pencil, Check, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Trash2, Archive, RotateCcw, Pencil, Check, X, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { useProjects } from '../../hooks/useProjects';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
@@ -15,14 +15,24 @@ export function ProjectsPage() {
   const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState('');
   const [color, setColor] = useState(PROJECT_COLORS[0]);
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
   const [showArchived, setShowArchived] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!name.trim()) return;
-    await addProject({ name: name.trim(), color, status: 'active' });
+    await addProject({
+      name: name.trim(),
+      color,
+      status: 'active',
+      startDate: startDate ? new Date(startDate + 'T00:00:00') : null,
+      endDate: endDate ? new Date(endDate + 'T00:00:00') : null,
+    });
     setName('');
     setColor(PROJECT_COLORS[0]);
+    setStartDate('');
+    setEndDate('');
     setShowForm(false);
   }
 
@@ -92,6 +102,26 @@ export function ProjectsPage() {
               ))}
             </div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-text-secondary block mb-1">Data de início</label>
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+              />
+            </div>
+            <div>
+              <label className="text-xs text-text-secondary block mb-1">Data de fim</label>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <button type="submit" className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90">Criar</button>
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-1.5 bg-bg-secondary border border-border text-text-secondary text-xs rounded">Cancelar</button>
@@ -138,17 +168,26 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
   const [editing, setEditing] = useState(false);
   const [editName, setEditName] = useState(project.name);
   const [editColor, setEditColor] = useState(project.color);
+  const [editStartDate, setEditStartDate] = useState(project.startDate ? project.startDate.toISOString().slice(0, 10) : '');
+  const [editEndDate, setEditEndDate] = useState(project.endDate ? project.endDate.toISOString().slice(0, 10) : '');
   const [showTxs, setShowTxs] = useState(false);
 
   async function saveEdit() {
     if (!editName.trim()) return;
-    await onUpdate(project.id, { name: editName.trim(), color: editColor });
+    await onUpdate(project.id, {
+      name: editName.trim(),
+      color: editColor,
+      startDate: editStartDate ? new Date(editStartDate + 'T00:00:00') : null,
+      endDate: editEndDate ? new Date(editEndDate + 'T00:00:00') : null,
+    });
     setEditing(false);
   }
 
   function cancelEdit() {
     setEditName(project.name);
     setEditColor(project.color);
+    setEditStartDate(project.startDate ? project.startDate.toISOString().slice(0, 10) : '');
+    setEditEndDate(project.endDate ? project.endDate.toISOString().slice(0, 10) : '');
     setEditing(false);
   }
 
@@ -178,6 +217,20 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
                     style={{ backgroundColor: c }}
                   />
                 ))}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-text-secondary block mb-0.5">Início</label>
+                  <input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)}
+                    className="w-full bg-bg-secondary border border-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-text-secondary block mb-0.5">Fim</label>
+                  <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)}
+                    className="w-full bg-bg-secondary border border-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
+                  />
+                </div>
               </div>
             </div>
           ) : (
@@ -218,6 +271,16 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
           </span>
           <span className="text-[10px] text-text-secondary">{totals.count} transações</span>
         </div>
+
+        {/* Dates */}
+        {(project.startDate || project.endDate) && (
+          <div className="flex items-center gap-1.5 text-[10px] text-text-secondary">
+            <Calendar size={10} className="flex-shrink-0" />
+            {project.startDate && <span>{project.startDate.toLocaleDateString('pt-BR')}</span>}
+            {project.startDate && project.endDate && <span>—</span>}
+            {project.endDate && <span>{project.endDate.toLocaleDateString('pt-BR')}</span>}
+          </div>
+        )}
 
         {/* Totals */}
         <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/40">

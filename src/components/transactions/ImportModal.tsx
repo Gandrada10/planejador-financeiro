@@ -3,7 +3,8 @@ import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, Chevron
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
-import type { Transaction, Category, Account, CategoryRule } from '../../types';
+import type { Transaction, Category, Account, CategoryRule, Project } from '../../types';
+import { NoteTag } from '../shared/NoteTag';
 import {
   formatBRL,
   getMonthYear,
@@ -59,6 +60,7 @@ interface Props {
   addRule?: (data: Omit<CategoryRule, 'id' | 'createdAt'>) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
   rules?: CategoryRule[];
+  projects?: Project[];
 }
 
 /** Fuzzy match a statement titular name to a registered member name */
@@ -109,7 +111,7 @@ function generateMonthOptions(): string[] {
   return options;
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, addRule, onCreateRule, rules = [] }: Props) {
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, addRule, onCreateRule, rules = [], projects = [] }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -132,6 +134,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [batchAccount, setBatchAccount] = useState('');
   const [batchCategory, setBatchCategory] = useState('');
   const [batchMember, setBatchMember] = useState('');
+  const [batchProject, setBatchProject] = useState('');
 
   // Installment editor (position tracked for fixed popup outside overflow container)
   const [editingInstallment, setEditingInstallment] = useState<number | null>(null);
@@ -470,14 +473,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         ...(batchAccount ? { account: batchAccount } : {}),
         ...(batchCategory ? { categoryId: batchCategory } : {}),
         ...(batchMember ? { familyMember: batchMember } : {}),
+        ...(batchProject ? { projectId: batchProject } : {}),
       };
     }));
-    setBatchAccount(''); setBatchCategory(''); setBatchMember('');
+    setBatchAccount(''); setBatchCategory(''); setBatchMember(''); setBatchProject('');
   }
 
   function updateRow(index: number, field: keyof ImportItem, value: string) {
     // Keep string fields as empty string, only use null for ID fields like categoryId
-    const nullableFields: (keyof ImportItem)[] = ['categoryId'];
+    const nullableFields: (keyof ImportItem)[] = ['categoryId', 'projectId'];
     const finalValue = nullableFields.includes(field) ? (value || null) : value;
     setItems((prev) => prev.map((item, i) => i === index ? { ...item, [field]: finalValue } : item));
   }
@@ -712,9 +716,18 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       </select>
                     </div>
                   )}
+                  {projects.length > 0 && (
+                    <div className="flex-1 min-w-[120px]">
+                      <p className="text-[10px] text-text-secondary mb-1">Projeto</p>
+                      <select value={batchProject} onChange={(e) => setBatchProject(e.target.value)} className={inputClass}>
+                        <option value="">— sem alterar —</option>
+                        {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                      </select>
+                    </div>
+                  )}
                   <button
                     onClick={applyBatch}
-                    disabled={!batchAccount && !batchCategory && !batchMember}
+                    disabled={!batchAccount && !batchCategory && !batchMember && !batchProject}
                     className="px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-40 flex items-center gap-1"
                   >
                     <Check size={12} /> Aplicar
@@ -737,6 +750,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       <th className="p-2 text-left min-w-[110px]">Conta</th>
                       <th className="p-2 text-left min-w-[120px]">Categoria</th>
                       <th className="p-2 text-left min-w-[100px]">Membro</th>
+                      {projects.length > 0 && <th className="p-2 text-left min-w-[100px]">Projeto</th>}
+                      <th className="p-2 text-center w-12">Nota</th>
                       <th className="p-2 w-6"></th>
                     </tr>
                   </thead>
@@ -850,11 +865,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               return (
                                 <button
                                   type="button"
-                                  title={hasRule ? 'Atualizar regra existente' : 'Criar regra para esta descrição'}
+                                  title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}
                                   onClick={() => onCreateRule(item.description, item.categoryId!)}
-                                  className={`flex-shrink-0 ${hasRule ? 'text-yellow-400' : 'text-text-secondary hover:text-accent'}`}
+                                  className={`flex-shrink-0 transition-colors ${
+                                    hasRule
+                                      ? 'text-yellow-400 hover:text-yellow-300'
+                                      : 'text-text-secondary/30 hover:text-text-secondary'
+                                  }`}
                                 >
-                                  <Zap size={12} className={hasRule ? 'fill-current' : ''} />
+                                  <Zap size={12} />
                                 </button>
                               );
                             })()}
@@ -874,6 +893,26 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                           ) : (
                             <span className="text-text-secondary">{item.familyMember || '—'}</span>
                           )}
+                        </td>
+                        {projects.length > 0 && (
+                          <td className="p-1">
+                            <select
+                              value={item.projectId ?? ''}
+                              onChange={(e) => updateRow(i, 'projectId', e.target.value)}
+                              className={inputClass}
+                            >
+                              <option value="">—</option>
+                              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                            </select>
+                          </td>
+                        )}
+                        <td className="p-1 text-center">
+                          <div className="flex justify-center group">
+                            <NoteTag
+                              note={item.notes || ''}
+                              onSave={(note) => updateInstallmentConfig(i, { notes: note })}
+                            />
+                          </div>
                         </td>
                         <td className="p-2 text-center">
                           {item.isDuplicate && (
