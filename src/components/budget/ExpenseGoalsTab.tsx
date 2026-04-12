@@ -44,7 +44,7 @@ interface BudgetGroup {
 export function ExpenseGoalsTab() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const { transactions } = useTransactions();
-  const { categories, rootCategories, subCategories } = useCategories();
+  const { categories, subCategories } = useCategories();
   const { budgets, addBudget, updateBudget, deleteBudget, getBudgetsForMonth } = useBudgets();
 
   // Editing state

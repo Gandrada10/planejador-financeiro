@@ -4,13 +4,10 @@ import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
 import {
-  formatBRL,
   getMonthYear,
   getMonthYearOffset,
   getMonthLabel,
 } from '../../lib/utils';
-
-type Interval = 'mensal';
 
 interface EvolutionRow {
   label: string;
