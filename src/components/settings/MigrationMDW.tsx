@@ -1,5 +1,5 @@
 import { useRef, useState, useMemo } from 'react';
-import { Upload, RefreshCw, Check, X, AlertTriangle, FileSpreadsheet, ArrowRight, Plus, ChevronDown } from 'lucide-react';
+import { RefreshCw, Check, X, AlertTriangle, FileSpreadsheet, ArrowRight, Plus } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import {
   collection,
