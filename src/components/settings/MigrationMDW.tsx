@@ -16,14 +16,14 @@ import type { Category } from '../../types';
 
 interface RawRow {
   tipo: string;
-  data: string;
-  vencFatura: string;
+  data: unknown;
+  vencFatura: unknown;
   valor: number;
   descricao: string;
   categoria: string;
   conta: string;
   subcategoria: string;
-  dataCompetencia: string;
+  dataCompetencia: unknown;
   cartao: string;
 }
 
@@ -44,7 +44,13 @@ type Step = 'idle' | 'preview' | 'resolve' | 'importing' | 'done';
 
 // ---------- helpers ----------
 
-function parseDate(s: string): Date | null {
+function parseDate(v: unknown): Date | null {
+  if (!v) return null;
+  // Already a Date object (from XLSX cellDates)
+  if (v instanceof Date) {
+    return isNaN(v.getTime()) ? null : v;
+  }
+  const s = String(v).trim();
   if (!s) return null;
   // Try DD/MM/YYYY
   const parts = s.split('/');
@@ -57,7 +63,7 @@ function parseDate(s: string): Date | null {
   }
   // Try ISO
   const iso = new Date(s);
-  if (!isNaN(iso.getTime())) return iso;
+  if (!isNaN(iso.getTime()) && iso.getFullYear() > 1970 && iso.getFullYear() < 2100) return iso;
   return null;
 }
 
@@ -141,7 +147,7 @@ export function MigrationMDW() {
     reader.onload = () => {
       try {
         const data = new Uint8Array(reader.result as ArrayBuffer);
-        const wb = XLSX.read(data, { type: 'array' });
+        const wb = XLSX.read(data, { type: 'array', cellDates: true });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const jsonRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: '' });
 
@@ -156,14 +162,14 @@ export function MigrationMDW() {
 
         const parsed: RawRow[] = jsonRows.map(row => ({
           tipo: String(row[colMap.tipo] || '').trim(),
-          data: String(row[colMap.data] || '').trim(),
-          vencFatura: String(row[colMap.vencFatura] || '').trim(),
+          data: row[colMap.data],
+          vencFatura: row[colMap.vencFatura],
           valor: parseNumber(row[colMap.valor]),
           descricao: String(row[colMap.descricao] || '').trim(),
           categoria: String(row[colMap.categoria] || '').trim(),
           conta: String(row[colMap.conta] || '').trim(),
           subcategoria: String(row[colMap.subcategoria] || '').trim(),
-          dataCompetencia: String(row[colMap.dataCompetencia] || '').trim(),
+          dataCompetencia: row[colMap.dataCompetencia],
           cartao: String(row[colMap.cartao] || '').trim(),
         })).filter(r => r.descricao && r.valor !== 0);
 
