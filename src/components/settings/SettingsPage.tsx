@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink, Download, Upload, Database, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink, Download, Upload, Database, AlertTriangle, ArrowRightLeft } from 'lucide-react';
+import { MigrationMDW } from './MigrationMDW';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -604,6 +605,18 @@ export function SettingsPage() {
             </div>
           </div>
         )}
+      </div>
+      {/* Migration from Meu Dinheiro Web */}
+      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <ArrowRightLeft size={16} className="text-accent" /> Migrar do Meu Dinheiro Web
+          </h3>
+          <p className="text-[10px] text-text-secondary mt-1">
+            Importe lancamentos exportados do Meu Dinheiro Web (Excel/CSV). O sistema le as colunas diretamente, sem usar IA, suportando qualquer volume de dados. Categorias existentes sao associadas automaticamente; categorias nao encontradas serao listadas para voce decidir.
+          </p>
+        </div>
+        <MigrationMDW />
       </div>
     </div>
   );

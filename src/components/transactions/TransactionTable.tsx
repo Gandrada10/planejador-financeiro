@@ -215,10 +215,10 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 />
               </th>
               <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('date')}>
-                Competencia <SortIcon field="date" />
+                Data <SortIcon field="date" />
               </th>
               <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('purchaseDate')}>
-                Data <SortIcon field="purchaseDate" />
+                Competencia <SortIcon field="purchaseDate" />
               </th>
               <th className="p-2 text-left">Descricao</th>
               <th className="p-2 text-left">Categoria</th>

@@ -76,13 +76,14 @@ export function useCategories() {
     }
   }, [loading, categories]);
 
-  async function addCategory(data: Omit<Category, 'id' | 'createdAt'>) {
+  async function addCategory(data: Omit<Category, 'id' | 'createdAt'>): Promise<string> {
     const uid = auth.currentUser?.uid;
-    if (!uid) return;
-    await addDoc(collection(db, 'users', uid, 'categories'), {
+    if (!uid) throw new Error('Not authenticated');
+    const ref = await addDoc(collection(db, 'users', uid, 'categories'), {
       ...data,
       createdAt: Timestamp.now(),
     });
+    return ref.id;
   }
 
   async function updateCategory(id: string, data: Partial<Category>) {
