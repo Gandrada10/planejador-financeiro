@@ -414,7 +414,7 @@ export function ReportsPage() {
       {/* Main content - side by side layout */}
       <div className="flex gap-4 items-start">
         {/* Left column - Summary */}
-        <div className="space-y-3 w-[220px] flex-shrink-0">
+        <div className="space-y-3 w-[330px] flex-shrink-0">
           {/* Summary card */}
           <div className="bg-bg-card border border-border rounded-lg p-4 space-y-2">
             <div className="flex justify-between text-xs">
@@ -456,7 +456,7 @@ export function ReportsPage() {
                     {/* Category header */}
                     <button
                       onClick={() => toggleCat(catKey)}
-                      className="w-full flex items-center gap-3 px-4 py-3 hover:bg-bg-secondary/40 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 pr-6 py-3 hover:bg-bg-secondary/40 transition-colors"
                     >
                       {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
                       <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
@@ -479,7 +479,7 @@ export function ReportsPage() {
                           {showSubHeader && (
                             <button
                               onClick={() => toggleSub(subKey)}
-                              className="w-full flex items-center gap-3 px-4 py-2 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
+                              className="w-full flex items-center gap-3 px-4 pr-6 py-2 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
                             >
                               {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
                               <CategoryIcon icon={sub.icon} size={14} style={{ color: sub.category?.color || 'var(--text-primary)' }} />
@@ -494,28 +494,49 @@ export function ReportsPage() {
                           {/* Transactions */}
                           {(showSubHeader ? isSubExpanded : isCatExpanded) && (
                             <div className="border-t border-border/30">
-                              {sub.transactions.map((t) => (
-                                <button
-                                  type="button"
-                                  key={t.id}
-                                  onClick={() => setEditingTransaction(t)}
-                                  title="Clique para editar o lançamento"
-                                  className="w-full flex items-center gap-4 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
-                                >
-                                  <span className="text-text-secondary w-16 flex-shrink-0 font-mono border-r border-border/40 pr-2">
-                                    {formatDate(t.date)}
-                                  </span>
-                                  <div className="flex-1 min-w-0 flex items-baseline gap-2 overflow-hidden">
-                                    <span className="text-text-primary truncate min-w-0 shrink">{t.description}</span>
-                                    <span className="text-[10px] text-text-secondary flex-shrink-0 whitespace-nowrap">
-                                      {t.account}{t.titular && ` · ${t.titular}`}{t.totalInstallments && ` · ${t.installmentNumber}/${t.totalInstallments}`}
+                              {sub.transactions.map((t) => {
+                                const project = t.projectId ? activeProjects.find((p) => p.id === t.projectId) : null;
+                                return (
+                                  <button
+                                    type="button"
+                                    key={t.id}
+                                    onClick={() => setEditingTransaction(t)}
+                                    title="Clique para editar o lançamento"
+                                    className="w-full flex items-center gap-3 px-4 pr-6 py-2 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
+                                  >
+                                    <span className="text-text-secondary w-[72px] flex-shrink-0 font-mono">
+                                      {formatDate(t.date)}
                                     </span>
-                                  </div>
-                                  <span className={`font-mono font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                                    {formatBRL(t.amount)}
-                                  </span>
-                                </button>
-                              ))}
+                                    <span className="text-text-primary flex-1 min-w-0 truncate">
+                                      {t.description}
+                                    </span>
+                                    <span className="w-[56px] flex-shrink-0 text-center">
+                                      {t.totalInstallments ? (
+                                        <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
+                                          {t.installmentNumber ?? '?'}/{t.totalInstallments}
+                                        </span>
+                                      ) : (
+                                        <span className="text-text-secondary/40">—</span>
+                                      )}
+                                    </span>
+                                    <span className="text-[10px] text-text-secondary w-[90px] flex-shrink-0 truncate">
+                                      {t.account || '—'}
+                                    </span>
+                                    <span className="text-[10px] text-text-secondary w-[90px] flex-shrink-0 truncate">
+                                      {t.familyMember || t.titular || '—'}
+                                    </span>
+                                    <span
+                                      className="text-[10px] w-[100px] flex-shrink-0 truncate"
+                                      style={{ color: project?.color || 'var(--color-text-secondary)' }}
+                                    >
+                                      {project?.name || '—'}
+                                    </span>
+                                    <span className={`font-mono font-bold w-[100px] flex-shrink-0 text-right ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                      {formatBRL(t.amount)}
+                                    </span>
+                                  </button>
+                                );
+                              })}
                             </div>
                           )}
                         </div>
