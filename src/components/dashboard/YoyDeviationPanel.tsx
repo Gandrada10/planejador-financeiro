@@ -46,6 +46,10 @@ const UNCATEGORIZED_ID = '__uncategorized';
 const UNCATEGORIZED_NAME = 'Sem categoria';
 const UNCATEGORIZED_COLOR = '#737373';
 
+// Shared grid template: chevron | category | curr | prev | pct+delta (or impact)
+const ROW_GRID =
+  'grid grid-cols-[12px_minmax(0,_1fr)_92px_92px_112px] items-center gap-2';
+
 function computePct(curr: number, prev: number, absBase = false): number | null {
   if (prev === 0) return null;
   const base = absBase ? Math.abs(prev) : prev;
@@ -422,7 +426,13 @@ function ResultadoSection({
               <ColumnHeader showImpactCol />
               <div className="divide-y divide-border/50">
                 {helping.map((item) => (
-                  <ResultadoRow key={`h-${item.id}`} item={item} />
+                  <ResultadoRow
+                    key={`h-${item.id}`}
+                    item={item}
+                    expanded={expanded}
+                    toggle={toggle}
+                    rowKey={`cat:res:h:${item.id}`}
+                  />
                 ))}
               </div>
             </>
@@ -437,7 +447,13 @@ function ResultadoSection({
               <ColumnHeader showImpactCol />
               <div className="divide-y divide-border/50">
                 {hurting.map((item) => (
-                  <ResultadoRow key={`x-${item.id}`} item={item} />
+                  <ResultadoRow
+                    key={`x-${item.id}`}
+                    item={item}
+                    expanded={expanded}
+                    toggle={toggle}
+                    rowKey={`cat:res:x:${item.id}`}
+                  />
                 ))}
               </div>
             </>
@@ -490,7 +506,7 @@ function GroupRow({
       type="button"
       onClick={onToggle}
       disabled={!canExpand}
-      className={`w-full flex items-center justify-between gap-3 px-4 py-2 text-left ${
+      className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left ${
         canExpand ? 'hover:bg-bg-secondary/40 cursor-pointer' : 'cursor-default'
       }`}
     >
@@ -505,7 +521,9 @@ function GroupRow({
           <span className="w-[12px] flex-shrink-0" />
         )}
         <div className="min-w-0">
-          <p className="text-[11px] text-text-primary">{label}</p>
+          <p className="text-xs font-bold text-text-primary uppercase tracking-wider">
+            {label}
+          </p>
           <p className="text-[10px] text-text-secondary tabular-nums mt-0.5">
             {fmt(curr)}
             <span className="text-text-secondary/60">
@@ -521,7 +539,9 @@ function GroupRow({
           <span>{pctText}</span>
         </div>
         {deltaText && (
-          <span className={`text-[10px] tabular-nums mt-0.5 opacity-80 ${color}`}>{deltaText}</span>
+          <span className={`text-[10px] tabular-nums mt-0.5 opacity-80 ${color}`}>
+            {deltaText}
+          </span>
         )}
       </div>
     </button>
@@ -556,7 +576,7 @@ function CategoryRow({
         type="button"
         onClick={() => hasSubs && toggle(rowKey)}
         disabled={!hasSubs}
-        className={`w-full grid grid-cols-[14px_1fr_minmax(60px,_74px)_minmax(60px,_74px)_minmax(60px,_74px)] items-center gap-2 px-4 py-1.5 text-left ${
+        className={`w-full ${ROW_GRID} px-4 py-1 text-left ${
           hasSubs ? 'hover:bg-bg-secondary/60 cursor-pointer' : 'cursor-default'
         }`}
       >
@@ -575,16 +595,16 @@ function CategoryRow({
             size={12}
             className="text-text-primary flex-shrink-0"
           />
-          <span className="text-[11px] text-text-primary truncate">{item.name}</span>
+          <span className="text-xs text-text-primary truncate">{item.name}</span>
         </div>
-        <span className="text-[11px] tabular-nums text-text-primary text-right">
+        <span className="text-xs tabular-nums text-text-primary text-right">
           {formatBRL(item.curr)}
         </span>
-        <span className="text-[11px] tabular-nums text-text-secondary text-right">
+        <span className="text-xs tabular-nums text-text-secondary text-right">
           {formatBRL(item.prev)}
         </span>
-        <div className="flex flex-col items-end">
-          <span className={`flex items-center gap-1 text-[11px] font-bold tabular-nums ${color}`}>
+        <div className="flex flex-col items-end leading-tight">
+          <span className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
             <Icon size={11} />
             {pctText}
           </span>
@@ -617,7 +637,7 @@ function SubCategoryRow({ sub, higherIsBetter, hasPrev }: SubCategoryRowProps) {
   const { color, Icon, pctText } = resolveTrend(sub.pct, higherIsBetter, hasPrev);
   const deltaText = `${sub.varianceAbs > 0 ? '+' : ''}${formatBRL(sub.varianceAbs)}`;
   return (
-    <div className="grid grid-cols-[14px_1fr_minmax(60px,_74px)_minmax(60px,_74px)_minmax(60px,_74px)] items-center gap-2 px-4 py-1 pl-10">
+    <div className={`${ROW_GRID} px-4 py-0.5 pl-10`}>
       <span />
       <div className="flex items-center gap-1.5 min-w-0">
         <CategoryIcon
@@ -625,16 +645,16 @@ function SubCategoryRow({ sub, higherIsBetter, hasPrev }: SubCategoryRowProps) {
           size={11}
           className="text-text-secondary flex-shrink-0"
         />
-        <span className="text-[10px] text-text-secondary truncate">{sub.name}</span>
+        <span className="text-[11px] text-text-secondary truncate">{sub.name}</span>
       </div>
-      <span className="text-[10px] tabular-nums text-text-secondary text-right">
+      <span className="text-[11px] tabular-nums text-text-secondary text-right">
         {formatBRL(sub.curr)}
       </span>
-      <span className="text-[10px] tabular-nums text-text-secondary/70 text-right">
+      <span className="text-[11px] tabular-nums text-text-secondary/70 text-right">
         {formatBRL(sub.prev)}
       </span>
-      <div className="flex flex-col items-end">
-        <span className={`flex items-center gap-1 text-[10px] font-bold tabular-nums ${color}`}>
+      <div className="flex flex-col items-end leading-tight">
+        <span className={`flex items-center gap-1 text-[11px] font-bold tabular-nums ${color}`}>
           <Icon size={10} />
           {pctText}
         </span>
@@ -644,7 +664,16 @@ function SubCategoryRow({ sub, higherIsBetter, hasPrev }: SubCategoryRowProps) {
   );
 }
 
-function ResultadoRow({ item }: { item: YoyItem }) {
+interface ResultadoRowProps {
+  item: YoyItem;
+  expanded: Set<string>;
+  toggle: (key: string) => void;
+  rowKey: string;
+}
+
+function ResultadoRow({ item, expanded, toggle, rowKey }: ResultadoRowProps) {
+  const isOpen = expanded.has(rowKey);
+  const hasSubs = item.subs.length > 0;
   const impact = item.resultadoImpact ?? 0;
   const color = impact > 0 ? 'text-accent-green' : impact < 0 ? 'text-accent-red' : 'text-text-secondary';
   const Icon = impact > 0 ? TrendingUp : impact < 0 ? TrendingDown : Minus;
@@ -655,25 +684,87 @@ function ResultadoRow({ item }: { item: YoyItem }) {
       : `${item.pct > 0 ? '+' : ''}${item.pct.toFixed(1)}%`;
 
   return (
-    <div className="grid grid-cols-[14px_1fr_minmax(60px,_74px)_minmax(60px,_74px)_minmax(60px,_74px)] items-center gap-2 px-4 py-1.5">
+    <div>
+      <button
+        type="button"
+        onClick={() => hasSubs && toggle(rowKey)}
+        disabled={!hasSubs}
+        className={`w-full ${ROW_GRID} px-4 py-1 text-left ${
+          hasSubs ? 'hover:bg-bg-secondary/60 cursor-pointer' : 'cursor-default'
+        }`}
+      >
+        {hasSubs ? (
+          isOpen ? (
+            <ChevronDown size={11} className="text-text-secondary" />
+          ) : (
+            <ChevronRight size={11} className="text-text-secondary" />
+          )
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-1.5 min-w-0">
+          <CategoryIcon
+            icon={item.icon}
+            size={12}
+            className="text-text-primary flex-shrink-0"
+          />
+          <span className="text-xs text-text-primary truncate">{item.name}</span>
+        </div>
+        <span className="text-xs tabular-nums text-text-primary text-right">
+          {formatBRL(item.curr)}
+        </span>
+        <span className="text-xs tabular-nums text-text-secondary text-right">
+          {formatBRL(item.prev)}
+        </span>
+        <div className="flex flex-col items-end leading-tight">
+          <span className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
+            <Icon size={11} />
+            {deltaText}
+          </span>
+          <span className={`text-[10px] tabular-nums opacity-80 ${color}`}>{pctText}</span>
+        </div>
+      </button>
+      {isOpen && hasSubs && (
+        <div className="bg-bg-secondary/60 divide-y divide-border/40">
+          {item.subs.map((sub) => (
+            <ResultadoSubRow key={sub.id} sub={sub} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResultadoSubRow({ sub }: { sub: YoySubItem }) {
+  const impact = sub.resultadoImpact ?? 0;
+  const color = impact > 0 ? 'text-accent-green' : impact < 0 ? 'text-accent-red' : 'text-text-secondary';
+  const Icon = impact > 0 ? TrendingUp : impact < 0 ? TrendingDown : Minus;
+  const deltaText = `${impact > 0 ? '+' : ''}${formatBRL(impact)}`;
+  const pctText =
+    sub.pct === null
+      ? 'n/d'
+      : `${sub.pct > 0 ? '+' : ''}${sub.pct.toFixed(1)}%`;
+
+  return (
+    <div className={`${ROW_GRID} px-4 py-0.5 pl-10`}>
       <span />
       <div className="flex items-center gap-1.5 min-w-0">
         <CategoryIcon
-          icon={item.icon}
-          size={12}
-          className="text-text-primary flex-shrink-0"
+          icon={sub.icon}
+          size={11}
+          className="text-text-secondary flex-shrink-0"
         />
-        <span className="text-[11px] text-text-primary truncate">{item.name}</span>
+        <span className="text-[11px] text-text-secondary truncate">{sub.name}</span>
       </div>
-      <span className="text-[11px] tabular-nums text-text-primary text-right">
-        {formatBRL(item.curr)}
-      </span>
       <span className="text-[11px] tabular-nums text-text-secondary text-right">
-        {formatBRL(item.prev)}
+        {formatBRL(sub.curr)}
       </span>
-      <div className="flex flex-col items-end">
+      <span className="text-[11px] tabular-nums text-text-secondary/70 text-right">
+        {formatBRL(sub.prev)}
+      </span>
+      <div className="flex flex-col items-end leading-tight">
         <span className={`flex items-center gap-1 text-[11px] font-bold tabular-nums ${color}`}>
-          <Icon size={11} />
+          <Icon size={10} />
           {deltaText}
         </span>
         <span className={`text-[10px] tabular-nums opacity-80 ${color}`}>{pctText}</span>
@@ -684,7 +775,9 @@ function ResultadoRow({ item }: { item: YoyItem }) {
 
 function ColumnHeader({ showImpactCol = false }: { showImpactCol?: boolean }) {
   return (
-    <div className="grid grid-cols-[14px_1fr_minmax(60px,_74px)_minmax(60px,_74px)_minmax(60px,_74px)] items-center gap-2 px-4 py-1 text-[9px] uppercase tracking-wider text-text-secondary/80">
+    <div
+      className={`${ROW_GRID} px-4 py-1 text-[9px] uppercase tracking-wider text-text-secondary/80`}
+    >
       <span />
       <span>Categoria</span>
       <span className="text-right">Atual</span>
