@@ -340,6 +340,10 @@ function GroupSection({
 }: GroupSectionProps) {
   const isOpen = expanded.has(groupKey);
   const canExpand = hasPrev && items.length > 0;
+  const showAllKey = `showAll:${groupKey}`;
+  const showAll = expanded.has(showAllKey);
+  const visibleItems = showAll ? items : items.slice(0, RESULTADO_TOP_N);
+  const extraCount = Math.max(0, items.length - RESULTADO_TOP_N);
 
   return (
     <div>
@@ -360,7 +364,7 @@ function GroupSection({
         <div className="bg-bg-secondary/40 border-t border-border">
           <ColumnHeader />
           <div className="divide-y divide-border/50">
-            {items.map((item) => (
+            {visibleItems.map((item) => (
               <CategoryRow
                 key={item.id}
                 item={item}
@@ -372,6 +376,13 @@ function GroupSection({
               />
             ))}
           </div>
+          {extraCount > 0 && (
+            <ShowMoreButton
+              expanded={showAll}
+              extraCount={extraCount}
+              onClick={() => toggle(showAllKey)}
+            />
+          )}
         </div>
       )}
     </div>
