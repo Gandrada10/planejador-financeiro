@@ -388,6 +388,8 @@ interface ResultadoSectionProps {
   toggle: (key: string) => void;
 }
 
+const RESULTADO_TOP_N = 5;
+
 function ResultadoSection({
   total,
   helping,
@@ -399,6 +401,13 @@ function ResultadoSection({
 }: ResultadoSectionProps) {
   const isOpen = expanded.has('group:resultado');
   const canExpand = hasPrev && (helping.length > 0 || hurting.length > 0);
+  const showAllHelping = expanded.has('showAll:resultado:helping');
+  const showAllHurting = expanded.has('showAll:resultado:hurting');
+
+  const helpingVisible = showAllHelping ? helping : helping.slice(0, RESULTADO_TOP_N);
+  const hurtingVisible = showAllHurting ? hurting : hurting.slice(0, RESULTADO_TOP_N);
+  const helpingExtra = Math.max(0, helping.length - RESULTADO_TOP_N);
+  const hurtingExtra = Math.max(0, hurting.length - RESULTADO_TOP_N);
 
   return (
     <div>
@@ -425,7 +434,7 @@ function ResultadoSection({
               </div>
               <ColumnHeader showImpactCol />
               <div className="divide-y divide-border/50">
-                {helping.map((item) => (
+                {helpingVisible.map((item) => (
                   <ResultadoRow
                     key={`h-${item.id}`}
                     item={item}
@@ -435,6 +444,13 @@ function ResultadoSection({
                   />
                 ))}
               </div>
+              {helpingExtra > 0 && (
+                <ShowMoreButton
+                  expanded={showAllHelping}
+                  extraCount={helpingExtra}
+                  onClick={() => toggle('showAll:resultado:helping')}
+                />
+              )}
             </>
           )}
           {hurting.length > 0 && (
@@ -446,7 +462,7 @@ function ResultadoSection({
               </div>
               <ColumnHeader showImpactCol />
               <div className="divide-y divide-border/50">
-                {hurting.map((item) => (
+                {hurtingVisible.map((item) => (
                   <ResultadoRow
                     key={`x-${item.id}`}
                     item={item}
@@ -456,11 +472,48 @@ function ResultadoSection({
                   />
                 ))}
               </div>
+              {hurtingExtra > 0 && (
+                <ShowMoreButton
+                  expanded={showAllHurting}
+                  extraCount={hurtingExtra}
+                  onClick={() => toggle('showAll:resultado:hurting')}
+                />
+              )}
             </>
           )}
         </div>
       )}
     </div>
+  );
+}
+
+function ShowMoreButton({
+  expanded,
+  extraCount,
+  onClick,
+}: {
+  expanded: boolean;
+  extraCount: number;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="w-full px-4 py-1.5 text-[10px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60 text-left flex items-center gap-1 border-t border-border/40"
+    >
+      {expanded ? (
+        <>
+          <ChevronDown size={11} />
+          Ver menos
+        </>
+      ) : (
+        <>
+          <ChevronRight size={11} />
+          Ver mais {extraCount} {extraCount === 1 ? 'item' : 'itens'}
+        </>
+      )}
+    </button>
   );
 }
 
@@ -510,28 +563,23 @@ function GroupRow({
         canExpand ? 'hover:bg-bg-secondary/40 cursor-pointer' : 'cursor-default'
       }`}
     >
-      <div className="flex items-center gap-2 min-w-0">
-        {canExpand ? (
-          isOpen ? (
-            <ChevronDown size={12} className="text-text-secondary flex-shrink-0" />
-          ) : (
-            <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
-          )
-        ) : (
-          <span className="w-[12px] flex-shrink-0" />
-        )}
-        <div className="min-w-0">
-          <p className="text-xs font-bold text-text-primary uppercase tracking-wider">
-            {label}
-          </p>
-          <p className="text-[10px] text-text-secondary tabular-nums mt-0.5">
-            {fmt(curr)}
-            <span className="text-text-secondary/60">
-              {' '}
-              · {prevYear}: {hasPrev ? fmt(prev) : '—'}
-            </span>
-          </p>
-        </div>
+      <div className="min-w-0">
+        <p className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
+          <span>{label}</span>
+          {canExpand &&
+            (isOpen ? (
+              <ChevronDown size={12} className="text-text-secondary" />
+            ) : (
+              <ChevronRight size={12} className="text-text-secondary" />
+            ))}
+        </p>
+        <p className="text-[10px] text-text-secondary tabular-nums mt-0.5">
+          {fmt(curr)}
+          <span className="text-text-secondary/60">
+            {' '}
+            · {prevYear}: {hasPrev ? fmt(prev) : '—'}
+          </span>
+        </p>
       </div>
       <div className="flex flex-col items-end flex-shrink-0">
         <div className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
@@ -582,18 +630,19 @@ function CategoryRow({
       >
         {hasSubs ? (
           isOpen ? (
-            <ChevronDown size={11} className="text-text-secondary" />
+            <ChevronDown size={11} style={{ color: item.color }} />
           ) : (
-            <ChevronRight size={11} className="text-text-secondary" />
+            <ChevronRight size={11} style={{ color: item.color }} />
           )
         ) : (
-          <span />
+          <ChevronRight size={11} style={{ color: item.color, opacity: 0.35 }} />
         )}
         <div className="flex items-center gap-1.5 min-w-0">
           <CategoryIcon
             icon={item.icon}
             size={12}
-            className="text-text-primary flex-shrink-0"
+            className="flex-shrink-0"
+            style={{ color: item.color }}
           />
           <span className="text-xs text-text-primary truncate">{item.name}</span>
         </div>
@@ -638,12 +687,13 @@ function SubCategoryRow({ sub, higherIsBetter, hasPrev }: SubCategoryRowProps) {
   const deltaText = `${sub.varianceAbs > 0 ? '+' : ''}${formatBRL(sub.varianceAbs)}`;
   return (
     <div className={`${ROW_GRID} px-4 py-0.5 pl-10`}>
-      <span />
+      <ChevronRight size={10} style={{ color: sub.color, opacity: 0.5 }} />
       <div className="flex items-center gap-1.5 min-w-0">
         <CategoryIcon
           icon={sub.icon}
           size={11}
-          className="text-text-secondary flex-shrink-0"
+          className="flex-shrink-0"
+          style={{ color: sub.color }}
         />
         <span className="text-[11px] text-text-secondary truncate">{sub.name}</span>
       </div>
@@ -695,18 +745,19 @@ function ResultadoRow({ item, expanded, toggle, rowKey }: ResultadoRowProps) {
       >
         {hasSubs ? (
           isOpen ? (
-            <ChevronDown size={11} className="text-text-secondary" />
+            <ChevronDown size={11} style={{ color: item.color }} />
           ) : (
-            <ChevronRight size={11} className="text-text-secondary" />
+            <ChevronRight size={11} style={{ color: item.color }} />
           )
         ) : (
-          <span />
+          <ChevronRight size={11} style={{ color: item.color, opacity: 0.35 }} />
         )}
         <div className="flex items-center gap-1.5 min-w-0">
           <CategoryIcon
             icon={item.icon}
             size={12}
-            className="text-text-primary flex-shrink-0"
+            className="flex-shrink-0"
+            style={{ color: item.color }}
           />
           <span className="text-xs text-text-primary truncate">{item.name}</span>
         </div>
@@ -747,12 +798,13 @@ function ResultadoSubRow({ sub }: { sub: YoySubItem }) {
 
   return (
     <div className={`${ROW_GRID} px-4 py-0.5 pl-10`}>
-      <span />
+      <ChevronRight size={10} style={{ color: sub.color, opacity: 0.5 }} />
       <div className="flex items-center gap-1.5 min-w-0">
         <CategoryIcon
           icon={sub.icon}
           size={11}
-          className="text-text-secondary flex-shrink-0"
+          className="flex-shrink-0"
+          style={{ color: sub.color }}
         />
         <span className="text-[11px] text-text-secondary truncate">{sub.name}</span>
       </div>

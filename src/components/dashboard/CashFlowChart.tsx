@@ -76,22 +76,22 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
         <table className="w-full text-xs table-fixed">
           <colgroup>
             <col />
-            <col className="w-24" />
-            <col className="w-24" />
-            <col className="w-24" />
+            <col className="w-28" />
+            <col className="w-28" />
+            <col className="w-28" />
           </colgroup>
           <thead>
             <tr className="border-b border-border text-text-secondary">
-              <th className="py-1.5 text-left">Conta</th>
-              <th className="py-1.5 text-right">Entradas</th>
-              <th className="py-1.5 text-right">Saidas</th>
-              <th className="py-1.5 text-right">Resultado</th>
+              <th className="py-1.5 pr-3 text-left">Conta</th>
+              <th className="py-1.5 px-3 text-right">Entradas</th>
+              <th className="py-1.5 px-3 text-right">Saidas</th>
+              <th className="py-1.5 pl-3 text-right">Resultado</th>
             </tr>
           </thead>
           <tbody>
             {data.map((d, i) => (
               <tr key={i} className="border-b border-border/40">
-                <td className="py-1.5 text-text-primary">
+                <td className="py-1.5 pr-3 text-text-primary">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: ACCOUNT_COLORS[i % ACCOUNT_COLORS.length] }} />
                     <span>{d.accountName}</span>
@@ -106,9 +106,9 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
                     )}
                   </div>
                 </td>
-                <td className="py-1.5 text-right text-accent-green">{formatBRL(d.entries)}</td>
-                <td className="py-1.5 text-right text-accent-red">{formatBRL(d.exits)}</td>
-                <td className={`py-1.5 text-right font-bold ${d.balance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                <td className="py-1.5 px-3 text-right text-accent-green">{formatBRL(d.entries)}</td>
+                <td className="py-1.5 px-3 text-right text-accent-red">{formatBRL(d.exits)}</td>
+                <td className={`py-1.5 pl-3 text-right font-bold ${d.balance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                   {formatBRL(d.balance)}
                 </td>
               </tr>
@@ -116,10 +116,10 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
           </tbody>
           <tfoot>
             <tr className="border-t border-border">
-              <td className="py-2 text-text-primary font-bold">Total</td>
-              <td className="py-2 text-right text-accent-green font-bold">{formatBRL(totalEntries)}</td>
-              <td className="py-2 text-right text-accent-red font-bold">{formatBRL(totalExits)}</td>
-              <td className={`py-2 text-right font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+              <td className="py-2 pr-3 text-text-primary font-bold">Total</td>
+              <td className="py-2 px-3 text-right text-accent-green font-bold">{formatBRL(totalEntries)}</td>
+              <td className="py-2 px-3 text-right text-accent-red font-bold">{formatBRL(totalExits)}</td>
+              <td className={`py-2 pl-3 text-right font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                 {formatBRL(totalBalance)}
               </td>
             </tr>
