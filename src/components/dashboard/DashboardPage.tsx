@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
@@ -9,6 +8,7 @@ import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
+import { YoyDeviationPanel } from './YoyDeviationPanel';
 import { formatBRL, getMonthYear } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -59,50 +59,6 @@ export function DashboardPage() {
       return sum + transactions.filter((t) => getMonthYear(t.date) === mo).reduce((s, t) => s + t.amount, 0);
     }, 0);
     return total / withData.length;
-  }, [transactions, monthYear]);
-
-  // Year-over-year deviation: accumulated (Jan → selected month) vs same period in the previous year.
-  // Expenses and incomes are aggregated as positive magnitudes; the result keeps its natural sign.
-  const yoy = useMemo(() => {
-    const [y, m] = monthYear.split('-').map(Number);
-    const prevYear = y - 1;
-
-    let currIncome = 0;
-    let currExpenses = 0;
-    let prevIncome = 0;
-    let prevExpenses = 0;
-    let hasPrev = false;
-
-    for (const t of transactions) {
-      const ty = t.date.getFullYear();
-      const tm = t.date.getMonth() + 1;
-      if (tm > m) continue;
-      if (ty === y) {
-        if (t.amount > 0) currIncome += t.amount;
-        else currExpenses += -t.amount;
-      } else if (ty === prevYear) {
-        hasPrev = true;
-        if (t.amount > 0) prevIncome += t.amount;
-        else prevExpenses += -t.amount;
-      }
-    }
-
-    const currBalance = currIncome - currExpenses;
-    const prevBalance = prevIncome - prevExpenses;
-
-    // Percentage variation: (curr - prev) / |prev|. Returns null when prev is 0 (no basis).
-    const pct = (curr: number, prev: number): number | null => {
-      if (prev === 0) return null;
-      return ((curr - prev) / Math.abs(prev)) * 100;
-    };
-
-    return {
-      prevYear,
-      hasPrev,
-      expenses: { curr: currExpenses, prev: prevExpenses, pct: pct(currExpenses, prevExpenses) },
-      income: { curr: currIncome, prev: prevIncome, pct: pct(currIncome, prevIncome) },
-      balance: { curr: currBalance, prev: prevBalance, pct: pct(currBalance, prevBalance) },
-    };
   }, [transactions, monthYear]);
 
   // Selected month is "in progress" when it matches the current real month (not yet closed).
@@ -301,33 +257,14 @@ export function DashboardPage() {
               </div>
             </div>
 
-            {/* YoY deviation: same period vs previous year */}
-            <div className="bg-bg-card border border-border rounded-lg">
-              <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b border-border">
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-text-primary uppercase tracking-wider">
-                    Desvio YoY · acumulado do ano
-                  </p>
-                  <p className="text-[10px] text-text-secondary mt-0.5">
-                    {periodLabel} {currentYear} vs {periodLabel} {yoy.prevYear}
-                  </p>
-                </div>
-                {isMonthInProgress && (
-                  <span
-                    className="flex items-center gap-1 text-[10px] text-accent bg-accent/10 border border-accent/30 rounded px-1.5 py-0.5 flex-shrink-0"
-                    title="O mês selecionado ainda está em andamento; os valores podem mudar até o fechamento."
-                  >
-                    <AlertTriangle size={10} />
-                    Mês em andamento
-                  </span>
-                )}
-              </div>
-              <div className="divide-y divide-border">
-                <YoyRow label="Despesas" curr={yoy.expenses.curr} prev={yoy.expenses.prev} pct={yoy.expenses.pct} higherIsBetter={false} hasPrev={yoy.hasPrev} prevYear={yoy.prevYear} />
-                <YoyRow label="Receitas" curr={yoy.income.curr} prev={yoy.income.prev} pct={yoy.income.pct} higherIsBetter={true} hasPrev={yoy.hasPrev} prevYear={yoy.prevYear} />
-                <YoyRow label="Resultado" curr={yoy.balance.curr} prev={yoy.balance.prev} pct={yoy.balance.pct} higherIsBetter={true} hasPrev={yoy.hasPrev} prevYear={yoy.prevYear} signed />
-              </div>
-            </div>
+            {/* YoY deviation: same period vs previous year (drill-down by category/subcategory) */}
+            <YoyDeviationPanel
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+              periodLabel={periodLabel}
+            />
           </div>
 
           {/* RIGHT COLUMN: Expenses + Projects + Metas */}
@@ -448,62 +385,3 @@ export function DashboardPage() {
   );
 }
 
-interface YoyRowProps {
-  label: string;
-  curr: number;
-  prev: number;
-  pct: number | null;
-  /** When true, a positive pct is good (green); when false, a positive pct is bad (red). */
-  higherIsBetter: boolean;
-  hasPrev: boolean;
-  prevYear: number;
-  /** When true, format the absolute values with their sign preserved (for "Resultado"). */
-  signed?: boolean;
-}
-
-function YoyRow({ label, curr, prev, pct, higherIsBetter, hasPrev, prevYear, signed }: YoyRowProps) {
-  // Colour & icon logic: map the sign of the pct through higherIsBetter.
-  // pct === null ⇒ no prior basis (previous period was 0); show a neutral placeholder.
-  let color = 'text-text-secondary';
-  let Icon: typeof TrendingUp = Minus;
-  let pctText = '—';
-
-  if (!hasPrev) {
-    pctText = 'sem dados';
-  } else if (pct === null) {
-    pctText = 'n/d';
-  } else {
-    const isBetter = higherIsBetter ? pct > 0 : pct < 0;
-    const isWorse = higherIsBetter ? pct < 0 : pct > 0;
-    if (Math.abs(pct) < 0.05) {
-      color = 'text-text-secondary';
-      Icon = Minus;
-    } else if (isBetter) {
-      color = 'text-accent-green';
-      Icon = pct > 0 ? TrendingUp : TrendingDown;
-    } else if (isWorse) {
-      color = 'text-accent-red';
-      Icon = pct > 0 ? TrendingUp : TrendingDown;
-    }
-    const sign = pct > 0 ? '+' : '';
-    pctText = `${sign}${pct.toFixed(1)}%`;
-  }
-
-  const fmt = (v: number) => (signed || v < 0 ? formatBRL(v) : formatBRL(Math.abs(v)));
-
-  return (
-    <div className="flex items-center justify-between px-4 py-2">
-      <div className="min-w-0">
-        <p className="text-[11px] text-text-primary">{label}</p>
-        <p className="text-[10px] text-text-secondary tabular-nums mt-0.5">
-          {fmt(curr)}
-          <span className="text-text-secondary/60"> · {prevYear}: {hasPrev ? fmt(prev) : '—'}</span>
-        </p>
-      </div>
-      <div className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
-        <Icon size={12} />
-        <span>{pctText}</span>
-      </div>
-    </div>
-  );
-}
