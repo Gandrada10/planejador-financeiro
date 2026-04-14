@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { TrendingUp, TrendingDown, Minus, AlertTriangle, ChevronDown, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
@@ -9,9 +9,33 @@ import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
+import { CategoryIcon } from '../shared/CategoryIcon';
 import { formatBRL, getMonthYear } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+
+type YoyMetric = 'expenses' | 'income' | 'balance';
+
+interface YoyDriver {
+  categoryId: string;
+  name: string;
+  icon: string;
+  color: string;
+  /** Amount to display (delta for expense/income, impact for balance). */
+  amount: number;
+  /** Percentual variation vs previous year (null = no basis). */
+  pct: number | null;
+  /** Optional badge tag (e.g. "novo", "↑ Receitas"). */
+  badge?: string;
+}
+
+interface AiInsightState {
+  loading: boolean;
+  text: string;
+  error: string;
+}
+
+const EMPTY_AI: AiInsightState = { loading: false, text: '', error: '' };
 
 export function DashboardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
@@ -63,9 +87,12 @@ export function DashboardPage() {
 
   // Year-over-year deviation: accumulated (Jan → selected month) vs same period in the previous year.
   // Expenses and incomes are aggregated as positive magnitudes; the result keeps its natural sign.
+  // Also builds per-category drivers (subcategories roll up to parents) for the attribution UI.
   const yoy = useMemo(() => {
     const [y, m] = monthYear.split('-').map(Number);
     const prevYear = y - 1;
+    const catById = new Map(categories.map((c) => [c.id, c]));
+    const UNCAT = '__uncat';
 
     let currIncome = 0;
     let currExpenses = 0;
@@ -73,22 +100,45 @@ export function DashboardPage() {
     let prevExpenses = 0;
     let hasPrev = false;
 
+    const expenseByCat = new Map<string, { curr: number; prev: number }>();
+    const incomeByCat = new Map<string, { curr: number; prev: number }>();
+
+    const bump = (
+      map: Map<string, { curr: number; prev: number }>,
+      key: string,
+      field: 'curr' | 'prev',
+      v: number
+    ) => {
+      const e = map.get(key) ?? { curr: 0, prev: 0 };
+      e[field] += v;
+      map.set(key, e);
+    };
+
     for (const t of transactions) {
       const ty = t.date.getFullYear();
       const tm = t.date.getMonth() + 1;
       if (tm > m) continue;
-      if (ty === y) {
-        if (t.amount > 0) currIncome += t.amount;
-        else currExpenses += -t.amount;
-      } else if (ty === prevYear) {
-        hasPrev = true;
-        if (t.amount > 0) prevIncome += t.amount;
-        else prevExpenses += -t.amount;
+      if (ty !== y && ty !== prevYear) continue;
+
+      // Roll subcategory spending up to its parent category for attribution.
+      const rawId = t.categoryId || UNCAT;
+      const cat = catById.get(rawId);
+      const parentId = cat?.parentId ?? rawId;
+      const field: 'curr' | 'prev' = ty === y ? 'curr' : 'prev';
+
+      if (ty === prevYear) hasPrev = true;
+
+      if (t.amount > 0) {
+        if (field === 'curr') currIncome += t.amount;
+        else prevIncome += t.amount;
+        bump(incomeByCat, parentId, field, t.amount);
+      } else {
+        const abs = -t.amount;
+        if (field === 'curr') currExpenses += abs;
+        else prevExpenses += abs;
+        bump(expenseByCat, parentId, field, abs);
       }
     }
-
-    const currBalance = currIncome - currExpenses;
-    const prevBalance = prevIncome - prevExpenses;
 
     // Percentage variation: (curr - prev) / |prev|. Returns null when prev is 0 (no basis).
     const pct = (curr: number, prev: number): number | null => {
@@ -96,19 +146,170 @@ export function DashboardPage() {
       return ((curr - prev) / Math.abs(prev)) * 100;
     };
 
+    const metaFor = (catId: string) => {
+      const cat = catById.get(catId);
+      return {
+        name: cat?.name ?? (catId === UNCAT ? 'Sem categoria' : 'Categoria removida'),
+        icon: cat?.icon ?? '',
+        color: cat?.color ?? '#737373',
+      };
+    };
+
+    // Build sorted Top N lists for a single-direction driver map (expense or income).
+    const buildDrivers = (
+      map: Map<string, { curr: number; prev: number }>
+    ): { increases: YoyDriver[]; reductions: YoyDriver[] } => {
+      const rows: YoyDriver[] = [];
+      for (const [catId, { curr, prev }] of map) {
+        const delta = curr - prev;
+        if (delta === 0) continue;
+        const meta = metaFor(catId);
+        let badge: string | undefined;
+        if (prev === 0 && curr > 0) badge = 'novo';
+        else if (curr === 0 && prev > 0) badge = 'zerado';
+        rows.push({
+          categoryId: catId,
+          name: meta.name,
+          icon: meta.icon,
+          color: meta.color,
+          amount: delta,
+          pct: pct(curr, prev),
+          badge,
+        });
+      }
+      const byAbs = (a: YoyDriver, b: YoyDriver) =>
+        Math.abs(b.amount) - Math.abs(a.amount) || a.name.localeCompare(b.name);
+      return {
+        increases: rows.filter((r) => r.amount > 0).sort(byAbs).slice(0, 5),
+        reductions: rows.filter((r) => r.amount < 0).sort(byAbs).slice(0, 5),
+      };
+    };
+
+    const expenseDrivers = buildDrivers(expenseByCat);
+    const incomeDrivers = buildDrivers(incomeByCat);
+
+    // Result drivers: per category, impact = ΔIncome − ΔExpense (expense down ⇒ lifts result).
+    const allCatIds = new Set<string>([...expenseByCat.keys(), ...incomeByCat.keys()]);
+    const balanceRows: YoyDriver[] = [];
+    for (const catId of allCatIds) {
+      const e = expenseByCat.get(catId) ?? { curr: 0, prev: 0 };
+      const i = incomeByCat.get(catId) ?? { curr: 0, prev: 0 };
+      const incomeDelta = i.curr - i.prev;
+      const expenseDelta = e.curr - e.prev;
+      const impact = incomeDelta - expenseDelta;
+      if (impact === 0) continue;
+      const meta = metaFor(catId);
+      // Hint whether the impact comes from income or expense side.
+      const hint =
+        Math.abs(incomeDelta) > Math.abs(expenseDelta)
+          ? incomeDelta > 0
+            ? 'Receita ↑'
+            : 'Receita ↓'
+          : expenseDelta > 0
+            ? 'Despesa ↑'
+            : 'Despesa ↓';
+      balanceRows.push({
+        categoryId: catId,
+        name: meta.name,
+        icon: meta.icon,
+        color: meta.color,
+        amount: impact,
+        pct: null,
+        badge: hint,
+      });
+    }
+    const byAbsImpact = (a: YoyDriver, b: YoyDriver) =>
+      Math.abs(b.amount) - Math.abs(a.amount) || a.name.localeCompare(b.name);
+
+    const currBalance = currIncome - currExpenses;
+    const prevBalance = prevIncome - prevExpenses;
+
     return {
       prevYear,
       hasPrev,
-      expenses: { curr: currExpenses, prev: prevExpenses, pct: pct(currExpenses, prevExpenses) },
-      income: { curr: currIncome, prev: prevIncome, pct: pct(currIncome, prevIncome) },
-      balance: { curr: currBalance, prev: prevBalance, pct: pct(currBalance, prevBalance) },
+      expenses: {
+        curr: currExpenses,
+        prev: prevExpenses,
+        pct: pct(currExpenses, prevExpenses),
+        increases: expenseDrivers.increases,
+        reductions: expenseDrivers.reductions,
+      },
+      income: {
+        curr: currIncome,
+        prev: prevIncome,
+        pct: pct(currIncome, prevIncome),
+        increases: incomeDrivers.increases,
+        reductions: incomeDrivers.reductions,
+      },
+      balance: {
+        curr: currBalance,
+        prev: prevBalance,
+        pct: pct(currBalance, prevBalance),
+        incomeContribution: currIncome - prevIncome,
+        expenseContribution: -(currExpenses - prevExpenses),
+        increases: balanceRows.filter((r) => r.amount > 0).sort(byAbsImpact).slice(0, 5),
+        reductions: balanceRows.filter((r) => r.amount < 0).sort(byAbsImpact).slice(0, 5),
+      },
     };
-  }, [transactions, monthYear]);
+  }, [transactions, monthYear, categories]);
 
   // Selected month is "in progress" when it matches the current real month (not yet closed).
   const isMonthInProgress = monthYear === getMonthYear();
   const selectedMonthIdx = Number(monthYear.split('-')[1]) - 1;
   const periodLabel = `Jan–${MONTH_ABBR[selectedMonthIdx]}`;
+
+  // Per-row expansion + per-metric AI insight cache. Both reset when the selected month changes.
+  const [expandedYoy, setExpandedYoy] = useState<Set<YoyMetric>>(new Set());
+  const [aiInsights, setAiInsights] = useState<Record<YoyMetric, AiInsightState>>({
+    expenses: EMPTY_AI,
+    income: EMPTY_AI,
+    balance: EMPTY_AI,
+  });
+
+  useEffect(() => {
+    setExpandedYoy(new Set());
+    setAiInsights({ expenses: EMPTY_AI, income: EMPTY_AI, balance: EMPTY_AI });
+  }, [monthYear]);
+
+  const toggleYoyRow = (metric: YoyMetric) => {
+    setExpandedYoy((prev) => {
+      const next = new Set(prev);
+      if (next.has(metric)) next.delete(metric);
+      else next.add(metric);
+      return next;
+    });
+  };
+
+  const requestYoyInsight = async (metric: YoyMetric) => {
+    const apiKey = localStorage.getItem('anthropic_api_key') || '';
+    if (!apiKey) {
+      setAiInsights((s) => ({
+        ...s,
+        [metric]: { ...EMPTY_AI, error: 'Configure sua chave Anthropic em Configurações > Chave API.' },
+      }));
+      return;
+    }
+    setAiInsights((s) => ({ ...s, [metric]: { loading: true, text: '', error: '' } }));
+    try {
+      const context = buildYoyContext(metric, yoy, periodLabel, Number(currentYear));
+      const message = buildYoyPrompt(metric, yoy);
+      const response = await fetch('/api/financial-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message, history: [], context, apiKey }),
+      });
+      const data = (await response.json()) as { response?: string; error?: string };
+      if (!response.ok || data.error) {
+        throw new Error(data.error || `HTTP ${response.status}`);
+      }
+      setAiInsights((s) => ({ ...s, [metric]: { loading: false, text: data.response || '', error: '' } }));
+    } catch (err) {
+      setAiInsights((s) => ({
+        ...s,
+        [metric]: { loading: false, text: '', error: err instanceof Error ? err.message : 'Falha ao gerar análise.' },
+      }));
+    }
+  };
 
   // Active projects with spending in the selected period
   const projectsData = useMemo(() => {
@@ -323,9 +524,59 @@ export function DashboardPage() {
                 )}
               </div>
               <div className="divide-y divide-border">
-                <YoyRow label="Despesas" curr={yoy.expenses.curr} prev={yoy.expenses.prev} pct={yoy.expenses.pct} higherIsBetter={false} hasPrev={yoy.hasPrev} prevYear={yoy.prevYear} />
-                <YoyRow label="Receitas" curr={yoy.income.curr} prev={yoy.income.prev} pct={yoy.income.pct} higherIsBetter={true} hasPrev={yoy.hasPrev} prevYear={yoy.prevYear} />
-                <YoyRow label="Resultado" curr={yoy.balance.curr} prev={yoy.balance.prev} pct={yoy.balance.pct} higherIsBetter={true} hasPrev={yoy.hasPrev} prevYear={yoy.prevYear} signed />
+                <YoyRow
+                  metric="expenses"
+                  label="Despesas"
+                  curr={yoy.expenses.curr}
+                  prev={yoy.expenses.prev}
+                  pct={yoy.expenses.pct}
+                  higherIsBetter={false}
+                  hasPrev={yoy.hasPrev}
+                  prevYear={yoy.prevYear}
+                  expanded={expandedYoy.has('expenses')}
+                  onToggle={() => toggleYoyRow('expenses')}
+                  increases={yoy.expenses.increases}
+                  reductions={yoy.expenses.reductions}
+                  ai={aiInsights.expenses}
+                  onRequestAi={() => requestYoyInsight('expenses')}
+                />
+                <YoyRow
+                  metric="income"
+                  label="Receitas"
+                  curr={yoy.income.curr}
+                  prev={yoy.income.prev}
+                  pct={yoy.income.pct}
+                  higherIsBetter
+                  hasPrev={yoy.hasPrev}
+                  prevYear={yoy.prevYear}
+                  expanded={expandedYoy.has('income')}
+                  onToggle={() => toggleYoyRow('income')}
+                  increases={yoy.income.increases}
+                  reductions={yoy.income.reductions}
+                  ai={aiInsights.income}
+                  onRequestAi={() => requestYoyInsight('income')}
+                />
+                <YoyRow
+                  metric="balance"
+                  label="Resultado"
+                  curr={yoy.balance.curr}
+                  prev={yoy.balance.prev}
+                  pct={yoy.balance.pct}
+                  higherIsBetter
+                  hasPrev={yoy.hasPrev}
+                  prevYear={yoy.prevYear}
+                  signed
+                  expanded={expandedYoy.has('balance')}
+                  onToggle={() => toggleYoyRow('balance')}
+                  increases={yoy.balance.increases}
+                  reductions={yoy.balance.reductions}
+                  balanceSummary={{
+                    incomeContribution: yoy.balance.incomeContribution,
+                    expenseContribution: yoy.balance.expenseContribution,
+                  }}
+                  ai={aiInsights.balance}
+                  onRequestAi={() => requestYoyInsight('balance')}
+                />
               </div>
             </div>
           </div>
@@ -449,6 +700,7 @@ export function DashboardPage() {
 }
 
 interface YoyRowProps {
+  metric: YoyMetric;
   label: string;
   curr: number;
   prev: number;
@@ -459,9 +711,33 @@ interface YoyRowProps {
   prevYear: number;
   /** When true, format the absolute values with their sign preserved (for "Resultado"). */
   signed?: boolean;
+  expanded: boolean;
+  onToggle: () => void;
+  increases: YoyDriver[];
+  reductions: YoyDriver[];
+  balanceSummary?: { incomeContribution: number; expenseContribution: number };
+  ai: AiInsightState;
+  onRequestAi: () => void;
 }
 
-function YoyRow({ label, curr, prev, pct, higherIsBetter, hasPrev, prevYear, signed }: YoyRowProps) {
+function YoyRow({
+  metric,
+  label,
+  curr,
+  prev,
+  pct,
+  higherIsBetter,
+  hasPrev,
+  prevYear,
+  signed,
+  expanded,
+  onToggle,
+  increases,
+  reductions,
+  balanceSummary,
+  ai,
+  onRequestAi,
+}: YoyRowProps) {
   // Colour & icon logic: map the sign of the pct through higherIsBetter.
   // pct === null ⇒ no prior basis (previous period was 0); show a neutral placeholder.
   let color = 'text-text-secondary';
@@ -491,19 +767,225 @@ function YoyRow({ label, curr, prev, pct, higherIsBetter, hasPrev, prevYear, sig
 
   const fmt = (v: number) => (signed || v < 0 ? formatBRL(v) : formatBRL(Math.abs(v)));
 
+  // Labels for the two driver blocks — phrased differently per metric.
+  const copy: Record<YoyMetric, { up: string; down: string }> = {
+    expenses: { up: 'Principais aumentos', down: 'Principais reduções' },
+    income: { up: 'Principais aumentos', down: 'Principais quedas' },
+    balance: { up: 'Contribuíram positivamente', down: 'Pressionaram negativamente' },
+  };
+
+  // Semantics for driver colour: for expenses, "up" is bad (red) and "down" is good (green);
+  // for income and balance, the opposite.
+  const upIsGood = metric !== 'expenses';
+
+  const canExpand = hasPrev && (increases.length > 0 || reductions.length > 0 || metric === 'balance');
+
   return (
-    <div className="flex items-center justify-between px-4 py-2">
-      <div className="min-w-0">
-        <p className="text-[11px] text-text-primary">{label}</p>
-        <p className="text-[10px] text-text-secondary tabular-nums mt-0.5">
-          {fmt(curr)}
-          <span className="text-text-secondary/60"> · {prevYear}: {hasPrev ? fmt(prev) : '—'}</span>
-        </p>
+    <div>
+      <button
+        type="button"
+        onClick={canExpand ? onToggle : undefined}
+        className={`w-full flex items-center justify-between px-4 py-2 text-left ${canExpand ? 'cursor-pointer hover:bg-bg-secondary/40' : 'cursor-default'}`}
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          {canExpand ? (
+            expanded ? (
+              <ChevronDown size={12} className="text-text-secondary flex-shrink-0" />
+            ) : (
+              <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
+            )
+          ) : (
+            <span className="w-3 flex-shrink-0" />
+          )}
+          <div className="min-w-0">
+            <p className="text-[11px] text-text-primary">{label}</p>
+            <p className="text-[10px] text-text-secondary tabular-nums mt-0.5">
+              {fmt(curr)}
+              <span className="text-text-secondary/60"> · {prevYear}: {hasPrev ? fmt(prev) : '—'}</span>
+            </p>
+          </div>
+        </div>
+        <div className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
+          <Icon size={12} />
+          <span>{pctText}</span>
+        </div>
+      </button>
+
+      {expanded && canExpand && (
+        <div className="bg-bg-secondary/30 border-t border-border px-4 py-3 space-y-3">
+          {!hasPrev ? (
+            <p className="text-[11px] text-text-secondary">Sem base de comparação em {prevYear}.</p>
+          ) : (
+            <>
+              {balanceSummary && (
+                <div className="flex items-center gap-3 flex-wrap text-[10px] text-text-secondary tabular-nums">
+                  <span>
+                    Receitas{' '}
+                    <span className={balanceSummary.incomeContribution >= 0 ? 'text-accent-green' : 'text-accent-red'}>
+                      {balanceSummary.incomeContribution >= 0 ? '+' : ''}
+                      {formatBRL(balanceSummary.incomeContribution)}
+                    </span>
+                  </span>
+                  <span className="text-text-secondary/50">·</span>
+                  <span>
+                    Despesas{' '}
+                    <span className={balanceSummary.expenseContribution >= 0 ? 'text-accent-green' : 'text-accent-red'}>
+                      {balanceSummary.expenseContribution >= 0 ? '+' : ''}
+                      {formatBRL(balanceSummary.expenseContribution)}
+                    </span>
+                  </span>
+                </div>
+              )}
+
+              <DriverBlock title={copy[metric].up} drivers={increases} positive={upIsGood} />
+              <DriverBlock title={copy[metric].down} drivers={reductions} positive={!upIsGood} />
+
+              <AiInsightBlock state={ai} onRequest={onRequestAi} />
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DriverBlock({ title, drivers, positive }: { title: string; drivers: YoyDriver[]; positive: boolean }) {
+  if (drivers.length === 0) {
+    return (
+      <div>
+        <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">{title}</p>
+        <p className="text-[11px] text-text-secondary/70">Nenhuma categoria com variação significativa.</p>
       </div>
-      <div className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
-        <Icon size={12} />
-        <span>{pctText}</span>
+    );
+  }
+  const amountColor = positive ? 'text-accent-green' : 'text-accent-red';
+  return (
+    <div>
+      <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">{title}</p>
+      <div className="space-y-0.5">
+        {drivers.map((d) => {
+          const sign = d.amount > 0 ? '+' : '';
+          const pctSign = d.pct !== null && d.pct > 0 ? '+' : '';
+          return (
+            <div key={d.categoryId} className="grid grid-cols-[1fr_auto] items-center gap-2 text-[11px]">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: d.color }} />
+                <CategoryIcon icon={d.icon} size={11} className="text-text-primary flex-shrink-0" />
+                <span className="text-text-primary truncate">{d.name}</span>
+                {d.badge && (
+                  <span className="text-[9px] text-text-secondary bg-bg-card border border-border rounded px-1 py-0.5 leading-none flex-shrink-0">
+                    {d.badge}
+                  </span>
+                )}
+              </div>
+              <div className={`flex items-center gap-1.5 tabular-nums font-bold ${amountColor}`}>
+                <span>
+                  {sign}
+                  {formatBRL(d.amount)}
+                </span>
+                {d.pct !== null && (
+                  <span className="text-text-secondary/70 font-normal text-[10px]">
+                    ({pctSign}
+                    {d.pct.toFixed(1)}%)
+                  </span>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
+  );
+}
+
+function AiInsightBlock({ state, onRequest }: { state: AiInsightState; onRequest: () => void }) {
+  return (
+    <div className="pt-2 border-t border-border/60 space-y-2">
+      {state.text ? (
+        <div className="flex gap-2 text-[11px] text-text-primary bg-bg-card border border-border rounded px-2 py-1.5">
+          <Sparkles size={12} className="text-accent flex-shrink-0 mt-0.5" />
+          <p className="leading-relaxed whitespace-pre-wrap">{state.text}</p>
+        </div>
+      ) : null}
+      {state.error ? <p className="text-[10px] text-accent-red">{state.error}</p> : null}
+      <button
+        type="button"
+        onClick={onRequest}
+        disabled={state.loading}
+        className="flex items-center gap-1.5 text-[10px] text-accent hover:text-accent/80 disabled:opacity-60 disabled:cursor-not-allowed"
+      >
+        {state.loading ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+        {state.loading ? 'Gerando análise...' : state.text ? 'Regenerar análise com IA' : 'Gerar análise com IA'}
+      </button>
+    </div>
+  );
+}
+
+// ------- AI payload builders -------
+
+interface YoySection {
+  curr: number;
+  prev: number;
+  pct: number | null;
+  increases: YoyDriver[];
+  reductions: YoyDriver[];
+  incomeContribution?: number;
+  expenseContribution?: number;
+}
+
+interface YoySummary {
+  prevYear: number;
+  hasPrev: boolean;
+  expenses: YoySection;
+  income: YoySection;
+  balance: YoySection;
+}
+
+const METRIC_LABEL: Record<YoyMetric, string> = {
+  expenses: 'Despesas',
+  income: 'Receitas',
+  balance: 'Resultado (receitas − despesas)',
+};
+
+function formatDriverLine(d: YoyDriver): string {
+  const sign = d.amount > 0 ? '+' : '';
+  const pct = d.pct !== null ? ` (${d.pct > 0 ? '+' : ''}${d.pct.toFixed(1)}%)` : '';
+  const badge = d.badge ? ` [${d.badge}]` : '';
+  return `- ${d.name}: ${sign}${formatBRL(d.amount)}${pct}${badge}`;
+}
+
+function buildYoyContext(metric: YoyMetric, yoy: YoySummary, periodLabel: string, currentYear: number): string {
+  const s = yoy[metric];
+  const pctText = s.pct !== null ? `${s.pct > 0 ? '+' : ''}${s.pct.toFixed(1)}%` : 'sem base (ano anterior = 0)';
+  const header = [
+    `MÉTRICA: ${METRIC_LABEL[metric]}`,
+    `PERÍODO: ${periodLabel} ${currentYear} vs ${periodLabel} ${yoy.prevYear}`,
+    `VALOR ATUAL: ${formatBRL(s.curr)}`,
+    `VALOR ANO ANTERIOR: ${formatBRL(s.prev)}`,
+    `VARIAÇÃO YoY: ${pctText}`,
+  ];
+  if (metric === 'balance' && s.incomeContribution !== undefined && s.expenseContribution !== undefined) {
+    header.push(
+      `DECOMPOSIÇÃO: receitas ${s.incomeContribution >= 0 ? '+' : ''}${formatBRL(s.incomeContribution)} · despesas ${s.expenseContribution >= 0 ? '+' : ''}${formatBRL(s.expenseContribution)}`
+    );
+  }
+  const upTitle = metric === 'balance' ? 'CATEGORIAS QUE CONTRIBUÍRAM POSITIVAMENTE' : 'PRINCIPAIS AUMENTOS';
+  const downTitle = metric === 'balance' ? 'CATEGORIAS QUE PRESSIONARAM NEGATIVAMENTE' : 'PRINCIPAIS REDUÇÕES';
+  const upLines = s.increases.length ? s.increases.map(formatDriverLine).join('\n') : '(nenhuma relevante)';
+  const downLines = s.reductions.length ? s.reductions.map(formatDriverLine).join('\n') : '(nenhuma relevante)';
+  return [
+    header.join('\n'),
+    `\n${upTitle}:\n${upLines}`,
+    `\n${downTitle}:\n${downLines}`,
+  ].join('\n');
+}
+
+function buildYoyPrompt(metric: YoyMetric, yoy: YoySummary): string {
+  const s = yoy[metric];
+  const pctText = s.pct !== null ? `${s.pct > 0 ? '+' : ''}${s.pct.toFixed(1)}%` : 'variação indeterminada';
+  return (
+    `Explique em 2 a 3 frases curtas e objetivas, em português brasileiro, por que ${METRIC_LABEL[metric]} variou ${pctText} YoY no acumulado do ano. ` +
+    `Baseie-se exclusivamente nos drivers listados no contexto; destaque os principais nomes de categoria e o comportamento (o que cresceu, o que caiu). ` +
+    `Evite repetir os valores literalmente — contextualize. Se for relevante, encerre sugerindo um ponto que merece atenção. Sem títulos ou listas, apenas o parágrafo.`
   );
 }
