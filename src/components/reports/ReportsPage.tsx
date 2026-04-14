@@ -510,6 +510,9 @@ export function ReportsPage() {
                                     <span className="text-text-primary flex-1 min-w-0 truncate">
                                       {t.description}
                                     </span>
+                                    <span className={`font-mono font-bold w-[100px] flex-shrink-0 text-right ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                      {formatBRL(t.amount)}
+                                    </span>
                                     <span className="w-[56px] flex-shrink-0 text-center">
                                       {t.totalInstallments ? (
                                         <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
@@ -530,9 +533,6 @@ export function ReportsPage() {
                                       style={{ color: project?.color || 'var(--color-text-secondary)' }}
                                     >
                                       {project?.name || '—'}
-                                    </span>
-                                    <span className={`font-mono font-bold w-[100px] flex-shrink-0 text-right ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                                      {formatBRL(t.amount)}
                                     </span>
                                   </button>
                                 );
