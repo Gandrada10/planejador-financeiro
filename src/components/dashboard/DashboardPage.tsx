@@ -288,13 +288,13 @@ export function DashboardPage() {
             {/* Compact KPIs: single card with 2 horizontal rows */}
             <div className="bg-bg-card border border-border rounded-lg divide-y divide-border">
               <div className="flex items-center justify-between px-4 py-2.5">
-                <p className="text-[10px] text-text-secondary uppercase tracking-wider">Acumulado {currentYear}</p>
+                <p className="text-xs font-bold text-text-primary uppercase tracking-wider">Acumulado {currentYear}</p>
                 <p className={`text-xs font-bold tabular-nums ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                   {formatBRL(yearBalance)}
                 </p>
               </div>
               <div className="flex items-center justify-between px-4 py-2.5">
-                <p className="text-[10px] text-text-secondary uppercase tracking-wider">Média mensal (12m)</p>
+                <p className="text-xs font-bold text-text-primary uppercase tracking-wider">Média mensal (12m)</p>
                 <p className={`text-xs font-bold tabular-nums ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                   {formatBRL(avg12months)}
                 </p>
@@ -305,7 +305,7 @@ export function DashboardPage() {
             <div className="bg-bg-card border border-border rounded-lg">
               <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b border-border">
                 <div className="min-w-0">
-                  <p className="text-[10px] text-text-primary uppercase tracking-wider font-bold">
+                  <p className="text-xs font-bold text-text-primary uppercase tracking-wider">
                     Desvio YoY · acumulado do ano
                   </p>
                   <p className="text-[10px] text-text-secondary mt-0.5">
