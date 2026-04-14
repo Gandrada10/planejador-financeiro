@@ -3,12 +3,17 @@ import { Download, FileSpreadsheet, ChevronDown, ChevronRight, ChevronsUpDown, C
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
+import { useAccounts } from '../../hooks/useAccounts';
+import { useFamilyMembers } from '../../hooks/useFamilyMembers';
+import { useTitularMappings } from '../../hooks/useTitularMappings';
+import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CategoryIcon } from '../shared/CategoryIcon';
 import { CashFlowReport } from './CashFlowReport';
 import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
 import { ExportFullReportModal } from './ExportFullReportModal';
+import { TransactionEditModal } from '../transactions/TransactionEditModal';
 import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
@@ -33,14 +38,19 @@ interface SubCategoryGroup {
 }
 
 export function ReportsPage() {
-  const { transactions, loading } = useTransactions();
+  const { transactions, loading, updateTransaction, deleteTransaction } = useTransactions();
   const { categories, rootCategories, subCategories } = useCategories();
   const { budgets } = useBudgets();
+  const { accounts, accountNames } = useAccounts();
+  const { memberNames: familyMemberNames } = useFamilyMembers();
+  const { titularNames } = useTitularMappings();
+  const { activeProjects } = useProjects();
   const [activeTab, setActiveTab] = useState<ReportTab>('categorias');
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [fullReportOpen, setFullReportOpen] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const availableMonths = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));
@@ -120,6 +130,13 @@ export function ReportsPage() {
       }
 
       if (subGroups.length > 0) {
+        // Sort subgroups: receitas first (by value desc), then despesas (by abs value desc)
+        subGroups.sort((a, b) => {
+          const aReceita = a.total >= 0;
+          const bReceita = b.total >= 0;
+          if (aReceita !== bReceita) return aReceita ? -1 : 1;
+          return Math.abs(b.total) - Math.abs(a.total);
+        });
         const groupTotal = subGroups.reduce((s, g) => s + g.total, 0);
         groups.push({
           category: root,
@@ -153,8 +170,13 @@ export function ReportsPage() {
       });
     }
 
-    // Sort by absolute total descending
-    groups.sort((a, b) => Math.abs(b.total) - Math.abs(a.total));
+    // Sort: receitas (total >= 0) first by value desc, then despesas (total < 0) by abs value desc
+    groups.sort((a, b) => {
+      const aReceita = a.total >= 0;
+      const bReceita = b.total >= 0;
+      if (aReceita !== bReceita) return aReceita ? -1 : 1;
+      return Math.abs(b.total) - Math.abs(a.total);
+    });
     return groups;
   }, [filteredTransactions, categories, rootCategories, subCategories, totalFiltered]);
 
@@ -473,9 +495,12 @@ export function ReportsPage() {
                           {(showSubHeader ? isSubExpanded : isCatExpanded) && (
                             <div className="border-t border-border/30">
                               {sub.transactions.map((t) => (
-                                <div
+                                <button
+                                  type="button"
                                   key={t.id}
-                                  className="flex items-center gap-4 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/10 text-xs"
+                                  onClick={() => setEditingTransaction(t)}
+                                  title="Clique para editar o lançamento"
+                                  className="w-full flex items-center gap-4 px-4 py-2 pl-16 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
                                 >
                                   <span className="text-text-secondary w-16 flex-shrink-0 font-mono border-r border-border/40 pr-2">
                                     {formatDate(t.date)}
@@ -489,7 +514,7 @@ export function ReportsPage() {
                                   <span className={`font-mono font-bold flex-shrink-0 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                     {formatBRL(t.amount)}
                                   </span>
-                                </div>
+                                </button>
                               ))}
                             </div>
                           )}
@@ -508,6 +533,20 @@ export function ReportsPage() {
       <FinancialChat transactions={transactions} categories={categories} budgets={budgets} />
 
       <ExportFullReportModal open={fullReportOpen} onClose={() => setFullReportOpen(false)} />
+
+      {editingTransaction && (
+        <TransactionEditModal
+          transaction={editingTransaction}
+          onSave={updateTransaction}
+          onDelete={deleteTransaction}
+          onClose={() => setEditingTransaction(null)}
+          categories={categories}
+          accounts={accounts}
+          accountNames={accountNames}
+          titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
+          projects={activeProjects}
+        />
+      )}
     </div>
   );
 }
