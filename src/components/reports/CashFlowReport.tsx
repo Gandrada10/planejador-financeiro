@@ -3,37 +3,70 @@ import { FileSpreadsheet, Download } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset } from '../../lib/utils';
 
-const PERIOD_OPTIONS = [3, 6, 12, 24] as const;
+type Interval = 'mensal' | 'anual';
+
+const CURRENT_YEAR = new Date().getFullYear();
+
+function defaultStartForInterval(interval: Interval): string {
+  if (interval === 'mensal') return getMonthYearOffset(getMonthYear(), -11);
+  return String(CURRENT_YEAR - 2);
+}
+
+function defaultCountForInterval(interval: Interval): number {
+  return interval === 'mensal' ? 12 : 3;
+}
+
+function maxCountForInterval(interval: Interval): number {
+  return interval === 'mensal' ? 13 : 5;
+}
 
 export function CashFlowReport() {
   const { transactions, loading } = useTransactions();
 
-  const firstTxMonth = useMemo(() => {
-    if (transactions.length === 0) return getMonthYearOffset(getMonthYear(), -11);
-    return [...transactions.map((t) => getMonthYear(t.date))].sort()[0];
-  }, [transactions]);
+  const [interval, setInterval] = useState<Interval>('mensal');
+  const [startPeriod, setStartPeriod] = useState(() => defaultStartForInterval('mensal'));
+  const [numPeriods, setNumPeriods] = useState<number>(12);
 
-  const [startMonth, setStartMonth] = useState(() => getMonthYearOffset(getMonthYear(), -11));
-  const [numMonths, setNumMonths] = useState<number>(12);
+  function handleIntervalChange(next: Interval) {
+    if (next === interval) return;
+    setInterval(next);
+    setStartPeriod(defaultStartForInterval(next));
+    setNumPeriods(defaultCountForInterval(next));
+  }
 
-  const months = useMemo(
-    () => Array.from({ length: numMonths }, (_, i) => getMonthYearOffset(startMonth, i)),
-    [startMonth, numMonths]
-  );
+  function txPeriodKey(date: Date): string {
+    if (interval === 'anual') return String(date.getFullYear());
+    return getMonthYear(date);
+  }
+
+  function periodLabel(key: string): string {
+    if (interval === 'anual') return key;
+    return getMonthLabel(key);
+  }
+
+  const periods = useMemo(() => {
+    if (interval === 'mensal') {
+      return Array.from({ length: numPeriods }, (_, i) => getMonthYearOffset(startPeriod, i));
+    }
+    const startYear = parseInt(startPeriod, 10);
+    if (Number.isNaN(startYear)) return [];
+    return Array.from({ length: numPeriods }, (_, i) => String(startYear + i));
+  }, [interval, startPeriod, numPeriods]);
 
   const { rows, saldoAnterior, totalEntradas, totalSaidas } = useMemo(() => {
+    const firstPeriod = periods[0] ?? startPeriod;
     const saldoAnterior = transactions
-      .filter((t) => getMonthYear(t.date) < startMonth)
+      .filter((t) => txPeriodKey(t.date) < firstPeriod)
       .reduce((s, t) => s + t.amount, 0);
 
     let runningSaldo = saldoAnterior;
-    const rows = months.map((monthYear) => {
-      const monthTxs = transactions.filter((t) => getMonthYear(t.date) === monthYear);
-      const entradas = monthTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-      const saidas = monthTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+    const rows = periods.map((periodKey) => {
+      const periodTxs = transactions.filter((t) => txPeriodKey(t.date) === periodKey);
+      const entradas = periodTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+      const saidas = periodTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
       const resultado = entradas + saidas;
       runningSaldo += resultado;
-      return { monthYear, label: getMonthLabel(monthYear), entradas, saidas, resultado, saldo: runningSaldo, empty: monthTxs.length === 0 };
+      return { periodKey, label: periodLabel(periodKey), entradas, saidas, resultado, saldo: runningSaldo, empty: periodTxs.length === 0 };
     });
 
     return {
@@ -42,7 +75,10 @@ export function CashFlowReport() {
       totalEntradas: rows.reduce((s, r) => s + r.entradas, 0),
       totalSaidas: rows.reduce((s, r) => s + r.saidas, 0),
     };
-  }, [transactions, months, startMonth]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions, periods, interval, startPeriod]);
+
+  const fileSuffix = `${startPeriod}_${numPeriods}${interval === 'mensal' ? 'm' : 'a'}`;
 
   async function exportExcel() {
     const XLSX = await import('xlsx');
@@ -56,7 +92,7 @@ export function CashFlowReport() {
     ws['!cols'] = [{ wch: 22 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Fluxo de Caixa');
-    XLSX.writeFile(wb, `fluxo_caixa_${startMonth}_${numMonths}m.xlsx`);
+    XLSX.writeFile(wb, `fluxo_caixa_${fileSuffix}.xlsx`);
   }
 
   async function exportPDF() {
@@ -67,7 +103,8 @@ export function CashFlowReport() {
     doc.setFontSize(14);
     doc.text('Fluxo de Caixa', 14, 15);
     doc.setFontSize(9);
-    doc.text(`${getMonthLabel(startMonth)} · ${numMonths} meses`, 14, 22);
+    const unitLabel = interval === 'mensal' ? 'meses' : 'anos';
+    doc.text(`${periodLabel(startPeriod)} · ${numPeriods} ${unitLabel}`, 14, 22);
 
     const body = [
       ['Saldo anterior', '—', '—', '—', formatBRL(saldoAnterior)],
@@ -90,46 +127,78 @@ export function CashFlowReport() {
       },
     });
 
-    doc.save(`fluxo_caixa_${startMonth}_${numMonths}m.pdf`);
+    doc.save(`fluxo_caixa_${fileSuffix}.pdf`);
   }
 
   if (loading) return <div className="text-accent text-sm animate-pulse">Carregando...</div>;
 
   const totalResultado = totalEntradas + totalSaidas;
   const hasData = rows.some((r) => !r.empty);
+  const maxCount = maxCountForInterval(interval);
 
   return (
     <div className="space-y-3">
       {/* Range bar */}
       <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-lg">
         <div className="flex items-center gap-2 text-xs">
-          <span className="text-text-secondary">Inicio:</span>
-          <input
-            type="month"
-            value={startMonth}
-            min={firstTxMonth}
-            onChange={(e) => e.target.value && setStartMonth(e.target.value)}
-            className="bg-transparent text-text-primary text-xs focus:outline-none cursor-pointer border-none"
-          />
-        </div>
-        <span className="text-border hidden sm:block">|</span>
-        <div className="flex items-center gap-2 text-xs">
-          <span className="text-text-secondary">Periodo:</span>
+          <span className="text-text-secondary">Intervalo:</span>
           <div className="flex gap-1">
-            {PERIOD_OPTIONS.map((n) => (
+            {(['mensal', 'anual'] as Interval[]).map((opt) => (
               <button
-                key={n}
-                onClick={() => setNumMonths(n)}
-                className={`px-2.5 py-1 text-xs rounded border transition-colors ${
-                  numMonths === n
+                key={opt}
+                onClick={() => handleIntervalChange(opt)}
+                className={`px-2.5 py-1 text-xs rounded border transition-colors capitalize ${
+                  interval === opt
                     ? 'bg-accent/10 text-accent border-accent/30'
                     : 'bg-bg-card border-border text-text-secondary hover:text-text-primary'
                 }`}
               >
-                {n}m
+                {opt}
               </button>
             ))}
           </div>
+        </div>
+        <span className="text-border hidden sm:block">|</span>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-text-secondary">Inicio:</span>
+          {interval === 'mensal' ? (
+            <input
+              type="month"
+              value={startPeriod}
+              onChange={(e) => e.target.value && setStartPeriod(e.target.value)}
+              className="bg-transparent text-text-primary text-xs focus:outline-none cursor-pointer border-none"
+            />
+          ) : (
+            <input
+              type="number"
+              min={2000}
+              max={CURRENT_YEAR}
+              value={startPeriod}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) return;
+                setStartPeriod(v);
+              }}
+              className="w-20 bg-bg-card border border-border rounded px-2 py-0.5 text-text-primary text-xs focus:outline-none focus:border-accent"
+            />
+          )}
+        </div>
+        <span className="text-border hidden sm:block">|</span>
+        <div className="flex items-center gap-2 text-xs">
+          <span className="text-text-secondary">Qtde:</span>
+          <input
+            type="number"
+            min={1}
+            max={maxCount}
+            value={numPeriods}
+            onChange={(e) => {
+              const n = parseInt(e.target.value, 10);
+              if (Number.isNaN(n)) return;
+              setNumPeriods(Math.min(Math.max(1, n), maxCount));
+            }}
+            className="w-14 bg-bg-card border border-border rounded px-2 py-0.5 text-text-primary text-xs focus:outline-none focus:border-accent"
+          />
+          <span className="text-text-secondary">{interval === 'mensal' ? `meses (máx ${maxCount})` : `anos (máx ${maxCount})`}</span>
         </div>
         <div className="ml-auto flex gap-1">
           <button
@@ -180,10 +249,10 @@ export function CashFlowReport() {
                 </td>
               </tr>
 
-              {/* Month rows */}
+              {/* Period rows */}
               {rows.map((row) => (
                 <tr
-                  key={row.monthYear}
+                  key={row.periodKey}
                   className={`border-b border-border/20 transition-colors hover:bg-bg-secondary/20 ${row.empty ? 'opacity-40' : ''}`}
                 >
                   <td className="p-3 text-text-primary capitalize">{row.label}</td>
