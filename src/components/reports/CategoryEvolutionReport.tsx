@@ -57,7 +57,7 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
               <CategoryIcon icon={icon} size={13} />
             </span>
           )}
-          <span className="text-xs" style={{ color }}>{label}</span>
+          <span className="text-xs text-text-primary">{label}</span>
         </div>
       </td>
 
