@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, type CSSProperties } from 'react';
 import { ChevronDown, ChevronRight, FileSpreadsheet, Download } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
@@ -21,6 +21,25 @@ function avg(values: number[]): number {
   return nonZero.reduce((s, v) => s + v, 0) / nonZero.length;
 }
 
+type HeatmapKind = 'income' | 'expense';
+
+/**
+ * Gera um background-color relativo baseado na intensidade do valor dentro da linha.
+ * Intensidade = |value| / max(|rowMin|, |rowMax|), clamp [0, 1].
+ * Usa color-mix com --color-accent-green (income) ou --color-accent-red (expense),
+ * com opacidade máxima de 35% para não prejudicar contraste do texto.
+ */
+function getHeatmapStyle(value: number, rowMax: number, kind: HeatmapKind): CSSProperties {
+  if (value === 0 || rowMax === 0) return {};
+  const intensity = Math.min(Math.abs(value) / Math.abs(rowMax), 1);
+  if (intensity < 0.05) return {};
+  const pct = Math.round(intensity * 35);
+  const varName = kind === 'income' ? '--color-accent-green' : '--color-accent-red';
+  return {
+    backgroundColor: `color-mix(in oklab, var(${varName}) ${pct}%, transparent)`,
+  };
+}
+
 interface CatRowProps {
   category?: Category | null;
   label: string;
@@ -34,17 +53,19 @@ interface CatRowProps {
   onToggle?: () => void;
   sectionTotals?: Record<string, number>;
   rowClassName?: string;
+  heatmapKind?: HeatmapKind;
 }
 
-function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, hasChildren, onToggle, sectionTotals, rowClassName }: CatRowProps) {
+function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, hasChildren, onToggle, sectionTotals, rowClassName, heatmapKind }: CatRowProps) {
   const values = months.map((m) => monthTotals[m] ?? 0);
   const total = values.reduce((s, v) => s + v, 0);
   const average = avg(values);
+  const rowMax = Math.max(...values.map((v) => Math.abs(v)), 0);
 
   return (
     <tr className={`border-b border-border/20 ${rowClassName || ''} ${onToggle ? 'cursor-pointer hover:bg-bg-secondary/30 transition-colors' : ''}`} onClick={onToggle}>
       <td className="p-0 sticky left-0 z-10 bg-inherit">
-        <div className="flex items-center gap-1.5 px-3 py-2 whitespace-nowrap" style={{ paddingLeft: `${12 + indent * 20}px` }}>
+        <div className="flex items-center gap-1.5 px-2 py-1 whitespace-nowrap" style={{ paddingLeft: `${10 + indent * 16}px` }}>
           {hasChildren !== undefined && (
             <span className="w-3 flex-shrink-0 text-text-secondary">
               {hasChildren
@@ -57,7 +78,7 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
               <CategoryIcon icon={icon} size={13} />
             </span>
           )}
-          <span className="text-xs" style={{ color }}>{label}</span>
+          <span className="text-xs text-text-primary">{label}</span>
         </div>
       </td>
 
@@ -65,8 +86,13 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
         const val = monthTotals[m] ?? 0;
         const sectionTotal = sectionTotals?.[m] ?? 0;
         const pct = sectionTotal !== 0 ? (Math.abs(val) / Math.abs(sectionTotal)) * 100 : 0;
+        const heatStyle = heatmapKind ? getHeatmapStyle(val, rowMax, heatmapKind) : {};
         return (
-          <td key={m} className="p-2 text-right font-mono whitespace-nowrap align-top min-w-[100px]">
+          <td
+            key={m}
+            className="px-2 py-1 text-right font-mono tabular-nums whitespace-nowrap align-top min-w-[100px]"
+            style={heatStyle}
+          >
             {val !== 0 ? (
               <>
                 <div className={`text-xs ${val >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(val)}</div>
@@ -79,12 +105,12 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
         );
       })}
 
-      <td className="p-2 text-right font-mono whitespace-nowrap min-w-[100px] bg-bg-secondary/20">
+      <td className="px-2 py-1 text-right font-mono tabular-nums whitespace-nowrap min-w-[100px] bg-bg-secondary/20">
         {average !== 0
           ? <span className={`text-xs ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>
           : <span className="text-[10px] text-text-secondary/40">—</span>}
       </td>
-      <td className="p-2 text-right font-bold font-mono whitespace-nowrap min-w-[110px] bg-bg-secondary/30">
+      <td className="px-2 py-1 text-right font-bold font-mono tabular-nums whitespace-nowrap min-w-[110px] bg-bg-secondary/30">
         {total !== 0
           ? <span className={`text-xs ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>
           : <span className="text-[10px] text-text-secondary/40">—</span>}
@@ -101,21 +127,21 @@ function SectionHeaderRow({ label, months, monthTotals, colorClass }: {
   const average = avg(values);
   return (
     <tr className="bg-bg-secondary/60 border-y border-border">
-      <td className="p-2 pl-3 sticky left-0 z-10 bg-bg-secondary/60">
+      <td className="px-2 py-1.5 pl-3 sticky left-0 z-10 bg-bg-secondary/60">
         <span className={`text-xs font-bold uppercase tracking-wider ${colorClass}`}>{label}</span>
       </td>
       {months.map((m) => {
         const val = monthTotals[m] ?? 0;
         return (
-          <td key={m} className="p-2 text-right font-bold font-mono whitespace-nowrap">
+          <td key={m} className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap">
             {val !== 0 ? <span className={`text-xs ${colorClass}`}>{formatBRL(val)}</span> : <span className="text-[10px] text-text-secondary/40">—</span>}
           </td>
         );
       })}
-      <td className="p-2 text-right font-bold font-mono whitespace-nowrap bg-bg-secondary/20">
+      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/20">
         {average !== 0 && <span className={`text-xs ${colorClass}`}>{formatBRL(average)}</span>}
       </td>
-      <td className="p-2 text-right font-bold font-mono whitespace-nowrap bg-bg-secondary/40">
+      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/40">
         {total !== 0 && <span className={`text-xs ${colorClass}`}>{formatBRL(total)}</span>}
       </td>
     </tr>
@@ -132,21 +158,21 @@ function ResultadoRow({ months, receitas, despesas }: {
   const average = avg(values);
   return (
     <tr className="bg-bg-secondary/80 border-t-2 border-border">
-      <td className="p-2 pl-3 sticky left-0 z-10 bg-bg-secondary/80">
+      <td className="px-2 py-1.5 pl-3 sticky left-0 z-10 bg-bg-secondary/80">
         <span className="text-xs font-bold uppercase tracking-wider text-text-primary">Resultado</span>
       </td>
       {months.map((m) => {
         const val = resultados[m] ?? 0;
         return (
-          <td key={m} className="p-2 text-right font-bold font-mono whitespace-nowrap">
+          <td key={m} className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap">
             {val !== 0 ? <span className={`text-xs ${val >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(val)}</span> : <span className="text-[10px] text-text-secondary/40">—</span>}
           </td>
         );
       })}
-      <td className="p-2 text-right font-bold font-mono whitespace-nowrap bg-bg-secondary/20">
+      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/20">
         {average !== 0 && <span className={`text-xs ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>}
       </td>
-      <td className="p-2 text-right font-bold font-mono whitespace-nowrap bg-bg-secondary/40">
+      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/40">
         {total !== 0 && <span className={`text-xs ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>}
       </td>
     </tr>
@@ -466,16 +492,16 @@ export function CategoryEvolutionReport() {
       </div>
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border border-border">
+      <div className="overflow-auto rounded-lg border border-border max-h-[calc(100vh-220px)]">
         <table className="text-xs border-collapse w-full">
-          <thead>
-            <tr className="bg-bg-secondary border-b border-border text-[10px] text-text-secondary uppercase tracking-wider">
-              <th className="p-2 text-left sticky left-0 bg-bg-secondary z-20 min-w-[200px]">Categoria</th>
+          <thead className="sticky top-0 z-30">
+            <tr className="bg-bg-secondary border-b border-border text-[11px] text-text-secondary uppercase tracking-wider">
+              <th className="px-2 py-1.5 text-left sticky left-0 bg-bg-secondary z-40 min-w-[200px]">Categoria</th>
               {periods.map((p) => (
-                <th key={p} className="p-2 text-right min-w-[100px] whitespace-nowrap">{periodLabel(p)}</th>
+                <th key={p} className="px-2 py-1.5 text-right min-w-[100px] whitespace-nowrap bg-bg-secondary">{periodLabel(p)}</th>
               ))}
-              <th className="p-2 text-right min-w-[100px] bg-bg-secondary/60">Media</th>
-              <th className="p-2 text-right min-w-[110px] bg-bg-secondary/80">Total</th>
+              <th className="px-2 py-1.5 text-right min-w-[100px] bg-bg-secondary/80">Media</th>
+              <th className="px-2 py-1.5 text-right min-w-[110px] bg-bg-secondary/90">Total</th>
             </tr>
           </thead>
           <tbody>
@@ -493,9 +519,9 @@ export function CategoryEvolutionReport() {
                 return Math.abs(tb) - Math.abs(ta);
               });
               return [
-                <CatRow key={cat.id} category={cat} label={cat.name} icon={cat.icon} color={cat.color} indent={1} monthTotals={catTotals} months={periods} isExpanded={isExpanded} hasChildren={subs.length > 0} onToggle={subs.length > 0 ? () => toggleCat(cat.id) : undefined} sectionTotals={sectionTotals.receitas} rowClassName="bg-bg-card" />,
+                <CatRow key={cat.id} category={cat} label={cat.name} icon={cat.icon} color={cat.color} indent={1} monthTotals={catTotals} months={periods} isExpanded={isExpanded} hasChildren={subs.length > 0} onToggle={subs.length > 0 ? () => toggleCat(cat.id) : undefined} sectionTotals={sectionTotals.receitas} rowClassName="bg-bg-card" heatmapKind="income" />,
                 ...(isExpanded ? sortedSubs.filter((sub) => Object.values(sumForIds([sub.id])).some((v) => v !== 0)).map((sub) => (
-                  <CatRow key={sub.id} category={sub} label={sub.name} icon={sub.icon} color={sub.color} indent={2} monthTotals={sumForIds([sub.id])} months={periods} hasChildren={false} sectionTotals={sectionTotals.receitas} rowClassName="bg-bg-primary/40" />
+                  <CatRow key={sub.id} category={sub} label={sub.name} icon={sub.icon} color={sub.color} indent={2} monthTotals={sumForIds([sub.id])} months={periods} hasChildren={false} sectionTotals={sectionTotals.receitas} rowClassName="bg-bg-primary/40" heatmapKind="income" />
                 )) : []),
               ];
             })}
@@ -514,9 +540,9 @@ export function CategoryEvolutionReport() {
                 return Math.abs(tb) - Math.abs(ta);
               });
               return [
-                <CatRow key={cat.id} category={cat} label={cat.name} icon={cat.icon} color={cat.color} indent={1} monthTotals={catTotals} months={periods} isExpanded={isExpanded} hasChildren={subs.length > 0} onToggle={subs.length > 0 ? () => toggleCat(cat.id) : undefined} sectionTotals={sectionTotals.despesas} rowClassName="bg-bg-card" />,
+                <CatRow key={cat.id} category={cat} label={cat.name} icon={cat.icon} color={cat.color} indent={1} monthTotals={catTotals} months={periods} isExpanded={isExpanded} hasChildren={subs.length > 0} onToggle={subs.length > 0 ? () => toggleCat(cat.id) : undefined} sectionTotals={sectionTotals.despesas} rowClassName="bg-bg-card" heatmapKind="expense" />,
                 ...(isExpanded ? sortedSubs.filter((sub) => Object.values(sumForIds([sub.id])).some((v) => v !== 0)).map((sub) => (
-                  <CatRow key={sub.id} category={sub} label={sub.name} icon={sub.icon} color={sub.color} indent={2} monthTotals={sumForIds([sub.id])} months={periods} hasChildren={false} sectionTotals={sectionTotals.despesas} rowClassName="bg-bg-primary/40" />
+                  <CatRow key={sub.id} category={sub} label={sub.name} icon={sub.icon} color={sub.color} indent={2} monthTotals={sumForIds([sub.id])} months={periods} hasChildren={false} sectionTotals={sectionTotals.despesas} rowClassName="bg-bg-primary/40" heatmapKind="expense" />
                 )) : []),
               ];
             })}

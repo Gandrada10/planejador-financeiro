@@ -168,22 +168,16 @@ export function CategoriesPage() {
                   <div key={cat.id} className="bg-bg-card border border-border rounded-lg overflow-hidden">
                     {/* Parent row */}
                     <div
-                      className="flex items-center gap-3 p-3 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
+                      className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
                       onClick={() => startEdit(cat)}
                     >
-                      <CategoryIcon icon={cat.icon} size={24} className="text-text-primary" />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: cat.color }} />
-                          <span className="text-xs text-text-primary truncate">{cat.name}</span>
-                          {cat.type === 'ambos' && (
-                            <span className="text-[9px] text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded uppercase tracking-wider">ambos</span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-3 mt-0.5">
-                          <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === cat.id).length} regras</span>
-                          <span className="text-[10px] text-text-secondary">{subs.length} subcategorias</span>
-                        </div>
+                      <CategoryIcon icon={cat.icon} size={18} className="flex-shrink-0" style={{ color: cat.color }} />
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="text-xs text-text-primary truncate">{cat.name}</span>
+                        {cat.type === 'ambos' && (
+                          <span className="text-[9px] text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded uppercase tracking-wider">ambos</span>
+                        )}
+                        <span className="text-[10px] text-text-secondary flex-shrink-0">{subs.length} subcategorias</span>
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); startNewSub(cat.id); }}
@@ -204,18 +198,12 @@ export function CategoriesPage() {
                     {subs.map((sub) => (
                       <div
                         key={sub.id}
-                        className="flex items-center gap-3 p-2.5 pl-8 border-t border-border/40 cursor-pointer hover:bg-bg-secondary/20 transition-colors"
+                        className="flex items-center gap-2 px-3 py-1 pl-8 border-t border-border/40 cursor-pointer hover:bg-bg-secondary/20 transition-colors"
                         onClick={() => startEdit(sub)}
                       >
                         <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
-                        <CategoryIcon icon={sub.icon} size={18} className="text-text-primary" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: sub.color }} />
-                            <span className="text-xs text-text-primary truncate">{sub.name}</span>
-                          </div>
-                          <span className="text-[10px] text-text-secondary">{rules.filter((r) => r.categoryId === sub.id).length} regras</span>
-                        </div>
+                        <CategoryIcon icon={sub.icon} size={14} className="flex-shrink-0" style={{ color: sub.color }} />
+                        <span className="flex-1 text-xs text-text-primary truncate min-w-0">{sub.name}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); deleteCategory(sub.id); }}
                           className="text-text-secondary hover:text-accent-red p-1"

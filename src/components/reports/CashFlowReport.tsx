@@ -226,63 +226,61 @@ export function CashFlowReport() {
           Nenhum lancamento no periodo selecionado.
         </div>
       ) : (
-        <div className="overflow-x-auto bg-bg-card border border-border rounded-lg">
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="border-b border-border text-text-secondary text-[10px] uppercase tracking-wider">
-                <th className="p-3 text-left min-w-[160px]">Periodo</th>
-                <th className="p-3 text-right min-w-[130px]">Entradas (R$)</th>
-                <th className="p-3 text-right min-w-[130px]">Saidas (R$)</th>
-                <th className="p-3 text-right min-w-[130px]">Resultado (R$)</th>
-                <th className="p-3 text-right min-w-[130px]">Saldo (R$)</th>
-              </tr>
-            </thead>
-            <tbody>
-              {/* Saldo anterior */}
-              <tr className="border-b border-border/40 bg-bg-secondary/30">
-                <td className="p-3 text-text-secondary font-bold">Saldo anterior</td>
-                <td className="p-3 text-right text-text-secondary">—</td>
-                <td className="p-3 text-right text-text-secondary">—</td>
-                <td className="p-3 text-right text-text-secondary">—</td>
-                <td className={`p-3 text-right font-bold font-mono ${saldoAnterior >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {formatBRL(saldoAnterior)}
-                </td>
-              </tr>
-
-              {/* Period rows */}
-              {rows.map((row) => (
-                <tr
-                  key={row.periodKey}
-                  className={`border-b border-border/20 transition-colors hover:bg-bg-secondary/20 ${row.empty ? 'opacity-40' : ''}`}
-                >
-                  <td className="p-3 text-text-primary capitalize">{row.label}</td>
-                  <td className="p-3 text-right font-mono text-accent-green">
-                    {row.entradas > 0 ? formatBRL(row.entradas) : <span className="text-text-secondary">—</span>}
-                  </td>
-                  <td className="p-3 text-right font-mono text-accent-red">
-                    {row.saidas < 0 ? formatBRL(row.saidas) : <span className="text-text-secondary">—</span>}
-                  </td>
-                  <td className={`p-3 text-right font-mono ${row.resultado === 0 ? 'text-text-secondary' : row.resultado > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                    {row.resultado === 0 ? '—' : formatBRL(row.resultado)}
-                  </td>
-                  <td className={`p-3 text-right font-bold font-mono ${row.saldo >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                    {formatBRL(row.saldo)}
-                  </td>
+        <div>
+          {/* Saldo anterior - banner compacto */}
+          <div className="flex items-center justify-between px-3 py-1.5 bg-bg-secondary/40 border border-border border-b-0 rounded-t-lg text-xs">
+            <span className="text-text-secondary">Saldo anterior ao período</span>
+            <span className={`font-bold font-mono tabular-nums ${saldoAnterior >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+              {formatBRL(saldoAnterior)}
+            </span>
+          </div>
+          <div className="overflow-x-auto bg-bg-card border border-border rounded-b-lg">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-border text-text-secondary text-[10px] uppercase tracking-wider">
+                  <th className="px-3 py-2 text-left min-w-[160px]">Periodo</th>
+                  <th className="px-3 py-2 text-right min-w-[130px]">Entradas (R$)</th>
+                  <th className="px-3 py-2 text-right min-w-[130px]">Saidas (R$)</th>
+                  <th className="px-3 py-2 text-right min-w-[130px]">Resultado (R$)</th>
+                  <th className="px-3 py-2 text-right min-w-[130px]">Saldo (R$)</th>
                 </tr>
-              ))}
+              </thead>
+              <tbody>
+                {/* Period rows */}
+                {rows.map((row) => (
+                  <tr
+                    key={row.periodKey}
+                    className={`border-b border-border/20 transition-colors hover:bg-bg-secondary/20 ${row.empty ? 'opacity-40' : ''}`}
+                  >
+                    <td className="px-3 py-2 text-text-primary capitalize">{row.label}</td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-accent-green">
+                      {row.entradas > 0 ? formatBRL(row.entradas) : <span className="text-text-secondary">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right font-mono tabular-nums text-accent-red">
+                      {row.saidas < 0 ? formatBRL(row.saidas) : <span className="text-text-secondary">—</span>}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-mono tabular-nums ${row.resultado === 0 ? 'text-text-secondary' : row.resultado > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      {row.resultado === 0 ? '—' : formatBRL(row.resultado)}
+                    </td>
+                    <td className={`px-3 py-2 text-right font-bold font-mono tabular-nums ${row.saldo >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      {formatBRL(row.saldo)}
+                    </td>
+                  </tr>
+                ))}
 
-              {/* Total row */}
-              <tr className="border-t-2 border-border bg-bg-secondary/40">
-                <td className="p-3 font-bold text-text-primary uppercase text-[10px] tracking-wider">Total</td>
-                <td className="p-3 text-right font-bold font-mono text-accent-green">{formatBRL(totalEntradas)}</td>
-                <td className="p-3 text-right font-bold font-mono text-accent-red">{formatBRL(totalSaidas)}</td>
-                <td className={`p-3 text-right font-bold font-mono ${totalResultado >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {formatBRL(totalResultado)}
-                </td>
-                <td className="p-3 text-right text-text-secondary">—</td>
-              </tr>
-            </tbody>
-          </table>
+                {/* Total row */}
+                <tr className="border-t-2 border-border bg-bg-secondary/60">
+                  <td className="px-3 py-2 font-bold text-text-primary uppercase text-[10px] tracking-wider">Total</td>
+                  <td className="px-3 py-2 text-right font-bold font-mono tabular-nums text-accent-green">{formatBRL(totalEntradas)}</td>
+                  <td className="px-3 py-2 text-right font-bold font-mono tabular-nums text-accent-red">{formatBRL(totalSaidas)}</td>
+                  <td className={`px-3 py-2 text-right font-bold font-mono tabular-nums ${totalResultado >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    {formatBRL(totalResultado)}
+                  </td>
+                  <td className="px-3 py-2 text-right text-text-secondary">—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
