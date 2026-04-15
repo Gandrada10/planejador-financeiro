@@ -446,7 +446,7 @@ export function ReportsPage() {
               Nenhum lancamento neste periodo.
             </div>
           ) : (
-            <div className="space-y-1">
+            <div className="space-y-2">
               {grouped.map((group) => {
                 const catKey = group.category?.id || group.label;
                 const isCatExpanded = expandedCats.has(catKey);
@@ -456,7 +456,7 @@ export function ReportsPage() {
                     {/* Category header */}
                     <button
                       onClick={() => toggleCat(catKey)}
-                      className="w-full flex items-center gap-3 px-4 pr-6 py-3 hover:bg-bg-secondary/40 transition-colors"
+                      className="w-full flex items-center gap-3 px-4 pr-6 py-2 hover:bg-bg-secondary/40 transition-colors"
                     >
                       {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
                       <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
@@ -479,7 +479,7 @@ export function ReportsPage() {
                           {showSubHeader && (
                             <button
                               onClick={() => toggleSub(subKey)}
-                              className="w-full flex items-center gap-3 px-4 pr-6 py-2 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
+                              className="w-full flex items-center gap-3 px-4 pr-6 py-1.5 pl-10 border-t border-border/40 hover:bg-bg-secondary/20 transition-colors"
                             >
                               {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
                               <CategoryIcon icon={sub.icon} size={14} style={{ color: sub.category?.color || 'var(--text-primary)' }} />
@@ -502,20 +502,20 @@ export function ReportsPage() {
                                     key={t.id}
                                     onClick={() => setEditingTransaction(t)}
                                     title="Clique para editar o lançamento"
-                                    className="w-full flex items-center gap-3 px-4 pr-6 py-2 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
+                                    className="w-full flex items-center gap-3 px-4 pr-6 py-1 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
                                   >
-                                    <span className="text-text-secondary w-[72px] flex-shrink-0 font-mono">
+                                    <span className="text-text-secondary w-[72px] flex-shrink-0 tabular-nums">
                                       {formatDate(t.date)}
                                     </span>
                                     <span className="text-text-primary flex-1 min-w-0 truncate">
                                       {t.description}
                                     </span>
-                                    <span className={`font-mono font-bold w-[100px] flex-shrink-0 text-right ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                    <span className={`font-mono font-bold w-[100px] flex-shrink-0 text-right tabular-nums ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                       {formatBRL(t.amount)}
                                     </span>
                                     <span className="w-[56px] flex-shrink-0 text-center">
                                       {t.totalInstallments ? (
-                                        <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
+                                        <span className="px-1 py-0 bg-accent/10 text-accent rounded text-[10px] font-mono leading-4">
                                           {t.installmentNumber ?? '?'}/{t.totalInstallments}
                                         </span>
                                       ) : (
