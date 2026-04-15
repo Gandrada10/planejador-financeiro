@@ -426,6 +426,7 @@ export function TransactionsPage() {
         categories={categories}
         projects={activeProjects}
         accountNames={accountNames}
+        memberNames={allTitulars}
         onUpdate={updateTransaction}
         onDelete={deleteTransaction}
         onBatchReconcile={batchUpdateReconciled}

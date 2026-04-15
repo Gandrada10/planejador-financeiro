@@ -33,11 +33,12 @@ export function CreditCardPage() {
     });
   }, [transactions, activeCard, monthYear]);
 
-  // Group by titular
+  // Group by titular (fall back to familyMember for transactions edited
+  // via the Transactions tab where only familyMember is updated)
   const titularGroups = useMemo(() => {
     const map = new Map<string, typeof invoiceTransactions>();
     for (const t of invoiceTransactions) {
-      const key = t.titular || '';
+      const key = (t.titular || t.familyMember || '').trim();
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
