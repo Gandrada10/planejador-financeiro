@@ -69,8 +69,17 @@ ${body.context}`;
 
     if (!response.ok) {
       const err = await response.text();
-      return new Response(JSON.stringify({ error: `API error: ${response.status}`, details: err }), {
-        status: 502,
+      const status = response.status;
+      let userMessage = `API error: ${status}`;
+      if (status === 401) {
+        userMessage = 'Chave API Anthropic invalida ou expirada. Verifique a chave em Configuracoes > Chave API (deve comecar com "sk-ant-") e salve novamente.';
+      } else if (status === 403) {
+        userMessage = 'Chave API Anthropic sem permissao para este recurso. Verifique a chave em Configuracoes > Chave API.';
+      } else if (status === 429) {
+        userMessage = 'Limite de requisicoes da Anthropic atingido. Aguarde alguns instantes e tente novamente.';
+      }
+      return new Response(JSON.stringify({ error: userMessage, details: err }), {
+        status: status === 401 || status === 403 || status === 429 ? status : 502,
         headers: { 'Content-Type': 'application/json' },
       });
     }
