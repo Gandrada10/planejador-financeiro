@@ -402,7 +402,7 @@ function SummaryCard({
           ))}
       </div>
 
-      <p className="mt-1.5 text-base font-bold text-text-primary tabular-nums truncate">
+      <p className="mt-1.5 text-xs font-bold text-text-primary tabular-nums truncate">
         {fmt(total.curr)}
       </p>
       <p className="text-[10px] text-text-secondary tabular-nums mt-0.5 truncate">
