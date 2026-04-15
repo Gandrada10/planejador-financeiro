@@ -17,11 +17,14 @@ interface Props {
   totalEntries: number;
   totalExits: number;
   totalBalance: number;
+  yearBalance: number;
+  avg12months: number;
+  currentYear: string;
 }
 
 const ACCOUNT_COLORS = ['#f59e0b', '#8b5cf6', '#3b82f6', '#ec4899', '#06b6d4', '#14b8a6', '#f97316'];
 
-export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: Props) {
+export function CashFlowChart({ data, totalEntries, totalExits, totalBalance, yearBalance, avg12months, currentYear }: Props) {
   const chartData = data.map((d, i) => ({
     name: d.accountName.length > 14 ? d.accountName.slice(0, 14) + '...' : d.accountName,
     Entradas: d.entries,
@@ -116,11 +119,25 @@ export function CashFlowChart({ data, totalEntries, totalExits, totalBalance }: 
           </tbody>
           <tfoot>
             <tr className="border-t border-border">
-              <td className="py-2 pr-3 text-text-primary font-bold">Total</td>
+              <td className="py-2 pr-3 text-text-primary font-bold">Total (mês)</td>
               <td className="py-2 px-3 text-right text-accent-green font-bold">{formatBRL(totalEntries)}</td>
               <td className="py-2 px-3 text-right text-accent-red font-bold">{formatBRL(totalExits)}</td>
               <td className={`py-2 pl-3 text-right font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                 {formatBRL(totalBalance)}
+              </td>
+            </tr>
+            <tr>
+              <td className="py-1.5 pr-3 text-text-secondary">Acumulado {currentYear}</td>
+              <td className="py-1.5 px-3" colSpan={2} />
+              <td className={`py-1.5 pl-3 text-right tabular-nums ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {formatBRL(yearBalance)}
+              </td>
+            </tr>
+            <tr>
+              <td className="py-1.5 pr-3 text-text-secondary">Média mensal (12M)</td>
+              <td className="py-1.5 px-3" colSpan={2} />
+              <td className={`py-1.5 pl-3 text-right tabular-nums ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                {formatBRL(avg12months)}
               </td>
             </tr>
           </tfoot>

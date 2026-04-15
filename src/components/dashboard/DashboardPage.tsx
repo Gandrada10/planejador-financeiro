@@ -247,23 +247,10 @@ export function DashboardPage() {
               totalEntries={totalEntries}
               totalExits={totalExits}
               totalBalance={totalBalance}
+              yearBalance={yearBalance}
+              avg12months={avg12months}
+              currentYear={currentYear}
             />
-
-            {/* Compact KPIs: single card with 2 horizontal rows */}
-            <div className="bg-bg-card border border-border rounded-lg divide-y divide-border">
-              <div className="flex items-center justify-between px-4 py-2.5">
-                <p className="text-xs font-bold text-text-primary uppercase tracking-wider">Acumulado {currentYear}</p>
-                <p className={`text-xs font-bold tabular-nums ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {formatBRL(yearBalance)}
-                </p>
-              </div>
-              <div className="flex items-center justify-between px-4 py-2.5">
-                <p className="text-xs font-bold text-text-primary uppercase tracking-wider">Média mensal (12m)</p>
-                <p className={`text-xs font-bold tabular-nums ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {formatBRL(avg12months)}
-                </p>
-              </div>
-            </div>
 
             {/* YoY deviation: same period vs previous year (drill-down by category/subcategory) */}
             <YoyDeviationPanel
