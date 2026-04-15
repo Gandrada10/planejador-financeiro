@@ -9,7 +9,7 @@ import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
-import { formatBRL, getMonthYear } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -66,15 +66,23 @@ export function DashboardPage() {
   const selectedMonthIdx = Number(monthYear.split('-')[1]) - 1;
   const periodLabel = `Jan–${MONTH_ABBR[selectedMonthIdx]}`;
 
-  // Active projects with spending in the selected period
+  // Active projects with both monthly and all-time spending
   const projectsData = useMemo(() => {
     return activeProjects.map((p) => {
-      const ptxs = monthTransactions.filter((t) => t.projectId === p.id);
-      const spent = ptxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
-      const income = ptxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-      return { ...p, spent, income, balance: income + spent, count: ptxs.length };
+      const monthTxs = monthTransactions.filter((t) => t.projectId === p.id);
+      const spentMonth = monthTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+
+      const allTxs = transactions.filter((t) => t.projectId === p.id);
+      const spentTotal = allTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+
+      return {
+        ...p,
+        spentMonth,
+        spentTotal,
+        countMonth: monthTxs.length,
+      };
     });
-  }, [activeProjects, monthTransactions]);
+  }, [activeProjects, transactions, monthTransactions]);
 
   // Cash flow by account
   const cashFlowData = useMemo(() => {
@@ -277,24 +285,32 @@ export function DashboardPage() {
               {projectsData.length === 0 ? (
                 <p className="text-xs text-text-secondary">Nenhum projeto ativo.</p>
               ) : (
-                <div className="space-y-2.5">
+                <div className="space-y-2">
+                  {/* Column headers */}
+                  <div className="grid grid-cols-[1fr_repeat(2,_minmax(70px,_90px))] gap-2 text-[10px] text-text-secondary uppercase tracking-wider">
+                    <span />
+                    <span className="text-right">Acumulado</span>
+                    <span className="text-right">Gasto no mês</span>
+                  </div>
+
                   {projectsData.map((p) => (
-                    <div key={p.id}>
-                      <div className="grid grid-cols-[1fr_auto] items-center gap-3 text-xs">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: p.color }} />
-                          <span className="text-text-primary truncate">{p.name}</span>
-                        </div>
-                        <span className={`font-bold ${p.spent < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
-                          {p.count > 0 ? formatBRL(p.spent) : '—'}
-                        </span>
+                    <div
+                      key={p.id}
+                      className="grid grid-cols-[1fr_repeat(2,_minmax(70px,_90px))] gap-2 items-center border-l-2 pl-2 py-0.5"
+                      style={{ borderColor: p.color }}
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs text-text-primary truncate font-medium">{p.name}</p>
+                        <p className="text-[10px] text-text-secondary mt-0.5">
+                          {p.startDate ? `Início: ${formatDate(p.startDate)}` : 'Sem data de início'}
+                        </p>
                       </div>
-                      {p.count > 0 && (
-                        <div className="flex gap-3 text-[10px] text-text-secondary pl-4 mt-0.5">
-                          {p.income > 0 && <span className="text-accent-green">+{formatBRL(p.income)}</span>}
-                          <span>{p.count} lançamento{p.count !== 1 ? 's' : ''}</span>
-                        </div>
-                      )}
+                      <span className={`text-xs font-mono text-right ${p.spentTotal < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
+                        {p.spentTotal < 0 ? formatBRL(p.spentTotal) : '—'}
+                      </span>
+                      <span className={`text-xs font-mono text-right ${p.spentMonth < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
+                        {p.countMonth > 0 && p.spentMonth < 0 ? formatBRL(p.spentMonth) : '—'}
+                      </span>
                     </div>
                   ))}
                 </div>

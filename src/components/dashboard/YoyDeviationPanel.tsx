@@ -575,7 +575,7 @@ function GroupRow({
       }`}
     >
       <div className="min-w-0">
-        <p className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-1.5">
+        <p className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
           <span>{label}</span>
           {canExpand &&
             (isOpen ? (
@@ -592,13 +592,13 @@ function GroupRow({
           </span>
         </p>
       </div>
-      <div className="flex flex-col items-end flex-shrink-0">
-        <div className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
+      <div className={`flex items-center gap-2 flex-shrink-0 tabular-nums ${color}`}>
+        <div className="flex items-center gap-1 text-xs font-bold">
           <Icon size={12} />
           <span>{pctText}</span>
         </div>
         {deltaText && (
-          <span className={`text-[10px] tabular-nums mt-0.5 opacity-80 ${color}`}>
+          <span className="text-[11px] font-medium opacity-80 border-l border-current/20 pl-2">
             {deltaText}
           </span>
         )}
