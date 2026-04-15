@@ -64,6 +64,7 @@ export function YoyDeviationPanel({
   periodLabel,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [activeGroup, setActiveGroup] = useState<'expenses' | 'income' | 'resultado' | null>(null);
 
   const data = useMemo(() => {
     const [y, m] = monthYear.split('-').map(Number);
@@ -248,7 +249,16 @@ export function YoyDeviationPanel({
     });
   }
 
+  function handleSummaryClick(group: 'expenses' | 'income' | 'resultado') {
+    setActiveGroup((prev) => (prev === group ? null : group));
+  }
+
   const currentYear = monthYear.split('-')[0];
+
+  const canExpandExpenses = data.hasPrev && data.expenseItems.length > 0;
+  const canExpandIncome = data.hasPrev && data.incomeItems.length > 0;
+  const canExpandResultado =
+    data.hasPrev && (data.resultadoHelping.length > 0 || data.resultadoHurting.length > 0);
 
   return (
     <div className="bg-bg-card border border-border rounded-lg">
@@ -272,146 +282,215 @@ export function YoyDeviationPanel({
         )}
       </div>
 
-      <div className="divide-y divide-border">
-        <GroupSection
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2">
+        <SummaryCard
           label="Despesas"
-          groupKey="group:expenses"
           total={data.totals.expenses}
-          items={data.expenseItems}
           higherIsBetter={false}
           hasPrev={data.hasPrev}
           prevYear={data.prevYear}
-          expanded={expanded}
-          toggle={toggle}
-          catKeyPrefix="cat:exp:"
+          isActive={activeGroup === 'expenses'}
+          canExpand={canExpandExpenses}
+          onClick={() => handleSummaryClick('expenses')}
         />
-        <GroupSection
+        <SummaryCard
           label="Receitas"
-          groupKey="group:income"
           total={data.totals.income}
-          items={data.incomeItems}
           higherIsBetter={true}
           hasPrev={data.hasPrev}
           prevYear={data.prevYear}
+          isActive={activeGroup === 'income'}
+          canExpand={canExpandIncome}
+          onClick={() => handleSummaryClick('income')}
+        />
+        <SummaryCard
+          label="Resultado"
+          total={data.totals.resultado}
+          higherIsBetter={true}
+          hasPrev={data.hasPrev}
+          prevYear={data.prevYear}
+          isActive={activeGroup === 'resultado'}
+          canExpand={canExpandResultado}
+          onClick={() => handleSummaryClick('resultado')}
+          signed
+        />
+      </div>
+
+      {activeGroup === 'expenses' && canExpandExpenses && (
+        <GroupDrilldown
+          items={data.expenseItems}
+          higherIsBetter={false}
+          hasPrev={data.hasPrev}
+          expanded={expanded}
+          toggle={toggle}
+          catKeyPrefix="cat:exp:"
+          showAllKey="showAll:group:expenses"
+        />
+      )}
+      {activeGroup === 'income' && canExpandIncome && (
+        <GroupDrilldown
+          items={data.incomeItems}
+          higherIsBetter={true}
+          hasPrev={data.hasPrev}
           expanded={expanded}
           toggle={toggle}
           catKeyPrefix="cat:inc:"
+          showAllKey="showAll:group:income"
         />
-        <ResultadoSection
-          total={data.totals.resultado}
+      )}
+      {activeGroup === 'resultado' && canExpandResultado && (
+        <ResultadoDrilldown
           helping={data.resultadoHelping}
           hurting={data.resultadoHurting}
-          hasPrev={data.hasPrev}
-          prevYear={data.prevYear}
           expanded={expanded}
           toggle={toggle}
         />
-      </div>
-    </div>
-  );
-}
-
-// ---------- Group sections ----------
-
-interface GroupSectionProps {
-  label: string;
-  groupKey: string;
-  total: GroupTotal;
-  items: YoyItem[];
-  higherIsBetter: boolean;
-  hasPrev: boolean;
-  prevYear: number;
-  expanded: Set<string>;
-  toggle: (key: string) => void;
-  catKeyPrefix: string;
-}
-
-function GroupSection({
-  label,
-  groupKey,
-  total,
-  items,
-  higherIsBetter,
-  hasPrev,
-  prevYear,
-  expanded,
-  toggle,
-  catKeyPrefix,
-}: GroupSectionProps) {
-  const isOpen = expanded.has(groupKey);
-  const canExpand = hasPrev && items.length > 0;
-  const showAllKey = `showAll:${groupKey}`;
-  const showAll = expanded.has(showAllKey);
-  const visibleItems = showAll ? items : items.slice(0, RESULTADO_TOP_N);
-  const extraCount = Math.max(0, items.length - RESULTADO_TOP_N);
-
-  return (
-    <div>
-      <GroupRow
-        label={label}
-        curr={total.curr}
-        prev={total.prev}
-        pct={total.pct}
-        varianceAbs={total.varianceAbs}
-        higherIsBetter={higherIsBetter}
-        hasPrev={hasPrev}
-        prevYear={prevYear}
-        isOpen={isOpen}
-        canExpand={canExpand}
-        onToggle={() => canExpand && toggle(groupKey)}
-      />
-      {isOpen && canExpand && (
-        <div className="bg-bg-secondary/40 border-t border-border">
-          <ColumnHeader />
-          <div className="divide-y divide-border/50">
-            {visibleItems.map((item) => (
-              <CategoryRow
-                key={item.id}
-                item={item}
-                higherIsBetter={higherIsBetter}
-                hasPrev={hasPrev}
-                expanded={expanded}
-                toggle={toggle}
-                rowKey={`${catKeyPrefix}${item.id}`}
-              />
-            ))}
-          </div>
-          {extraCount > 0 && (
-            <ShowMoreButton
-              expanded={showAll}
-              extraCount={extraCount}
-              onClick={() => toggle(showAllKey)}
-            />
-          )}
-        </div>
       )}
     </div>
   );
 }
 
-interface ResultadoSectionProps {
+// ---------- Summary card ----------
+
+interface SummaryCardProps {
+  label: string;
   total: GroupTotal;
-  helping: YoyItem[];
-  hurting: YoyItem[];
+  higherIsBetter: boolean;
   hasPrev: boolean;
   prevYear: number;
+  isActive: boolean;
+  canExpand: boolean;
+  onClick: () => void;
+  signed?: boolean;
+}
+
+function SummaryCard({
+  label,
+  total,
+  higherIsBetter,
+  hasPrev,
+  prevYear,
+  isActive,
+  canExpand,
+  onClick,
+  signed,
+}: SummaryCardProps) {
+  const { color, Icon, pctText } = resolveTrend(total.pct, higherIsBetter, hasPrev);
+  const fmt = (v: number) => (signed || v < 0 ? formatBRL(v) : formatBRL(Math.abs(v)));
+  const deltaText = hasPrev
+    ? `${total.varianceAbs > 0 ? '+' : ''}${formatBRL(total.varianceAbs)}`
+    : '';
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!canExpand}
+      className={`rounded-md border p-3 text-left transition-colors ${
+        isActive
+          ? 'border-accent bg-bg-secondary/60'
+          : 'border-border bg-bg-secondary/20'
+      } ${canExpand ? 'hover:bg-bg-secondary/40 cursor-pointer' : 'cursor-default'}`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm font-semibold text-text-primary">{label}</p>
+        {canExpand &&
+          (isActive ? (
+            <ChevronDown size={12} className="text-text-secondary flex-shrink-0" />
+          ) : (
+            <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
+          ))}
+      </div>
+
+      <p className="mt-1.5 text-base font-bold text-text-primary tabular-nums truncate">
+        {fmt(total.curr)}
+      </p>
+      <p className="text-[10px] text-text-secondary tabular-nums mt-0.5 truncate">
+        {prevYear}: {hasPrev ? fmt(total.prev) : '—'}
+      </p>
+
+      <div className={`mt-2 flex items-center gap-2 tabular-nums ${color}`}>
+        <div className="flex items-center gap-1 text-xs font-bold">
+          <Icon size={12} />
+          <span>{pctText}</span>
+        </div>
+        {deltaText && (
+          <span className="text-[11px] font-medium opacity-80 border-l border-current/20 pl-2 truncate">
+            {deltaText}
+          </span>
+        )}
+      </div>
+    </button>
+  );
+}
+
+// ---------- Drill-down panels ----------
+
+const RESULTADO_TOP_N = 5;
+
+interface GroupDrilldownProps {
+  items: YoyItem[];
+  higherIsBetter: boolean;
+  hasPrev: boolean;
+  expanded: Set<string>;
+  toggle: (key: string) => void;
+  catKeyPrefix: string;
+  showAllKey: string;
+}
+
+function GroupDrilldown({
+  items,
+  higherIsBetter,
+  hasPrev,
+  expanded,
+  toggle,
+  catKeyPrefix,
+  showAllKey,
+}: GroupDrilldownProps) {
+  const showAll = expanded.has(showAllKey);
+  const visibleItems = showAll ? items : items.slice(0, RESULTADO_TOP_N);
+  const extraCount = Math.max(0, items.length - RESULTADO_TOP_N);
+
+  return (
+    <div className="bg-bg-secondary/40 border-t border-border">
+      <ColumnHeader />
+      <div className="divide-y divide-border/50">
+        {visibleItems.map((item) => (
+          <CategoryRow
+            key={item.id}
+            item={item}
+            higherIsBetter={higherIsBetter}
+            hasPrev={hasPrev}
+            expanded={expanded}
+            toggle={toggle}
+            rowKey={`${catKeyPrefix}${item.id}`}
+          />
+        ))}
+      </div>
+      {extraCount > 0 && (
+        <ShowMoreButton
+          expanded={showAll}
+          extraCount={extraCount}
+          onClick={() => toggle(showAllKey)}
+        />
+      )}
+    </div>
+  );
+}
+
+interface ResultadoDrilldownProps {
+  helping: YoyItem[];
+  hurting: YoyItem[];
   expanded: Set<string>;
   toggle: (key: string) => void;
 }
 
-const RESULTADO_TOP_N = 5;
-
-function ResultadoSection({
-  total,
+function ResultadoDrilldown({
   helping,
   hurting,
-  hasPrev,
-  prevYear,
   expanded,
   toggle,
-}: ResultadoSectionProps) {
-  const isOpen = expanded.has('group:resultado');
-  const canExpand = hasPrev && (helping.length > 0 || hurting.length > 0);
+}: ResultadoDrilldownProps) {
   const showAllHelping = expanded.has('showAll:resultado:helping');
   const showAllHurting = expanded.has('showAll:resultado:hurting');
 
@@ -421,78 +500,60 @@ function ResultadoSection({
   const hurtingExtra = Math.max(0, hurting.length - RESULTADO_TOP_N);
 
   return (
-    <div>
-      <GroupRow
-        label="Resultado"
-        curr={total.curr}
-        prev={total.prev}
-        pct={total.pct}
-        varianceAbs={total.varianceAbs}
-        higherIsBetter={true}
-        hasPrev={hasPrev}
-        prevYear={prevYear}
-        isOpen={isOpen}
-        canExpand={canExpand}
-        onToggle={() => canExpand && toggle('group:resultado')}
-        signed
-      />
-      {isOpen && canExpand && (
-        <div className="bg-bg-secondary/40 border-t border-border">
-          {helping.length > 0 && (
-            <>
-              <div className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent-green">
-                Ajudando o resultado
-              </div>
-              <ColumnHeader showImpactCol />
-              <div className="divide-y divide-border/50">
-                {helpingVisible.map((item) => (
-                  <ResultadoRow
-                    key={`h-${item.id}`}
-                    item={item}
-                    expanded={expanded}
-                    toggle={toggle}
-                    rowKey={`cat:res:h:${item.id}`}
-                  />
-                ))}
-              </div>
-              {helpingExtra > 0 && (
-                <ShowMoreButton
-                  expanded={showAllHelping}
-                  extraCount={helpingExtra}
-                  onClick={() => toggle('showAll:resultado:helping')}
-                />
-              )}
-            </>
+    <div className="bg-bg-secondary/40 border-t border-border">
+      {helping.length > 0 && (
+        <>
+          <div className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent-green">
+            Ajudando o resultado
+          </div>
+          <ColumnHeader showImpactCol />
+          <div className="divide-y divide-border/50">
+            {helpingVisible.map((item) => (
+              <ResultadoRow
+                key={`h-${item.id}`}
+                item={item}
+                expanded={expanded}
+                toggle={toggle}
+                rowKey={`cat:res:h:${item.id}`}
+              />
+            ))}
+          </div>
+          {helpingExtra > 0 && (
+            <ShowMoreButton
+              expanded={showAllHelping}
+              extraCount={helpingExtra}
+              onClick={() => toggle('showAll:resultado:helping')}
+            />
           )}
-          {hurting.length > 0 && (
-            <>
-              <div
-                className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent-red ${helping.length > 0 ? 'border-t border-border' : ''}`}
-              >
-                Atrapalhando o resultado
-              </div>
-              <ColumnHeader showImpactCol />
-              <div className="divide-y divide-border/50">
-                {hurtingVisible.map((item) => (
-                  <ResultadoRow
-                    key={`x-${item.id}`}
-                    item={item}
-                    expanded={expanded}
-                    toggle={toggle}
-                    rowKey={`cat:res:x:${item.id}`}
-                  />
-                ))}
-              </div>
-              {hurtingExtra > 0 && (
-                <ShowMoreButton
-                  expanded={showAllHurting}
-                  extraCount={hurtingExtra}
-                  onClick={() => toggle('showAll:resultado:hurting')}
-                />
-              )}
-            </>
+        </>
+      )}
+      {hurting.length > 0 && (
+        <>
+          <div
+            className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent-red ${helping.length > 0 ? 'border-t border-border' : ''}`}
+          >
+            Atrapalhando o resultado
+          </div>
+          <ColumnHeader showImpactCol />
+          <div className="divide-y divide-border/50">
+            {hurtingVisible.map((item) => (
+              <ResultadoRow
+                key={`x-${item.id}`}
+                item={item}
+                expanded={expanded}
+                toggle={toggle}
+                rowKey={`cat:res:x:${item.id}`}
+              />
+            ))}
+          </div>
+          {hurtingExtra > 0 && (
+            <ShowMoreButton
+              expanded={showAllHurting}
+              extraCount={hurtingExtra}
+              onClick={() => toggle('showAll:resultado:hurting')}
+            />
           )}
-        </div>
+        </>
       )}
     </div>
   );
@@ -529,83 +590,6 @@ function ShowMoreButton({
 }
 
 // ---------- Rows ----------
-
-interface GroupRowProps {
-  label: string;
-  curr: number;
-  prev: number;
-  pct: number | null;
-  varianceAbs: number;
-  higherIsBetter: boolean;
-  hasPrev: boolean;
-  prevYear: number;
-  isOpen: boolean;
-  canExpand: boolean;
-  onToggle: () => void;
-  signed?: boolean;
-}
-
-function GroupRow({
-  label,
-  curr,
-  prev,
-  pct,
-  varianceAbs,
-  higherIsBetter,
-  hasPrev,
-  prevYear,
-  isOpen,
-  canExpand,
-  onToggle,
-  signed,
-}: GroupRowProps) {
-  const { color, Icon, pctText } = resolveTrend(pct, higherIsBetter, hasPrev);
-  const fmt = (v: number) => (signed || v < 0 ? formatBRL(v) : formatBRL(Math.abs(v)));
-  const deltaText = hasPrev
-    ? `${varianceAbs > 0 ? '+' : ''}${formatBRL(varianceAbs)}`
-    : '';
-
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      disabled={!canExpand}
-      className={`w-full flex items-center justify-between gap-3 px-4 py-2.5 text-left ${
-        canExpand ? 'hover:bg-bg-secondary/40 cursor-pointer' : 'cursor-default'
-      }`}
-    >
-      <div className="min-w-0">
-        <p className="text-sm font-semibold text-text-primary flex items-center gap-1.5">
-          <span>{label}</span>
-          {canExpand &&
-            (isOpen ? (
-              <ChevronDown size={12} className="text-text-secondary" />
-            ) : (
-              <ChevronRight size={12} className="text-text-secondary" />
-            ))}
-        </p>
-        <p className="text-[10px] text-text-secondary tabular-nums mt-0.5">
-          {fmt(curr)}
-          <span className="text-text-secondary/60">
-            {' '}
-            · {prevYear}: {hasPrev ? fmt(prev) : '—'}
-          </span>
-        </p>
-      </div>
-      <div className={`flex items-center gap-2 flex-shrink-0 tabular-nums ${color}`}>
-        <div className="flex items-center gap-1 text-xs font-bold">
-          <Icon size={12} />
-          <span>{pctText}</span>
-        </div>
-        {deltaText && (
-          <span className="text-[11px] font-medium opacity-80 border-l border-current/20 pl-2">
-            {deltaText}
-          </span>
-        )}
-      </div>
-    </button>
-  );
-}
 
 interface CategoryRowProps {
   item: YoyItem;
