@@ -393,7 +393,7 @@ function SummaryCard({
       } ${canExpand ? 'hover:bg-bg-secondary/40 cursor-pointer' : 'cursor-default'}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-text-primary">{label}</p>
+        <p className="text-xs font-medium text-text-primary truncate">{label}</p>
         {canExpand &&
           (isActive ? (
             <ChevronDown size={12} className="text-text-secondary flex-shrink-0" />
