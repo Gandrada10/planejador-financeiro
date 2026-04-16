@@ -1,9 +1,10 @@
 import { useState, useMemo } from 'react';
-import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap } from 'lucide-react';
+import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil } from 'lucide-react';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
+import { BatchEditModal } from '../shared/BatchEditModal';
 
 interface Props {
   transactions: Transaction[];
@@ -14,6 +15,7 @@ interface Props {
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
+  onBatchUpdate?: (ids: string[], data: Partial<Transaction>) => Promise<void> | void;
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
   reopenCycle?: (cycleId: string) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
@@ -21,12 +23,13 @@ interface Props {
   rules?: CategoryRule[];
 }
 
-export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [sortField, setSortField] = useState<'date' | 'purchaseDate'>('date');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
+  const [showBatchEdit, setShowBatchEdit] = useState(false);
 
   function toggleSort(field: 'date' | 'purchaseDate') {
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -168,7 +171,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   return (
     <div className="space-y-2">
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 p-2 bg-bg-secondary rounded text-xs">
+        <div className="flex items-center gap-3 p-2 bg-bg-secondary rounded text-xs flex-wrap">
           <span className="text-text-secondary">{selectedIds.size} selecionadas</span>
           {onBatchReconcile && (() => {
             const selectedList = sorted.filter((t) => selectedIds.has(t.id));
@@ -183,10 +186,48 @@ export function TransactionTable({ transactions, categories, projects = [], acco
               </button>
             );
           })()}
+          {onBatchUpdate && (
+            <button onClick={() => setShowBatchEdit(true)} className="text-accent hover:underline flex items-center gap-1">
+              <Pencil size={12} /> Edicao em lote
+            </button>
+          )}
           <button onClick={deleteSelected} className="text-accent-red hover:underline flex items-center gap-1">
             <Trash2 size={12} /> Excluir
           </button>
         </div>
+      )}
+
+      {showBatchEdit && onBatchUpdate && (
+        <BatchEditModal
+          count={selectedIds.size}
+          categories={categories}
+          projects={projects}
+          accountNames={accountNames}
+          memberNames={memberNames}
+          onApply={async (updates) => {
+            const ids = [...selectedIds];
+            if (checkClosedCycle && reopenCycle) {
+              const closedMap = new Map<string, string>();
+              for (const id of ids) {
+                const t = sorted.find((x) => x.id === id);
+                if (!t) continue;
+                const closed = checkClosedCycle(t);
+                if (closed) closedMap.set(closed.cycleId, closed.label);
+              }
+              if (closedMap.size > 0) {
+                const labels = [...closedMap.values()].join('\n');
+                const ok = window.confirm(
+                  `As seguintes faturas estao encerradas:\n${labels}\n\nDeseja reabri-las para editar?`
+                );
+                if (!ok) return;
+                for (const cycleId of closedMap.keys()) await reopenCycle(cycleId);
+              }
+            }
+            await onBatchUpdate(ids, updates);
+            setSelectedIds(new Set());
+          }}
+          onClose={() => setShowBatchEdit(false)}
+        />
       )}
 
       <div className="overflow-auto bg-bg-card border border-border rounded-lg">
