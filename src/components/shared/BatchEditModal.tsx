@@ -63,7 +63,7 @@ export function BatchEditModal({
   const SENTINEL_KEEP = '__keep__';
   const SENTINEL_CLEAR = '__clear__';
 
-  function resolveValue<T>(selected: string, keep: T, clear: T, real: (v: string) => T): T | undefined {
+  function resolveValue<T>(selected: string, clear: T, real: (v: string) => T): T | undefined {
     if (selected === '' || selected === SENTINEL_KEEP) return undefined;
     if (selected === SENTINEL_CLEAR) return clear;
     return real(selected);
@@ -73,19 +73,19 @@ export function BatchEditModal({
     const updates: Partial<Transaction> = {};
 
     if (fields.includes('categoryId')) {
-      const v = resolveValue<string | null>(categoryId, null, null, (s) => s);
+      const v = resolveValue<string | null>(categoryId, null, (s) => s);
       if (v !== undefined) updates.categoryId = v;
     }
     if (fields.includes('account')) {
-      const v = resolveValue<string>(account, '', '', (s) => s);
+      const v = resolveValue<string>(account, '', (s) => s);
       if (v !== undefined && v !== '') updates.account = v;
     }
     if (fields.includes('familyMember')) {
-      const v = resolveValue<string>(familyMember, '', '', (s) => s);
+      const v = resolveValue<string>(familyMember, '', (s) => s);
       if (v !== undefined) updates.familyMember = v;
     }
     if (fields.includes('projectId')) {
-      const v = resolveValue<string | null>(projectId, null, null, (s) => s);
+      const v = resolveValue<string | null>(projectId, null, (s) => s);
       if (v !== undefined) updates.projectId = v;
     }
 
