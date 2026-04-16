@@ -190,19 +190,19 @@ export function TransactionTable({ transactions, categories, projects = [], acco
       )}
 
       <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full min-w-[1157px] text-xs table-fixed">
+        <table className="w-full min-w-[1131px] text-xs table-fixed">
           <colgroup>
-            <col style={{ width: 32 }} />  {/* dot */}
-            <col style={{ width: 95 }} />  {/* competencia */}
-            <col style={{ width: 95 }} />  {/* data */}
-            <col style={{ width: 210 }} /> {/* descricao - fixa e estreita */}
-            <col style={{ width: 160 }} /> {/* categoria */}
-            <col style={{ width: 105 }} /> {/* valor */}
-            <col style={{ width: 68 }} />  {/* parcelas */}
-            <col style={{ width: 95 }} />  {/* conta */}
-            <col style={{ width: 130 }} /> {/* membro */}
-            <col style={{ width: 135 }} /> {/* projeto */}
-            <col style={{ width: 32 }} />  {/* delete */}
+            <col style={{ width: 28 }} />  {/* dot */}
+            <col style={{ width: 85 }} />  {/* competencia */}
+            <col style={{ width: 85 }} />  {/* data */}
+            <col style={{ width: 170 }} /> {/* descricao */}
+            <col style={{ width: 215 }} /> {/* categoria */}
+            <col style={{ width: 100 }} /> {/* valor */}
+            <col style={{ width: 60 }} />  {/* parcelas */}
+            <col style={{ width: 105 }} /> {/* conta */}
+            <col style={{ width: 125 }} /> {/* membro */}
+            <col style={{ width: 130 }} /> {/* projeto */}
+            <col style={{ width: 28 }} />  {/* delete */}
           </colgroup>
           <thead>
             <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
