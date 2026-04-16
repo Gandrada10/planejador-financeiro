@@ -525,7 +525,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                                 if (!ok) return;
                                 onUpdate(t.id, { projectId: value || null });
                               }}
-                              className="w-full bg-transparent border-none text-[10px] cursor-pointer focus:outline-none hover:text-text-primary truncate"
+                              className="w-full bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary truncate"
                               style={{ color: projects.find((p) => p.id === t.projectId)?.color || 'var(--color-text-secondary)' }}
                             >
                               <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>—</option>

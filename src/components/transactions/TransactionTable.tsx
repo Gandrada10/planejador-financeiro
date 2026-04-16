@@ -10,6 +10,7 @@ interface Props {
   categories: Category[];
   projects?: Project[];
   accountNames: string[];
+  memberNames?: string[];
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
@@ -20,7 +21,7 @@ interface Props {
   rules?: CategoryRule[];
 }
 
-export function TransactionTable({ transactions, categories, projects = [], accountNames, onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -189,19 +190,19 @@ export function TransactionTable({ transactions, categories, projects = [], acco
       )}
 
       <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full min-w-[1117px] text-xs table-fixed">
+        <table className="w-full min-w-[1131px] text-xs table-fixed">
           <colgroup>
-            <col style={{ width: 32 }} />  {/* dot */}
-            <col style={{ width: 95 }} />  {/* competencia */}
-            <col style={{ width: 95 }} />  {/* data */}
-            <col style={{ width: 210 }} /> {/* descricao - fixa e estreita */}
-            <col style={{ width: 160 }} /> {/* categoria */}
-            <col style={{ width: 105 }} /> {/* valor */}
-            <col style={{ width: 68 }} />  {/* parcelas */}
-            <col style={{ width: 95 }} />  {/* conta */}
-            <col style={{ width: 90 }} />  {/* membro */}
-            <col style={{ width: 135 }} /> {/* projeto */}
-            <col style={{ width: 32 }} />  {/* delete */}
+            <col style={{ width: 28 }} />  {/* dot */}
+            <col style={{ width: 85 }} />  {/* competencia */}
+            <col style={{ width: 85 }} />  {/* data */}
+            <col style={{ width: 170 }} /> {/* descricao */}
+            <col style={{ width: 215 }} /> {/* categoria */}
+            <col style={{ width: 100 }} /> {/* valor */}
+            <col style={{ width: 60 }} />  {/* parcelas */}
+            <col style={{ width: 105 }} /> {/* conta */}
+            <col style={{ width: 125 }} /> {/* membro */}
+            <col style={{ width: 130 }} /> {/* projeto */}
+            <col style={{ width: 28 }} />  {/* delete */}
           </colgroup>
           <thead>
             <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
@@ -433,23 +434,47 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                   </select>
                 </td>
 
-                {/* Membro - editable */}
-                <td
-                  data-tab-cell
-                  className={`p-2 text-text-secondary truncate overflow-hidden ${editableCell}`}
-                  onClick={() => startEdit(t.id, 'familyMember', t.familyMember || '')}
-                >
-                  {editingCell?.id === t.id && editingCell.field === 'familyMember' ? (
-                    <input
-                      autoFocus
-                      value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onBlur={commitEdit}
-                      onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
-                    />
+                {/* Membro - select */}
+                <td className="p-2 text-text-secondary overflow-hidden">
+                  {memberNames.length > 0 ? (
+                    <select
+                      tabIndex={-1}
+                      value={t.familyMember || ''}
+                      onChange={async (e) => {
+                        const val = e.target.value;
+                        const ok = await guardClosedCycle(t);
+                        if (!ok) { e.target.value = t.familyMember || ''; return; }
+                        onUpdate(t.id, { familyMember: val });
+                      }}
+                      className="w-full bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary truncate"
+                    >
+                      <option value="">—</option>
+                      {memberNames.map((name) => (
+                        <option key={name} value={name}>{name}</option>
+                      ))}
+                      {t.familyMember && !memberNames.includes(t.familyMember) && (
+                        <option value={t.familyMember}>{t.familyMember}</option>
+                      )}
+                    </select>
                   ) : (
-                    t.familyMember || '—'
+                    <span
+                      data-tab-cell
+                      className={`block truncate ${editableCell}`}
+                      onClick={() => startEdit(t.id, 'familyMember', t.familyMember || '')}
+                    >
+                      {editingCell?.id === t.id && editingCell.field === 'familyMember' ? (
+                        <input
+                          autoFocus
+                          value={editValue}
+                          onChange={(e) => setEditValue(e.target.value)}
+                          onBlur={commitEdit}
+                          onKeyDown={handleKeyDown}
+                          className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                        />
+                      ) : (
+                        t.familyMember || '—'
+                      )}
+                    </span>
                   )}
                 </td>
 
