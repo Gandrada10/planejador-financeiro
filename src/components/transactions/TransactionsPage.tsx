@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X, Landmark, History, ChevronDown, ChevronRight } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, Landmark, ChevronDown, History } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -14,19 +14,9 @@ import { ImportModal } from './ImportModal';
 import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
-import { getMonthYear, getMonthLabel, cn, formatDate } from '../../lib/utils';
+import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
+import { getMonthYear, getMonthLabel, cn } from '../../lib/utils';
 import type { CategorizationSession, Transaction } from '../../types';
-
-const HISTORY_PAGE_SIZE = 20;
-
-function formatHistoryStatus(s: CategorizationSession): { label: string; tone: string } {
-  if (s.status === 'applied') {
-    const when = s.appliedAt ? formatDate(s.appliedAt) : '';
-    return { label: when ? `Aplicado em ${when}` : 'Aplicado', tone: 'text-accent-green' };
-  }
-  if (s.status === 'dismissed') return { label: 'Dispensado', tone: 'text-text-secondary' };
-  return { label: 'Em andamento', tone: 'text-accent' };
-}
 
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
@@ -50,10 +40,22 @@ export function TransactionsPage() {
   const [filterReconciled, setFilterReconciled] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
-  const [historyOpen, setHistoryOpen] = useState(false);
-  const [historyVisible, setHistoryVisible] = useState(HISTORY_PAGE_SIZE);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [showHistoryList, setShowHistoryList] = useState(false);
   const [detailSession, setDetailSession] = useState<CategorizationSession | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
   const autoApplied = useRef(false);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(e.target as Node)) {
+        setShareMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [shareMenuOpen]);
 
   // Auto-apply ALL pending categorizations when page loads and sessions are available
   // This doesn't depend on categorizedCount — it reads the actual session transactions
@@ -301,12 +303,33 @@ export function TransactionsPage() {
               <Landmark size={14} /> Sincronizar Banco
             </button>
           )}
-          <button
-            onClick={() => setShowShareModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
-          >
-            <Send size={14} /> Enviar p/ Categorizar
-          </button>
+          <div className="relative" ref={shareMenuRef}>
+            <button
+              onClick={() => setShareMenuOpen((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
+            >
+              <Send size={14} /> Categorização compartilhada <ChevronDown size={12} />
+            </button>
+            {shareMenuOpen && (
+              <div className="absolute right-0 mt-1 min-w-[220px] bg-bg-card border border-border rounded shadow-lg z-20 py-1">
+                <button
+                  onClick={() => { setShareMenuOpen(false); setShowShareModal(true); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
+                >
+                  <Send size={12} className="text-accent" />
+                  Enviar p/ categorizar
+                </button>
+                <button
+                  onClick={() => { setShareMenuOpen(false); setShowHistoryList(true); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
+                >
+                  <History size={12} className="text-accent" />
+                  Ver histórico
+                  <span className="ml-auto text-[10px] text-text-secondary">{historySessions.length}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -467,60 +490,6 @@ export function TransactionsPage() {
         </div>
       )}
 
-      {historySessions.length > 0 && (
-        <div className="border border-border rounded-lg">
-          <button
-            onClick={() => setHistoryOpen((v) => !v)}
-            className="w-full flex items-center justify-between px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
-          >
-            <span className="flex items-center gap-2">
-              {historyOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              <History size={14} className="text-accent" />
-              Histórico de categorizações ({historySessions.length})
-            </span>
-            <span className="text-[10px] text-text-secondary">últimos 90 dias</span>
-          </button>
-          {historyOpen && (
-            <div className="border-t border-border divide-y divide-border">
-              {historySessions.slice(0, historyVisible).map((s) => {
-                const status = formatHistoryStatus(s);
-                const period = s.monthFilter && s.monthFilter !== 'all' ? getMonthLabel(s.monthFilter) : 'Todos os meses';
-                const accountsLabel = s.accounts.length > 0 ? s.accounts.join(' • ') : '—';
-                return (
-                  <div key={s.id} className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-text-secondary">{formatDate(s.createdAt)}</span>
-                        <span className="text-text-primary font-medium">{s.titularName}</span>
-                        <span className="text-text-secondary">• {period}</span>
-                        <span className={`${status.tone} font-medium`}>• {status.label}</span>
-                      </div>
-                      <div className="text-[11px] text-text-secondary truncate">
-                        {accountsLabel} — {s.transactionIds.length} enviados • {s.categorizedCount} categorizados
-                        {s.status === 'applied' && ` • ${s.appliedCount} aplicados`}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => setDetailSession(s)}
-                      className="px-2 py-1 bg-bg-secondary border border-border text-text-primary text-[11px] rounded hover:border-accent whitespace-nowrap"
-                    >
-                      Ver detalhes
-                    </button>
-                  </div>
-                );
-              })}
-              {historySessions.length > historyVisible && (
-                <button
-                  onClick={() => setHistoryVisible((v) => v + HISTORY_PAGE_SIZE)}
-                  className="w-full py-2 text-[11px] text-accent hover:bg-bg-secondary"
-                >
-                  Ver mais ({historySessions.length - historyVisible})
-                </button>
-              )}
-            </div>
-          )}
-        </div>
-      )}
 
       <TransactionTable
         transactions={filtered}
@@ -572,6 +541,13 @@ export function TransactionsPage() {
           titulars={allTitulars}
           monthFilter={filterMonth}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+      {showHistoryList && (
+        <CategorizationHistoryListModal
+          sessions={historySessions}
+          onOpenDetail={(s) => setDetailSession(s)}
+          onClose={() => setShowHistoryList(false)}
         />
       )}
       {detailSession && (
