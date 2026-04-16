@@ -13,7 +13,7 @@ import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
 import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
-import { getMonthYear, getMonthLabel } from '../../lib/utils';
+import { getMonthYear, getMonthLabel, cn } from '../../lib/utils';
 import type { Transaction } from '../../types';
 
 export function TransactionsPage() {
@@ -235,6 +235,31 @@ export function TransactionsPage() {
     return <div className="text-accent text-sm animate-pulse">Carregando transacoes...</div>;
   }
 
+  const defaultMonth = getMonthYear();
+  const baseFieldClass = 'flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent';
+  const activeFieldClass = 'border-accent bg-accent/10 text-accent';
+  const inactiveFieldClass = 'border-border text-text-primary';
+  const isActive = {
+    account: filterAccount !== 'all',
+    month: filterMonth !== defaultMonth,
+    category: filterCategory !== 'all',
+    titular: filterTitular !== 'all',
+    installment: filterInstallment !== 'all',
+    search: searchText.trim() !== '',
+  };
+  const activeCount =
+    Object.values(isActive).filter(Boolean).length +
+    (filterReconciled !== 'all' ? 1 : 0);
+  const clearAllFilters = () => {
+    setFilterAccount('all');
+    setFilterMonth(defaultMonth);
+    setFilterCategory('all');
+    setFilterTitular('all');
+    setFilterInstallment('all');
+    setFilterReconciled('all');
+    setSearchText('');
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -274,7 +299,7 @@ export function TransactionsPage() {
         <select
           value={filterAccount}
           onChange={(e) => setFilterAccount(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.account ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todas as contas</option>
           {accountNames.map((a) => (
@@ -284,7 +309,7 @@ export function TransactionsPage() {
         <select
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.month ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todos os meses</option>
           {months.map((m) => (
@@ -294,7 +319,7 @@ export function TransactionsPage() {
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.category ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todas as categorias</option>
           <option value="uncategorized">Sem categoria</option>
@@ -305,7 +330,7 @@ export function TransactionsPage() {
         <select
           value={filterTitular}
           onChange={(e) => setFilterTitular(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.titular ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todos os titulares</option>
           {allTitulars.map((t) => (
@@ -315,23 +340,34 @@ export function TransactionsPage() {
         <select
           value={filterInstallment}
           onChange={(e) => setFilterInstallment(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.installment ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todos os tipos</option>
           <option value="installments">Parcelados</option>
           <option value="single">Avulsos</option>
         </select>
         <div className="relative flex-1 min-w-[140px]">
-          <Search size={14} className="absolute left-2.5 top-2.5 text-text-secondary" />
+          <Search size={14} className={cn('absolute left-2.5 top-2.5', isActive.search ? 'text-accent' : 'text-text-secondary')} />
           <input
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Buscar por descricao, conta, membro..."
-            className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className={cn('w-full pl-8 pr-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent', isActive.search ? activeFieldClass : inactiveFieldClass)}
           />
         </div>
       </div>
+
+      {activeCount > 0 && (
+        <div className="flex justify-end -mt-2">
+          <button
+            onClick={clearAllFilters}
+            className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent"
+          >
+            <X size={12} /> Limpar filtros ({activeCount})
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-4 text-xs text-text-secondary flex-wrap">
         <span>{filtered.length} transacoes</span>
