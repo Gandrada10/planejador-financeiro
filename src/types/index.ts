@@ -68,6 +68,8 @@ export interface TitularMapping {
   createdAt: Date;
 }
 
+export type CategorizationSessionStatus = 'active' | 'applied' | 'dismissed';
+
 export interface CategorizationSession {
   id: string;
   userId: string;
@@ -76,6 +78,13 @@ export interface CategorizationSession {
   categorizedCount: number;
   expiresAt: Date;
   createdAt: Date;
+  status: CategorizationSessionStatus;
+  monthFilter: string;
+  accounts: string[];
+  totalAmount: number;
+  appliedAt: Date | null;
+  appliedCount: number;
+  lastActivityAt: Date | null;
 }
 
 export interface CategorizationTransaction {

@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X, Landmark } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, Landmark, History, ChevronDown, ChevronRight } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -13,8 +13,20 @@ import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
 import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
-import { getMonthYear, getMonthLabel, cn } from '../../lib/utils';
-import type { Transaction } from '../../types';
+import { CategorizationHistoryModal } from './CategorizationHistoryModal';
+import { getMonthYear, getMonthLabel, cn, formatDate } from '../../lib/utils';
+import type { CategorizationSession, Transaction } from '../../types';
+
+const HISTORY_PAGE_SIZE = 20;
+
+function formatHistoryStatus(s: CategorizationSession): { label: string; tone: string } {
+  if (s.status === 'applied') {
+    const when = s.appliedAt ? formatDate(s.appliedAt) : '';
+    return { label: when ? `Aplicado em ${when}` : 'Aplicado', tone: 'text-accent-green' };
+  }
+  if (s.status === 'dismissed') return { label: 'Dispensado', tone: 'text-text-secondary' };
+  return { label: 'Em andamento', tone: 'text-accent' };
+}
 
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
@@ -22,7 +34,7 @@ export function TransactionsPage() {
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
-  const { sessions, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession } = useCategorizationSessions();
+  const { sessions, activeSessions, historySessions, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
   const [showForm, setShowForm] = useState(false);
@@ -38,6 +50,9 @@ export function TransactionsPage() {
   const [filterReconciled, setFilterReconciled] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [historyVisible, setHistoryVisible] = useState(HISTORY_PAGE_SIZE);
+  const [detailSession, setDetailSession] = useState<CategorizationSession | null>(null);
   const autoApplied = useRef(false);
 
   // Auto-apply ALL pending categorizations when page loads and sessions are available
@@ -397,65 +412,115 @@ export function TransactionsPage() {
         )}
       </div>
 
-      {(() => {
-        const activeSessions = sessions.filter((s) => s.expiresAt > new Date());
-        if (activeSessions.length === 0) return null;
-        return (
-          <div className="space-y-2">
-            {activeSessions.length > 1 && (
-              <div className="flex justify-end">
+      {activeSessions.length > 0 && (
+        <div className="space-y-2">
+          {activeSessions.length > 1 && (
+            <div className="flex justify-end">
+              <button
+                onClick={async () => {
+                  for (const s of activeSessions) await dismissSession(s.id);
+                }}
+                className="text-[10px] text-text-secondary hover:text-accent-red"
+              >
+                Remover todas ({activeSessions.length})
+              </button>
+            </div>
+          )}
+          {activeSessions.slice(0, 3).map((s) => (
+            <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={14} className="text-accent" />
+                <span className="text-text-primary">
+                  <strong>{s.titularName}</strong> — {s.categorizedCount}/{s.transactionIds.length} categorizadas
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   onClick={async () => {
-                    for (const s of activeSessions) await dismissSession(s.id);
+                    setApplyingSession(s.id);
+                    const count = await applyCategorizationsFromSession(s.id);
+                    setApplyingSession(null);
+                    if (count > 0) {
+                      alert(`${count} categorias aplicadas com sucesso!`);
+                    }
                   }}
-                  className="text-[10px] text-text-secondary hover:text-accent-red"
+                  disabled={applyingSession === s.id}
+                  className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
                 >
-                  Remover todas ({activeSessions.length})
+                  {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
+                </button>
+                <button
+                  onClick={() => dismissSession(s.id)}
+                  className="p-1 text-text-secondary hover:text-accent-red"
+                  title="Remover"
+                >
+                  <X size={14} />
                 </button>
               </div>
-            )}
-            {activeSessions.slice(0, 3).map((s) => (
-              <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
-                <div className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-accent" />
-                  <span className="text-text-primary">
-                    <strong>{s.titularName}</strong> — {s.categorizedCount}/{s.transactionIds.length} categorizadas
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={async () => {
-                      setApplyingSession(s.id);
-                      const count = await applyCategorizationsFromSession(s.id);
-                      setApplyingSession(null);
-                      if (count > 0) {
-                        alert(`${count} categorias aplicadas com sucesso!`);
-                      }
-                      await dismissSession(s.id);
-                    }}
-                    disabled={applyingSession === s.id}
-                    className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
-                  >
-                    {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
-                  </button>
-                  <button
-                    onClick={() => dismissSession(s.id)}
-                    className="p-1 text-text-secondary hover:text-accent-red"
-                    title="Remover"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-            {activeSessions.length > 3 && (
-              <p className="text-[10px] text-text-secondary text-center">
-                + {activeSessions.length - 3} sessoes ocultas
-              </p>
-            )}
-          </div>
-        );
-      })()}
+            </div>
+          ))}
+          {activeSessions.length > 3 && (
+            <p className="text-[10px] text-text-secondary text-center">
+              + {activeSessions.length - 3} sessoes ocultas
+            </p>
+          )}
+        </div>
+      )}
+
+      {historySessions.length > 0 && (
+        <div className="border border-border rounded-lg">
+          <button
+            onClick={() => setHistoryOpen((v) => !v)}
+            className="w-full flex items-center justify-between px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
+          >
+            <span className="flex items-center gap-2">
+              {historyOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <History size={14} className="text-accent" />
+              Histórico de categorizações ({historySessions.length})
+            </span>
+            <span className="text-[10px] text-text-secondary">últimos 90 dias</span>
+          </button>
+          {historyOpen && (
+            <div className="border-t border-border divide-y divide-border">
+              {historySessions.slice(0, historyVisible).map((s) => {
+                const status = formatHistoryStatus(s);
+                const period = s.monthFilter && s.monthFilter !== 'all' ? getMonthLabel(s.monthFilter) : 'Todos os meses';
+                const accountsLabel = s.accounts.length > 0 ? s.accounts.join(' • ') : '—';
+                return (
+                  <div key={s.id} className="px-3 py-2 flex items-center justify-between gap-3 text-xs">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-text-secondary">{formatDate(s.createdAt)}</span>
+                        <span className="text-text-primary font-medium">{s.titularName}</span>
+                        <span className="text-text-secondary">• {period}</span>
+                        <span className={`${status.tone} font-medium`}>• {status.label}</span>
+                      </div>
+                      <div className="text-[11px] text-text-secondary truncate">
+                        {accountsLabel} — {s.transactionIds.length} enviados • {s.categorizedCount} categorizados
+                        {s.status === 'applied' && ` • ${s.appliedCount} aplicados`}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => setDetailSession(s)}
+                      className="px-2 py-1 bg-bg-secondary border border-border text-text-primary text-[11px] rounded hover:border-accent whitespace-nowrap"
+                    >
+                      Ver detalhes
+                    </button>
+                  </div>
+                );
+              })}
+              {historySessions.length > historyVisible && (
+                <button
+                  onClick={() => setHistoryVisible((v) => v + HISTORY_PAGE_SIZE)}
+                  className="w-full py-2 text-[11px] text-accent hover:bg-bg-secondary"
+                >
+                  Ver mais ({historySessions.length - historyVisible})
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       <TransactionTable
         transactions={filtered}
@@ -505,7 +570,16 @@ export function TransactionsPage() {
           transactions={filtered}
           categories={categories}
           titulars={allTitulars}
+          monthFilter={filterMonth}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+      {detailSession && (
+        <CategorizationHistoryModal
+          key={detailSession.id}
+          session={detailSession}
+          categories={categories}
+          onClose={() => setDetailSession(null)}
         />
       )}
     </div>

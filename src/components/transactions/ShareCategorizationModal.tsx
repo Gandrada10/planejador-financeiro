@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { X, Send, Copy, Check, MessageCircle } from 'lucide-react';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
+import { getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 interface Props {
   transactions: Transaction[];
   categories: Category[];
   titulars: string[];
+  monthFilter: string;
   onClose: () => void;
 }
 
-export function ShareCategorizationModal({ transactions, categories, titulars, onClose }: Props) {
+export function ShareCategorizationModal({ transactions, categories, titulars, monthFilter, onClose }: Props) {
   const { createSession } = useCategorizationSessions();
   const [selectedTitular, setSelectedTitular] = useState(titulars[0] || '');
   const [generatedLink, setGeneratedLink] = useState('');
@@ -18,9 +20,18 @@ export function ShareCategorizationModal({ transactions, categories, titulars, o
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const uncategorizedCount = transactions.filter(
-    (t) => !t.categoryId && (!selectedTitular || t.titular === selectedTitular)
-  ).length;
+  const eligibleTx = useMemo(
+    () => transactions.filter(
+      (t) => !t.categoryId && (!selectedTitular || t.titular === selectedTitular)
+    ),
+    [transactions, selectedTitular]
+  );
+  const uncategorizedCount = eligibleTx.length;
+  const accountsPreview = useMemo(
+    () => Array.from(new Set(eligibleTx.map((t) => t.account).filter(Boolean))).sort(),
+    [eligibleTx]
+  );
+  const periodLabel = monthFilter && monthFilter !== 'all' ? getMonthLabel(monthFilter) : 'Todos os meses';
 
   async function handleGenerate() {
     setLoading(true);
@@ -29,7 +40,12 @@ export function ShareCategorizationModal({ transactions, categories, titulars, o
       const filteredTx = selectedTitular
         ? transactions.filter((t) => t.titular === selectedTitular)
         : transactions;
-      const token = await createSession(selectedTitular || 'Todos', filteredTx, categories);
+      const token = await createSession(
+        selectedTitular || 'Todos',
+        filteredTx,
+        categories,
+        { monthFilter }
+      );
       const link = `${window.location.origin}/categorizar/${token}`;
       setGeneratedLink(link);
     } catch (err) {
@@ -45,9 +61,14 @@ export function ShareCategorizationModal({ transactions, categories, titulars, o
   }
 
   function handleWhatsApp() {
-    const text = encodeURIComponent(
-      `Oi! Categoriza os gastos por favor 😊\n\n${generatedLink}`
-    );
+    const lines = [`Oi! Categoriza ${uncategorizedCount} lançamento${uncategorizedCount === 1 ? '' : 's'} por favor 😊`];
+    lines.push(`📅 ${periodLabel}`);
+    if (accountsPreview.length > 0) {
+      lines.push(`💳 ${accountsPreview.join(' • ')}`);
+    }
+    lines.push('');
+    lines.push(generatedLink);
+    const text = encodeURIComponent(lines.join('\n'));
     window.open(`https://wa.me/?text=${text}`, '_blank');
   }
 
