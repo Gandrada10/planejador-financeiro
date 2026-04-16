@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X, Landmark } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, Landmark, ChevronDown, History } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -13,8 +13,10 @@ import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
 import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
-import { getMonthYear, getMonthLabel } from '../../lib/utils';
-import type { Transaction } from '../../types';
+import { CategorizationHistoryModal } from './CategorizationHistoryModal';
+import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
+import { getMonthYear, getMonthLabel, cn } from '../../lib/utils';
+import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
@@ -22,7 +24,7 @@ export function TransactionsPage() {
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
-  const { sessions, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession } = useCategorizationSessions();
+  const { sessions, activeSessions, historySessions, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
   const [showForm, setShowForm] = useState(false);
@@ -38,7 +40,22 @@ export function TransactionsPage() {
   const [filterReconciled, setFilterReconciled] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
+  const [showHistoryList, setShowHistoryList] = useState(false);
+  const [detailSession, setDetailSession] = useState<CategorizationSession | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
   const autoApplied = useRef(false);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    function handleClickOutside(e: MouseEvent) {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(e.target as Node)) {
+        setShareMenuOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [shareMenuOpen]);
 
   // Auto-apply ALL pending categorizations when page loads and sessions are available
   // This doesn't depend on categorizedCount — it reads the actual session transactions
@@ -235,6 +252,31 @@ export function TransactionsPage() {
     return <div className="text-accent text-sm animate-pulse">Carregando transacoes...</div>;
   }
 
+  const defaultMonth = getMonthYear();
+  const baseFieldClass = 'flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent';
+  const activeFieldClass = 'border-accent bg-accent/10 text-accent';
+  const inactiveFieldClass = 'border-border text-text-primary';
+  const isActive = {
+    account: filterAccount !== 'all',
+    month: filterMonth !== defaultMonth,
+    category: filterCategory !== 'all',
+    titular: filterTitular !== 'all',
+    installment: filterInstallment !== 'all',
+    search: searchText.trim() !== '',
+  };
+  const activeCount =
+    Object.values(isActive).filter(Boolean).length +
+    (filterReconciled !== 'all' ? 1 : 0);
+  const clearAllFilters = () => {
+    setFilterAccount('all');
+    setFilterMonth(defaultMonth);
+    setFilterCategory('all');
+    setFilterTitular('all');
+    setFilterInstallment('all');
+    setFilterReconciled('all');
+    setSearchText('');
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -261,12 +303,33 @@ export function TransactionsPage() {
               <Landmark size={14} /> Sincronizar Banco
             </button>
           )}
-          <button
-            onClick={() => setShowShareModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
-          >
-            <Send size={14} /> Enviar p/ Categorizar
-          </button>
+          <div className="relative" ref={shareMenuRef}>
+            <button
+              onClick={() => setShareMenuOpen((v) => !v)}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
+            >
+              <Send size={14} /> Categorização compartilhada <ChevronDown size={12} />
+            </button>
+            {shareMenuOpen && (
+              <div className="absolute right-0 mt-1 min-w-[220px] bg-bg-card border border-border rounded shadow-lg z-20 py-1">
+                <button
+                  onClick={() => { setShareMenuOpen(false); setShowShareModal(true); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
+                >
+                  <Send size={12} className="text-accent" />
+                  Enviar p/ categorizar
+                </button>
+                <button
+                  onClick={() => { setShareMenuOpen(false); setShowHistoryList(true); }}
+                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
+                >
+                  <History size={12} className="text-accent" />
+                  Ver histórico
+                  <span className="ml-auto text-[10px] text-text-secondary">{historySessions.length}</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -274,7 +337,7 @@ export function TransactionsPage() {
         <select
           value={filterAccount}
           onChange={(e) => setFilterAccount(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.account ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todas as contas</option>
           {accountNames.map((a) => (
@@ -284,7 +347,7 @@ export function TransactionsPage() {
         <select
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.month ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todos os meses</option>
           {months.map((m) => (
@@ -294,7 +357,7 @@ export function TransactionsPage() {
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.category ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todas as categorias</option>
           <option value="uncategorized">Sem categoria</option>
@@ -305,7 +368,7 @@ export function TransactionsPage() {
         <select
           value={filterTitular}
           onChange={(e) => setFilterTitular(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.titular ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todos os titulares</option>
           {allTitulars.map((t) => (
@@ -315,23 +378,34 @@ export function TransactionsPage() {
         <select
           value={filterInstallment}
           onChange={(e) => setFilterInstallment(e.target.value)}
-          className="flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+          className={cn(baseFieldClass, isActive.installment ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todos os tipos</option>
           <option value="installments">Parcelados</option>
           <option value="single">Avulsos</option>
         </select>
         <div className="relative flex-1 min-w-[140px]">
-          <Search size={14} className="absolute left-2.5 top-2.5 text-text-secondary" />
+          <Search size={14} className={cn('absolute left-2.5 top-2.5', isActive.search ? 'text-accent' : 'text-text-secondary')} />
           <input
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Buscar por descricao, conta, membro..."
-            className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className={cn('w-full pl-8 pr-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent', isActive.search ? activeFieldClass : inactiveFieldClass)}
           />
         </div>
       </div>
+
+      {activeCount > 0 && (
+        <div className="flex justify-end -mt-2">
+          <button
+            onClick={clearAllFilters}
+            className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent"
+          >
+            <X size={12} /> Limpar filtros ({activeCount})
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-4 text-xs text-text-secondary flex-wrap">
         <span>{filtered.length} transacoes</span>
@@ -361,65 +435,61 @@ export function TransactionsPage() {
         )}
       </div>
 
-      {(() => {
-        const activeSessions = sessions.filter((s) => s.expiresAt > new Date());
-        if (activeSessions.length === 0) return null;
-        return (
-          <div className="space-y-2">
-            {activeSessions.length > 1 && (
-              <div className="flex justify-end">
+      {activeSessions.length > 0 && (
+        <div className="space-y-2">
+          {activeSessions.length > 1 && (
+            <div className="flex justify-end">
+              <button
+                onClick={async () => {
+                  for (const s of activeSessions) await dismissSession(s.id);
+                }}
+                className="text-[10px] text-text-secondary hover:text-accent-red"
+              >
+                Remover todas ({activeSessions.length})
+              </button>
+            </div>
+          )}
+          {activeSessions.slice(0, 3).map((s) => (
+            <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
+              <div className="flex items-center gap-2">
+                <CheckCircle size={14} className="text-accent" />
+                <span className="text-text-primary">
+                  <strong>{s.titularName}</strong> — {s.categorizedCount}/{s.transactionIds.length} categorizadas
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
                 <button
                   onClick={async () => {
-                    for (const s of activeSessions) await dismissSession(s.id);
+                    setApplyingSession(s.id);
+                    const count = await applyCategorizationsFromSession(s.id);
+                    setApplyingSession(null);
+                    if (count > 0) {
+                      alert(`${count} categorias aplicadas com sucesso!`);
+                    }
                   }}
-                  className="text-[10px] text-text-secondary hover:text-accent-red"
+                  disabled={applyingSession === s.id}
+                  className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
                 >
-                  Remover todas ({activeSessions.length})
+                  {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
+                </button>
+                <button
+                  onClick={() => dismissSession(s.id)}
+                  className="p-1 text-text-secondary hover:text-accent-red"
+                  title="Remover"
+                >
+                  <X size={14} />
                 </button>
               </div>
-            )}
-            {activeSessions.slice(0, 3).map((s) => (
-              <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
-                <div className="flex items-center gap-2">
-                  <CheckCircle size={14} className="text-accent" />
-                  <span className="text-text-primary">
-                    <strong>{s.titularName}</strong> — {s.categorizedCount}/{s.transactionIds.length} categorizadas
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={async () => {
-                      setApplyingSession(s.id);
-                      const count = await applyCategorizationsFromSession(s.id);
-                      setApplyingSession(null);
-                      if (count > 0) {
-                        alert(`${count} categorias aplicadas com sucesso!`);
-                      }
-                      await dismissSession(s.id);
-                    }}
-                    disabled={applyingSession === s.id}
-                    className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
-                  >
-                    {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
-                  </button>
-                  <button
-                    onClick={() => dismissSession(s.id)}
-                    className="p-1 text-text-secondary hover:text-accent-red"
-                    title="Remover"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-              </div>
-            ))}
-            {activeSessions.length > 3 && (
-              <p className="text-[10px] text-text-secondary text-center">
-                + {activeSessions.length - 3} sessoes ocultas
-              </p>
-            )}
-          </div>
-        );
-      })()}
+            </div>
+          ))}
+          {activeSessions.length > 3 && (
+            <p className="text-[10px] text-text-secondary text-center">
+              + {activeSessions.length - 3} sessoes ocultas
+            </p>
+          )}
+        </div>
+      )}
+
 
       <TransactionTable
         transactions={filtered}
@@ -469,7 +539,23 @@ export function TransactionsPage() {
           transactions={filtered}
           categories={categories}
           titulars={allTitulars}
+          monthFilter={filterMonth}
           onClose={() => setShowShareModal(false)}
+        />
+      )}
+      {showHistoryList && (
+        <CategorizationHistoryListModal
+          sessions={historySessions}
+          onOpenDetail={(s) => setDetailSession(s)}
+          onClose={() => setShowHistoryList(false)}
+        />
+      )}
+      {detailSession && (
+        <CategorizationHistoryModal
+          key={detailSession.id}
+          session={detailSession}
+          categories={categories}
+          onClose={() => setDetailSession(null)}
         />
       )}
     </div>
