@@ -19,7 +19,7 @@ import { getMonthYear, getMonthLabel, cn } from '../../lib/utils';
 import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
-  const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled } = useTransactions();
+  const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate } = useTransactions();
   const { categories, rules, matchCategory, addRule, deleteRule } = useCategories();
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
@@ -71,6 +71,26 @@ export function TransactionsPage() {
     return Array.from(set).sort().reverse();
   }, [transactions]);
 
+  const categoryOptions = useMemo(() => {
+    // Build ordered list where subcategories appear under their parent
+    // and are labeled with the full relation "Parent / Sub".
+    const parents = categories.filter((c) => !c.parentId);
+    const opts: { id: string; label: string; isChild: boolean }[] = [];
+    for (const parent of parents) {
+      opts.push({ id: parent.id, label: parent.name, isChild: false });
+      const children = categories.filter((c) => c.parentId === parent.id);
+      for (const child of children) {
+        opts.push({ id: child.id, label: `${parent.name} / ${child.name}`, isChild: true });
+      }
+    }
+    for (const cat of categories) {
+      if (cat.parentId && !parents.some((p) => p.id === cat.parentId)) {
+        opts.push({ id: cat.id, label: cat.name, isChild: true });
+      }
+    }
+    return opts;
+  }, [categories]);
+
   const allTitulars = useMemo(() => {
     // Prefer the canonical family member names; only add raw titular strings
     // when they don't match any known member (case-insensitive).
@@ -101,7 +121,15 @@ export function TransactionsPage() {
     if (filterCategory === 'uncategorized') {
       list = list.filter((t) => !t.categoryId);
     } else if (filterCategory !== 'all') {
-      list = list.filter((t) => t.categoryId === filterCategory);
+      // If a parent category is selected, also include transactions in its subcategories.
+      const selected = categories.find((c) => c.id === filterCategory);
+      const isParent = selected && !selected.parentId;
+      const childIds = isParent
+        ? new Set(categories.filter((c) => c.parentId === filterCategory).map((c) => c.id))
+        : null;
+      list = list.filter((t) =>
+        t.categoryId === filterCategory || (childIds ? childIds.has(t.categoryId || '') : false)
+      );
     }
     if (filterAccount !== 'all') {
       list = list.filter((t) => t.account === filterAccount);
@@ -127,7 +155,7 @@ export function TransactionsPage() {
       );
     }
     return list;
-  }, [transactions, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterReconciled, searchText]);
+  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterReconciled, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -361,8 +389,10 @@ export function TransactionsPage() {
         >
           <option value="all">Todas as categorias</option>
           <option value="uncategorized">Sem categoria</option>
-          {categories.map((cat) => (
-            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          {categoryOptions.map((opt) => (
+            <option key={opt.id} value={opt.id}>
+              {opt.isChild ? `\u00A0\u00A0${opt.label}` : opt.label}
+            </option>
           ))}
         </select>
         <select
@@ -500,6 +530,7 @@ export function TransactionsPage() {
         onUpdate={updateTransaction}
         onDelete={deleteTransaction}
         onBatchReconcile={batchUpdateReconciled}
+        onBatchUpdate={batchUpdate}
         checkClosedCycle={checkClosedCycle}
         reopenCycle={reopenCycle}
         onCreateRule={handleCreateRule}

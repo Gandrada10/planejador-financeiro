@@ -5,6 +5,8 @@ import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { useProjects } from '../../hooks/useProjects';
+import { useFamilyMembers } from '../../hooks/useFamilyMembers';
+import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
@@ -14,11 +16,14 @@ export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [selectedCardId, setSelectedCardId] = useState('');
 
-  const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled } = useTransactions();
+  const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled, batchUpdate } = useTransactions();
   const { categories, rules, addRule, deleteRule } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
   const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
+  const { memberNames: familyMemberNames } = useFamilyMembers();
+  const { titularNames } = useTitularMappings();
+  const memberNames = familyMemberNames.length > 0 ? familyMemberNames : titularNames;
 
   // Auto-select first card
   const activeCardId = selectedCardId || cardAccounts[0]?.id || '';
@@ -292,10 +297,12 @@ export function CreditCardPage() {
             totalTransactions={invoiceTransactions.length}
             availableMonths={availableMonths}
             currentMonthYear={monthYear}
+            memberNames={memberNames}
             onUpdate={updateTransaction}
             onDelete={deleteTransaction}
             onBatchReconcile={batchUpdateReconciled}
             onBatchMove={handleBatchMove}
+            onBatchUpdate={batchUpdate}
             checkClosedCycle={checkClosedCycleForTx}
             reopenCycle={reopenCycle}
             onCreateRule={handleCreateRule}

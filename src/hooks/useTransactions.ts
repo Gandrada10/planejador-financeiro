@@ -128,5 +128,25 @@ export function useTransactions() {
     await batch.commit();
   }
 
-  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled };
+  async function batchUpdate(ids: string[], data: Partial<Transaction>) {
+    const uid = auth.currentUser?.uid;
+    if (!uid || ids.length === 0) return;
+    const updates: Record<string, unknown> = { ...data };
+    if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
+    if (data.date) updates.date = Timestamp.fromDate(data.date);
+    if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
+    if (data.reconciledAt !== undefined) {
+      updates.reconciledAt = data.reconciledAt ? Timestamp.fromDate(data.reconciledAt) : null;
+    }
+    delete updates.id;
+    delete updates.createdAt;
+    const batch = writeBatch(db);
+    for (const id of ids) {
+      const ref = doc(db, 'users', uid, 'transactions', id);
+      batch.update(ref, updates);
+    }
+    await batch.commit();
+  }
+
+  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate };
 }
