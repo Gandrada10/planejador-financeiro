@@ -44,7 +44,7 @@ Os dados chegam em lotes (faturas), não em fluxo contínuo — então o rito na
 - Cada branch gera um **preview deployment** próprio no Cloudflare Pages — a família usa a URL de teste enquanto a produção segue intocada. Merge no `master` só após aprovação; rollback é reverter o merge.
 - **Recomendado**: um segundo projeto Firebase ("staging") apontado pelas variáveis do preview, populado com um backup dos dados reais — teste com dados reais em ambiente descartável. **Decisão pendente do dono:** staging separado (~30 min no console) vs. banco real com backup prévio.
 
-### D4. Direção estética (protótipo em `prototipos/categorizacao-mobile.html`)
+### D4. Direção estética (protótipo em `prototipos/categorizacao-mobile.html`; especificação completa com código em `MELHORIAS-VISUAIS.md`)
 Fundo `#121212`, superfícies com borda sutil, raio 16px, um único verde-menta como cor de ação/sucesso, coral para despesa, números tabulares, ícones de linha monocromáticos (estilo SF Symbols), tipografia do sistema. Vale para o app inteiro — hoje cada tela tem densidade e pesos diferentes. No desktop, a mudança mais valiosa não é cosmética: é **hierarquia** — o Dashboard deve abrir com os "sinais vitais" (taxa de poupança, resultado projetado, metas em risco) antes dos detalhes.
 
 ---
