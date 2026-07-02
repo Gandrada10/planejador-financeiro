@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, Send, Copy, Check, MessageCircle } from 'lucide-react';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
 import { getMonthLabel } from '../../lib/utils';
-import type { Transaction, Category } from '../../types';
+import type { Transaction, Category, CategoryRule } from '../../types';
 
 interface Props {
   transactions: Transaction[];
@@ -10,9 +10,13 @@ interface Props {
   titulars: string[];
   monthFilter: string;
   onClose: () => void;
+  /** Regras do dono, usadas para pré-calcular as sugestões da sessão. */
+  rules?: CategoryRule[];
+  /** Base completa de transações (todos os meses) — fonte do histórico de sugestões. */
+  allTransactions?: Transaction[];
 }
 
-export function ShareCategorizationModal({ transactions, categories, titulars, monthFilter, onClose }: Props) {
+export function ShareCategorizationModal({ transactions, categories, titulars, monthFilter, onClose, rules = [], allTransactions }: Props) {
   const { createSession } = useCategorizationSessions();
   const [selectedTitular, setSelectedTitular] = useState(titulars[0] || '');
   const [generatedLink, setGeneratedLink] = useState('');
@@ -44,7 +48,9 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
         selectedTitular || 'Todos',
         filteredTx,
         categories,
-        { monthFilter }
+        { monthFilter },
+        rules,
+        allTransactions ?? transactions
       );
       const link = `${window.location.origin}/categorizar/${token}`;
       setGeneratedLink(link);

@@ -85,6 +85,8 @@ export interface CategorizationSession {
   appliedAt: Date | null;
   appliedCount: number;
   lastActivityAt: Date | null;
+  /** Ids das categorias mais usadas (histórico), para a grade de acesso rápido. */
+  topCategoryIds: string[];
 }
 
 export interface CategorizationTransaction {
@@ -97,6 +99,10 @@ export interface CategorizationTransaction {
   totalInstallments: number | null;
   categoryId: string | null;
   notes: string;
+  /** Categoria provável, pré-calculada na criação da sessão (regras + histórico). */
+  suggestedCategoryId: string | null;
+  /** Motivo legível da sugestão, ex.: "Você já categorizou assim". */
+  suggestionReason: string | null;
 }
 
 export interface Project {

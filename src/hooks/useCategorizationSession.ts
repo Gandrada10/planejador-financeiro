@@ -16,10 +16,12 @@ import { db, auth } from '../lib/firebase';
 import type {
   Transaction,
   Category,
+  CategoryRule,
   CategorizationSession,
   CategorizationSessionStatus,
   CategorizationTransaction,
 } from '../types';
+import { normalizeDescriptionForDedup } from '../lib/utils';
 
 function generateToken(): string {
   const array = new Uint8Array(16);
@@ -28,6 +30,40 @@ function generateToken(): string {
 }
 
 const HISTORY_RETENTION_DAYS = 90;
+
+// ---------------------------------------------------------------------------
+// Sugestões pré-calculadas (sem IA): regras do dono + histórico de escolhas.
+// Rodam na CRIAÇÃO da sessão, no dispositivo do dono (autenticado). A esposa só
+// vê a sugestão pronta — 1 toque confirma, zero latência e zero custo por toque.
+// ---------------------------------------------------------------------------
+
+function patternMatches(lower: string, rawPattern: string): boolean {
+  const pattern = rawPattern.toLowerCase();
+  if (pattern.startsWith('*') && pattern.endsWith('*')) return lower.includes(pattern.slice(1, -1));
+  if (pattern.startsWith('*')) return lower.endsWith(pattern.slice(1));
+  if (pattern.endsWith('*')) return lower.startsWith(pattern.slice(0, -1));
+  return lower.includes(pattern);
+}
+
+function matchRule(description: string, rules: CategoryRule[]): string | null {
+  const lower = description.toLowerCase();
+  for (const rule of rules) {
+    if (rule.pattern && patternMatches(lower, rule.pattern)) return rule.categoryId;
+    if (rule.keywords?.length) {
+      for (const kw of rule.keywords) {
+        if (kw && patternMatches(lower, kw)) return rule.categoryId;
+      }
+    }
+  }
+  return null;
+}
+
+function allowedForAmount(category: Category | undefined, amount: number): boolean {
+  if (!category) return false;
+  return amount >= 0
+    ? category.type === 'receita' || category.type === 'ambos'
+    : category.type === 'despesa' || category.type === 'ambos';
+}
 
 function parseSession(id: string, data: Record<string, unknown>): CategorizationSession {
   const expiresAtRaw = data.expiresAt as Timestamp | undefined;
@@ -58,25 +94,29 @@ function parseSession(id: string, data: Record<string, unknown>): Categorization
     appliedAt: appliedAtRaw ? appliedAtRaw.toDate() : null,
     appliedCount: (data.appliedCount as number) || 0,
     lastActivityAt: lastActivityAtRaw ? lastActivityAtRaw.toDate() : null,
+    topCategoryIds: ((data.topCategoryIds as string[]) || []),
+  };
+}
+
+function docToSessionTransaction(id: string, td: Record<string, unknown>): CategorizationTransaction {
+  return {
+    id,
+    transactionId: td.transactionId as string,
+    description: td.description as string,
+    amount: td.amount as number,
+    date: (td.date as Timestamp).toDate(),
+    installmentNumber: (td.installmentNumber as number) ?? null,
+    totalInstallments: (td.totalInstallments as number) ?? null,
+    categoryId: (td.categoryId as string) || null,
+    notes: (td.notes as string) || '',
+    suggestedCategoryId: (td.suggestedCategoryId as string) || null,
+    suggestionReason: (td.suggestionReason as string) || null,
   };
 }
 
 export async function fetchSessionTransactions(token: string): Promise<CategorizationTransaction[]> {
   const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
-  return txSnap.docs.map((d) => {
-    const td = d.data();
-    return {
-      id: d.id,
-      transactionId: td.transactionId,
-      description: td.description,
-      amount: td.amount,
-      date: (td.date as Timestamp).toDate(),
-      installmentNumber: td.installmentNumber,
-      totalInstallments: td.totalInstallments,
-      categoryId: td.categoryId || null,
-      notes: td.notes || '',
-    };
-  });
+  return txSnap.docs.map((d) => docToSessionTransaction(d.id, d.data()));
 }
 
 // Hook for the OWNER (authenticated user) to create and manage sessions
@@ -121,7 +161,11 @@ export function useCategorizationSessions() {
     titularName: string,
     transactions: Transaction[],
     categories: Category[],
-    context: { monthFilter: string }
+    context: { monthFilter: string },
+    rules: CategoryRule[] = [],
+    // Fonte do histórico para sugestões — a base COMPLETA (todos os meses),
+    // enquanto `transactions` define apenas o ESCOPO compartilhado (o filtro).
+    historyTransactions: Transaction[] = transactions
   ): Promise<string> {
     const uid = auth.currentUser?.uid;
     if (!uid) throw new Error('Not authenticated');
@@ -133,6 +177,51 @@ export function useCategorizationSessions() {
     const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h
     const accounts = Array.from(new Set(uncategorized.map((t) => t.account).filter(Boolean))).sort();
     const totalAmount = uncategorized.reduce((s, t) => s + t.amount, 0);
+
+    // --- Aprendizado com o histórico do dono (transações já categorizadas) ---
+    const catById = new Map(categories.map((c) => [c.id, c]));
+    // normalizedDesc -> (categoryId -> nº de vezes escolhida)
+    const history = new Map<string, Map<string, number>>();
+    // categoryId -> uso total (para a grade de acesso rápido)
+    const usage = new Map<string, number>();
+    for (const t of historyTransactions) {
+      if (!t.categoryId) continue;
+      usage.set(t.categoryId, (usage.get(t.categoryId) || 0) + 1);
+      const key = normalizeDescriptionForDedup(t.description);
+      if (!key) continue;
+      const m = history.get(key) || new Map<string, number>();
+      m.set(t.categoryId, (m.get(t.categoryId) || 0) + 1);
+      history.set(key, m);
+    }
+    const topCategoryIds = Array.from(usage.entries())
+      .sort((a, b) => b[1] - a[1])
+      .map(([id]) => id)
+      .slice(0, 8);
+
+    function suggestFor(description: string, amount: number): { id: string | null; reason: string | null } {
+      // 1) Regras explícitas do dono
+      const byRule = matchRule(description, rules);
+      if (byRule && allowedForAmount(catById.get(byRule), amount)) {
+        return { id: byRule, reason: 'Regra automática' };
+      }
+      // 2) Histórico: categoria mais frequente para a mesma descrição
+      const key = normalizeDescriptionForDedup(description);
+      const m = history.get(key);
+      if (m) {
+        let best: string | null = null;
+        let bestN = 0;
+        for (const [cid, n] of m) {
+          if (n > bestN && allowedForAmount(catById.get(cid), amount)) {
+            best = cid;
+            bestN = n;
+          }
+        }
+        if (best) {
+          return { id: best, reason: bestN > 1 ? `Você já categorizou assim ${bestN}×` : 'Você já categorizou assim' };
+        }
+      }
+      return { id: null, reason: null };
+    }
 
     const sessionRef = doc(db, 'categorizationSessions', token);
     await setDoc(sessionRef, {
@@ -149,6 +238,7 @@ export function useCategorizationSessions() {
       appliedAt: null,
       appliedCount: 0,
       lastActivityAt: null,
+      topCategoryIds,
     });
 
     // Copy categories to session so the public page can access them
@@ -159,9 +249,10 @@ export function useCategorizationSessions() {
     }
     await catBatch.commit();
 
-    // Copy transactions to session sub-collection
+    // Copy transactions to session sub-collection, each with its pre-computed suggestion
     const txBatch = writeBatch(db);
     for (const t of uncategorized) {
+      const suggestion = suggestFor(t.description, t.amount);
       const txRef = doc(db, 'categorizationSessions', token, 'transactions', t.id);
       txBatch.set(txRef, {
         transactionId: t.id,
@@ -172,6 +263,9 @@ export function useCategorizationSessions() {
         totalInstallments: t.totalInstallments,
         categoryId: null,
         notes: '',
+        suggestedCategoryId: suggestion.id,
+        suggestionReason: suggestion.reason,
+        applied: false,
       });
     }
     await txBatch.commit();
@@ -179,7 +273,12 @@ export function useCategorizationSessions() {
     return token;
   }
 
-  // Read session transactions from Firestore and apply categorized ones to the real user transactions
+  // Read session transactions and apply the categorized ones to the real user
+  // transactions. FIX do bug crítico: a sessão só é marcada 'applied' quando
+  // TODAS as transações foram categorizadas. Enquanto houver pendentes, ela
+  // permanece 'active' e cada abertura aplica apenas o DELTA (as ainda não
+  // aplicadas, marcadas com applied=true na subcoleção). Assim o trabalho feito
+  // aos poucos nunca é descartado.
   const applyCategorizationsFromSession = useCallback(async (token: string) => {
     const uid = auth.currentUser?.uid;
     if (!uid) {
@@ -190,40 +289,46 @@ export function useCategorizationSessions() {
     try {
       const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
       const batch = writeBatch(db);
-      let applied = 0;
+      let appliedNow = 0;
+      let categorized = 0;
+      let total = 0;
 
       for (const txDoc of txSnap.docs) {
+        total++;
         const data = txDoc.data();
-        if (data.categoryId) {
-          const realTxRef = doc(db, 'users', uid, 'transactions', data.transactionId);
-          batch.update(realTxRef, {
-            categoryId: data.categoryId,
-            ...(data.notes ? { notes: data.notes } : {}),
-          });
-          applied++;
-        }
+        if (!data.categoryId) continue;
+        categorized++;
+        if (data.applied) continue; // já aplicada em abertura anterior — pula
+        const realTxRef = doc(db, 'users', uid, 'transactions', data.transactionId);
+        batch.update(realTxRef, {
+          categoryId: data.categoryId,
+          ...(data.notes ? { notes: data.notes } : {}),
+        });
+        batch.update(txDoc.ref, { applied: true });
+        appliedNow++;
       }
 
-      if (applied > 0) {
-        await batch.commit();
-      }
+      if (appliedNow > 0) await batch.commit();
+
+      const allDone = total > 0 && categorized === total;
       const sessionRef = doc(db, 'categorizationSessions', token);
       await updateDoc(sessionRef, {
-        status: 'applied' as CategorizationSessionStatus,
-        appliedAt: Timestamp.now(),
-        appliedCount: applied,
+        appliedCount: categorized,
+        lastActivityAt: Timestamp.now(),
+        ...(allDone
+          ? { status: 'applied' as CategorizationSessionStatus, appliedAt: Timestamp.now() }
+          : {}),
       });
-      return applied;
+      return appliedNow;
     } catch (err) {
       console.error('Erro ao aplicar categorizacoes:', err);
-      alert('Erro ao aplicar categorizacoes. Verifique o console para mais detalhes.');
       return 0;
     }
   }, []);
 
-  // Apply all pending sessions at once — called by TransactionsPage on mount.
-  // Only auto-applies sessions where the recipient already categorized something,
-  // so freshly-shared sessions (still being filled in) stay visible in the active panel.
+  // Apply all pending sessions — called by TransactionsPage on mount.
+  // Reaplica o delta de qualquer sessão ativa que já tenha algo categorizado;
+  // como as transações já aplicadas ficam marcadas, reprocessar é barato.
   const applyAllPendingSessions = useCallback(async () => {
     const uid = auth.currentUser?.uid;
     if (!uid) return 0;
@@ -317,28 +422,46 @@ export function usePublicCategorizationSession(token: string) {
     load();
   }, [token]);
 
-  async function categorizeTransaction(txId: string, categoryId: string, notes: string) {
-    // 1. Update the session transaction in Firestore
-    const txRef = doc(db, 'categorizationSessions', token, 'transactions', txId);
-    await updateDoc(txRef, { categoryId, notes });
-
-    // 2. Update local state
-    setTransactions((prev) =>
-      prev.map((t) => (t.id === txId ? { ...t, categoryId, notes } : t))
-    );
-
-    // 3. Update categorized count on the session document
-    // Use a functional approach to get the correct count after state update
-    try {
-      // Read fresh count from Firestore to avoid stale state
-      const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
-      const count = txSnap.docs.filter((d) => d.data().categoryId).length;
+  // Atualiza a contagem da sessão a partir do estado local (sem reler a
+  // subcoleção inteira a cada toque — antes era O(n) leituras por categorização).
+  const pushCount = useCallback(
+    (next: CategorizationTransaction[]) => {
+      const count = next.filter((t) => t.categoryId).length;
       const sessionRef = doc(db, 'categorizationSessions', token);
-      await updateDoc(sessionRef, { categorizedCount: count, lastActivityAt: Timestamp.now() });
-    } catch {
-      // Non-critical — count is just for display
-    }
-  }
+      updateDoc(sessionRef, { categorizedCount: count, lastActivityAt: Timestamp.now() }).catch(() => {
+        // não-crítico: a contagem é só para exibição
+      });
+    },
+    [token]
+  );
 
-  return { session, transactions, categories, loading, error, categorizeTransaction };
+  const categorizeTransaction = useCallback(
+    async (txId: string, categoryId: string, notes: string) => {
+      const txRef = doc(db, 'categorizationSessions', token, 'transactions', txId);
+      // applied:false garante que o dono reaplique este delta na próxima abertura
+      await updateDoc(txRef, { categoryId, notes, applied: false });
+      setTransactions((prev) => {
+        const next = prev.map((t) => (t.id === txId ? { ...t, categoryId, notes } : t));
+        pushCount(next);
+        return next;
+      });
+    },
+    [token, pushCount]
+  );
+
+  // Desfazer: devolve a transação para o estado não categorizado.
+  const uncategorizeTransaction = useCallback(
+    async (txId: string) => {
+      const txRef = doc(db, 'categorizationSessions', token, 'transactions', txId);
+      await updateDoc(txRef, { categoryId: null, notes: '', applied: false });
+      setTransactions((prev) => {
+        const next = prev.map((t) => (t.id === txId ? { ...t, categoryId: null, notes: '' } : t));
+        pushCount(next);
+        return next;
+      });
+    },
+    [token, pushCount]
+  );
+
+  return { session, transactions, categories, loading, error, categorizeTransaction, uncategorizeTransaction };
 }

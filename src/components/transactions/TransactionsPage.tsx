@@ -571,6 +571,8 @@ export function TransactionsPage() {
           categories={categories}
           titulars={allTitulars}
           monthFilter={filterMonth}
+          rules={rules}
+          allTransactions={transactions}
           onClose={() => setShowShareModal(false)}
         />
       )}

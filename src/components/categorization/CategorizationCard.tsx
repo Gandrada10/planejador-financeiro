@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, MessageSquare, Search, X } from 'lucide-react';
+import { Search, X, MessageSquare, ChevronRight, Sparkles } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
@@ -7,9 +7,9 @@ import { CategoryIcon } from '../shared/CategoryIcon';
 interface Props {
   transaction: CategorizationTransaction;
   categories: Category[];
+  quickCategoryIds: string[];
   onCategorize: (categoryId: string, notes: string) => Promise<void>;
   onSkip: () => void;
-  onBack?: () => void;
   remaining: number;
 }
 
@@ -17,294 +17,257 @@ function removeAccents(str: string) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-// Silver color for secondary text on this page (brighter than the global #737373)
-const silver = 'text-[#a8a8a8]';
-const silverPlaceholder = 'placeholder:text-[#a8a8a8]/50';
+function haptic() {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
+}
 
-export function CategorizationCard({ transaction, categories, onCategorize, onSkip, onBack, remaining }: Props) {
+export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, onSkip, remaining }: Props) {
   const [notes, setNotes] = useState('');
   const [showNotes, setShowNotes] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState('');
   const [exiting, setExiting] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [search, setSearch] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const highlightedRef = useRef<HTMLButtonElement>(null);
 
-  const expenseCategories = useMemo(
+  const isIncome = transaction.amount >= 0;
+
+  // Categorias válidas para o sinal do valor (receita vs despesa)
+  const eligible = useMemo(
     () => filterCategoriesByAmount(categories, transaction.amount),
     [categories, transaction.amount]
   );
+  const byId = useMemo(() => new Map(eligible.map((c) => [c.id, c])), [eligible]);
+  const parentName = useCallback(
+    (c: Category) => (c.parentId ? categories.find((p) => p.id === c.parentId)?.name : undefined),
+    [categories]
+  );
 
-  // Group by parent/child hierarchy
-  const groupedCategories = useMemo(() => {
-    const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' });
-    const roots = expenseCategories.filter((c) => !c.parentId).sort((a, b) => collator.compare(a.name, b.name));
-    const children = expenseCategories.filter((c) => c.parentId);
+  // Sugestão pré-calculada (validada para o sinal do valor)
+  const suggestion = transaction.suggestedCategoryId ? byId.get(transaction.suggestedCategoryId) : undefined;
 
-    const groups: { parent: Category; subs: Category[] }[] = [];
-    const standalone: Category[] = [];
-
-    for (const root of roots) {
-      const subs = children.filter((c) => c.parentId === root.id).sort((a, b) => collator.compare(a.name, b.name));
-      if (subs.length > 0) {
-        groups.push({ parent: root, subs });
-      } else {
-        standalone.push(root);
+  // Grade de acesso rápido: top categorias do histórico, válidas para o sinal,
+  // excluindo a sugestão; completa até 6 com as demais em ordem alfabética.
+  const quick = useMemo(() => {
+    const picked: Category[] = [];
+    const seen = new Set<string>();
+    if (suggestion) seen.add(suggestion.id);
+    for (const id of quickCategoryIds) {
+      const c = byId.get(id);
+      if (c && !seen.has(c.id)) { picked.push(c); seen.add(c.id); }
+      if (picked.length >= 6) break;
+    }
+    if (picked.length < 6) {
+      const rest = [...eligible]
+        .filter((c) => !seen.has(c.id))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+      for (const c of rest) {
+        picked.push(c); seen.add(c.id);
+        if (picked.length >= 6) break;
       }
     }
+    return picked;
+  }, [quickCategoryIds, byId, eligible, suggestion]);
 
-    const groupedChildIds = new Set(groups.flatMap((g) => g.subs.map((s) => s.id)));
-    const orphans = children.filter((c) => !groupedChildIds.has(c.id));
-    standalone.push(...orphans);
-
-    return { groups, standalone };
-  }, [expenseCategories]);
-
-  // Filter by search
-  const filteredGroups = useMemo(() => {
-    if (!search.trim()) return groupedCategories;
-    const term = removeAccents(search.toLowerCase());
-    const match = (c: Category) => removeAccents(c.name.toLowerCase()).includes(term);
-
-    const groups = groupedCategories.groups
-      .map((g) => {
-        const parentMatch = match(g.parent);
-        const filteredSubs = g.subs.filter(match);
-        if (parentMatch) return g;
-        if (filteredSubs.length > 0) return { parent: g.parent, subs: filteredSubs };
-        return null;
-      })
-      .filter(Boolean) as { parent: Category; subs: Category[] }[];
-
-    const standalone = groupedCategories.standalone.filter(match);
-    return { groups, standalone };
-  }, [search, groupedCategories]);
-
-  // Flat list of selectable categories (subs from groups + standalone), in display order
-  const flatCategories = useMemo(() => {
-    const flat: Category[] = [];
-    for (const group of filteredGroups.groups) {
-      for (const sub of group.subs) flat.push(sub);
-    }
-    for (const cat of filteredGroups.standalone) flat.push(cat);
-    return flat;
-  }, [filteredGroups]);
-
-  const hasResults = filteredGroups.groups.length > 0 || filteredGroups.standalone.length > 0;
-
-  // Reset highlight to first item whenever search changes
+  // Reset ao trocar de transação
   useEffect(() => {
-    setHighlightedIndex(search.trim() ? 0 : -1);
-  }, [search]);
-
-  // Scroll highlighted item into view
-  useEffect(() => {
-    if (highlightedRef.current) {
-      highlightedRef.current.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlightedIndex]);
-
-  // Reset state when transaction changes
-  useEffect(() => {
-    setSearch('');
-    setShowNotes(false);
     setNotes('');
-    setHighlightedIndex(-1);
+    setShowNotes(false);
+    setSearch('');
+    setSheetOpen(false);
   }, [transaction.id]);
 
   const handleSelect = useCallback(async (categoryId: string) => {
-    // Dismiss keyboard on iOS before animating
+    if (saving) return;
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    haptic();
     setSaving(true);
+    setSheetOpen(false);
     setExiting(true);
-    // Wait for exit animation before processing
-    await new Promise((r) => setTimeout(r, 250));
+    await new Promise((r) => setTimeout(r, 220));
     await onCategorize(categoryId, notes);
-    setNotes('');
-    setShowNotes(false);
-    setSearch('');
-    setHighlightedIndex(-1);
     setExiting(false);
     setSaving(false);
-  }, [onCategorize, notes]);
+  }, [saving, onCategorize, notes]);
 
-  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightedIndex((i) => Math.min(i + 1, flatCategories.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightedIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (highlightedIndex >= 0 && flatCategories[highlightedIndex]) {
-        handleSelect(flatCategories[highlightedIndex].id);
-      } else if (flatCategories.length === 1) {
-        // If only one result, Enter selects it even without highlight
-        handleSelect(flatCategories[0].id);
-      }
-    } else if (e.key === 'Escape') {
-      setSearch('');
-      setHighlightedIndex(-1);
+  // Busca (bottom-sheet): lista plana, ordem alfabética, filtro por acento-insensível
+  const searchResults = useMemo(() => {
+    const sorted = [...eligible].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+    const term = removeAccents(search.trim().toLowerCase());
+    if (!term) return sorted;
+    return sorted.filter((c) => {
+      const p = parentName(c);
+      return removeAccents(c.name.toLowerCase()).includes(term) ||
+        (p ? removeAccents(p.toLowerCase()).includes(term) : false);
+    });
+  }, [eligible, search, parentName]);
+
+  useEffect(() => {
+    if (sheetOpen) {
+      const t = setTimeout(() => searchRef.current?.focus(), 240);
+      return () => clearTimeout(t);
     }
-  }
-
-  function CategoryButton({ cat, indent, index, parentName }: { cat: Category; indent?: boolean; index: number; parentName?: string }) {
-    const isHighlighted = index === highlightedIndex;
-    return (
-      <button
-        ref={isHighlighted ? highlightedRef : undefined}
-        onClick={() => handleSelect(cat.id)}
-        disabled={saving}
-        className={`w-full flex items-center gap-3 py-3 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'pl-9 pr-4' : 'px-4'} ${
-          isHighlighted
-            ? 'border-accent bg-accent/10 text-text-primary'
-            : 'border-border hover:border-accent hover:bg-accent/5'
-        }`}
-      >
-        <CategoryIcon icon={cat.icon} size={18} className="flex-shrink-0" style={{ color: cat.color }} />
-        <div className="flex flex-col text-left min-w-0">
-          <span className="text-sm text-text-primary">{cat.name}</span>
-          {parentName && (
-            <span className={`text-[11px] ${silver} leading-tight`}>{parentName}</span>
-          )}
-        </div>
-      </button>
-    );
-  }
-
-  // Build indexed flat list tracker for rendering
-  let flatIndex = 0;
+  }, [sheetOpen]);
 
   return (
-    <div className={`flex flex-col gap-3 transition-all duration-200 ease-out ${exiting ? 'opacity-0 -translate-x-8 scale-[0.97]' : 'opacity-100 translate-x-0 scale-100'}`}>
-      {/* Transaction info — compact */}
-      <div className="bg-bg-card border border-border rounded-xl p-4 text-center space-y-1">
-        <p className="text-white text-base font-bold leading-tight truncate">
+    <div className={`flex flex-col gap-3 transition-all duration-200 ease-out ${exiting ? 'opacity-0 translate-x-10' : 'opacity-100 translate-x-0'}`}>
+      {/* Cartão da transação */}
+      <div className="bg-bg-card border border-border rounded-card p-5">
+        <p className={`text-caption uppercase tracking-[0.12em] font-semibold ${isIncome ? 'text-accent-green' : 'text-ink-3'}`}>
+          {isIncome ? 'Entrada · confirme a categoria' : 'Gasto · escolha a categoria'}
+        </p>
+        <p className="text-text-primary text-lg font-bold leading-tight mt-1.5 break-words">
           {transaction.description}
         </p>
-        <p className="text-accent-red text-xl font-bold font-mono">
-          {formatBRL(transaction.amount)}
-        </p>
-        <div className={`flex items-center justify-center gap-2 ${silver} text-xs`}>
+        <div className="flex items-center gap-2 mt-1 text-body text-text-secondary">
           <span>{formatDate(transaction.date)}</span>
           {transaction.totalInstallments && (
-            <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded font-mono text-[10px]">
-              {transaction.installmentNumber}/{transaction.totalInstallments}
+            <span className="px-2 py-0.5 bg-elevated rounded-full text-caption tnum">
+              Parcela {transaction.installmentNumber}/{transaction.totalInstallments}
             </span>
           )}
-          <span className="opacity-40">•</span>
-          <span>{remaining} restante{remaining !== 1 ? 's' : ''}</span>
         </div>
-      </div>
+        <p className={`text-kpi font-bold tnum mt-2 ${isIncome ? 'text-accent-green' : 'text-accent-red'}`}>
+          {formatBRL(transaction.amount)}
+        </p>
 
-      {/* Search + Categories */}
-      <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-        {/* Search bar */}
-        <div className="p-3 border-b border-border">
-          <div className="relative">
-            <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${silver} pointer-events-none`} />
-            <input
-              ref={searchRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              placeholder="Buscar categoria... (↑↓ navegar, Enter selecionar)"
-              className={`w-full pl-8 pr-8 py-2.5 bg-bg-secondary border border-border rounded-lg text-text-primary text-[16px] focus:outline-none focus:border-accent ${silverPlaceholder}`}
-            />
-            {search && (
-              <button
-                onClick={() => { setSearch(''); setHighlightedIndex(-1); searchRef.current?.focus(); }}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 ${silver} hover:text-text-primary`}
-              >
-                <X size={14} />
-              </button>
+        {/* Sugestão mágica — 1 toque */}
+        {suggestion ? (
+          <>
+            <button
+              onClick={() => handleSelect(suggestion.id)}
+              disabled={saving}
+              className="mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 border border-accent-dim text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50"
+            >
+              <CategoryIcon icon={suggestion.icon} size={22} style={{ color: suggestion.color }} />
+              <span><span className="text-text-secondary font-medium">É </span>{suggestion.name}<span className="text-text-secondary font-medium">?</span></span>
+            </button>
+            {transaction.suggestionReason && (
+              <p className="mt-2 text-caption text-ink-3 text-center flex items-center justify-center gap-1.5">
+                <Sparkles size={12} /> {transaction.suggestionReason} · um toque confirma
+              </p>
             )}
-          </div>
-        </div>
-
-        {/* Category list — vertical, grouped, no horizontal scroll */}
-        <div ref={listRef} className="p-3 max-h-[40vh] overflow-y-auto overflow-x-hidden overscroll-contain">
-          {!hasResults ? (
-            <p className={`${silver} text-xs text-center py-4`}>
-              Nenhuma categoria encontrada
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {/* Grouped categories (parent + subs) */}
-              {filteredGroups.groups.map((group) => (
-                <div key={group.parent.id} className="flex flex-col gap-1.5">
-                  {/* Parent label */}
-                  <div className="flex items-center gap-2 px-2 pt-2 pb-1 text-[11px] uppercase tracking-wider font-bold text-text-primary">
-                    <CategoryIcon icon={group.parent.icon} size={14} style={{ color: group.parent.color }} />
-                    <span className="truncate">{group.parent.name}</span>
-                  </div>
-                  {/* Subcategories */}
-                  {group.subs.map((sub) => {
-                    const idx = flatIndex++;
-                    return <CategoryButton key={sub.id} cat={sub} indent index={idx} parentName={search.trim() ? group.parent.name : undefined} />;
-                  })}
-                </div>
-              ))}
-
-              {/* Standalone categories (no children) */}
-              {filteredGroups.standalone.length > 0 && filteredGroups.groups.length > 0 && (
-                <div className={`px-2 pt-3 pb-1 ${silver} text-[11px] uppercase tracking-wider font-bold`}>
-                  Outras
-                </div>
-              )}
-              {filteredGroups.standalone.map((cat) => {
-                const idx = flatIndex++;
-                return <CategoryButton key={cat.id} cat={cat} index={idx} />;
-              })}
-            </div>
-          )}
-        </div>
+          </>
+        ) : (
+          <p className="mt-4 text-body text-text-secondary text-center border border-dashed border-border rounded-control py-3 px-3 leading-snug">
+            Primeira vez que isso aparece. Escolha abaixo — o app memoriza para as próximas.
+          </p>
+        )}
       </div>
 
-      {/* Notes + Navigation */}
-      <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-        {/* Notes toggle */}
-        <div className="px-4 py-2.5">
+      {/* Zona do polegar: categorias frequentes */}
+      <div className="flex flex-col gap-2">
+        <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-1">
+          {suggestion ? 'Outras categorias' : 'Categorias frequentes'}
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {quick.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => handleSelect(c.id)}
+              disabled={saving}
+              className="min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card border border-border rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50"
+            >
+              <CategoryIcon icon={c.icon} size={21} style={{ color: c.color }} />
+              <span className="text-center leading-tight line-clamp-2">{c.name}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="flex gap-2">
           <button
-            onClick={() => setShowNotes(!showNotes)}
-            className={`flex items-center gap-1.5 text-xs ${silver} hover:text-accent transition-colors`}
+            onClick={() => setSheetOpen(true)}
+            disabled={saving}
+            className="flex-1 min-h-[48px] flex items-center justify-center gap-2 bg-bg-card border border-border rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-50"
+          >
+            <Search size={17} /> Buscar categoria
+          </button>
+          <button
+            onClick={onSkip}
+            disabled={saving}
+            className="flex-1 min-h-[48px] flex items-center justify-center gap-2 bg-bg-card border border-border rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-50"
+          >
+            Pular <ChevronRight size={17} />
+          </button>
+        </div>
+
+        {/* Observação (secundária) */}
+        <div className="px-1">
+          <button
+            onClick={() => setShowNotes((s) => !s)}
+            className="flex items-center gap-1.5 text-caption text-ink-3 hover:text-text-secondary transition-colors py-1"
           >
             <MessageSquare size={13} />
-            {showNotes ? 'Esconder observacao' : 'Adicionar observacao'}
+            {showNotes ? 'Esconder observação' : 'Adicionar observação'}
           </button>
           {showNotes && (
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex: presente de aniversario da Mae..."
-              className={`w-full mt-2 px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary text-[16px] focus:outline-none focus:border-accent resize-none ${silverPlaceholder}`}
+              placeholder="Ex.: presente de aniversário da mãe…"
               rows={2}
+              className="w-full mt-1.5 px-3 py-2 bg-elevated border border-border rounded-control text-text-primary text-[16px] placeholder:text-ink-3 focus:outline-none focus:border-accent-dim resize-none"
             />
           )}
         </div>
 
-        {/* Navigation */}
-        <div className="flex border-t border-border">
-          <button
-            onClick={onBack}
-            disabled={!onBack}
-            className={`flex-1 flex items-center justify-center gap-1 py-3 text-xs ${silver} hover:text-text-primary hover:bg-bg-secondary/50 transition-colors disabled:opacity-30 active:bg-bg-secondary/70`}
-          >
-            <ChevronLeft size={14} /> Voltar
-          </button>
-          <div className="w-px bg-border" />
-          <button
-            onClick={onSkip}
-            className="flex-1 flex items-center justify-center gap-1 py-3.5 text-sm font-bold text-accent border-l-0 hover:bg-accent/10 transition-colors active:bg-accent/20"
-          >
-            Pular <ChevronRight size={16} />
-          </button>
-        </div>
+        <p className="text-caption text-ink-3 text-center pt-1">
+          {remaining} restante{remaining !== 1 ? 's' : ''}
+        </p>
       </div>
+
+      {/* Bottom-sheet de busca */}
+      {sheetOpen && (
+        <div
+          className="fixed inset-0 z-50 bg-black/50 flex items-end"
+          onClick={() => setSheetOpen(false)}
+        >
+          <div
+            className="w-full max-h-[78%] bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-8 flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Digite para filtrar…"
+                className="w-full pl-9 pr-9 py-3 bg-elevated border border-border rounded-control text-text-primary text-[16px] placeholder:text-ink-3 focus:outline-none focus:border-accent-dim"
+              />
+              {search && (
+                <button
+                  onClick={() => { setSearch(''); searchRef.current?.focus(); }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-text-primary"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
+            <div className="overflow-y-auto overscroll-contain flex flex-col">
+              {searchResults.length === 0 ? (
+                <p className="text-body text-text-secondary text-center py-6">Nenhuma categoria encontrada</p>
+              ) : (
+                searchResults.map((c) => {
+                  const p = parentName(c);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => handleSelect(c.id)}
+                      className="flex items-center gap-3.5 py-3 px-1.5 min-h-[50px] border-b border-border text-left active:bg-bg-card transition-colors"
+                    >
+                      <CategoryIcon icon={c.icon} size={20} style={{ color: c.color }} />
+                      <span className="text-text-primary text-[15px] font-medium">{c.name}</span>
+                      {p && <span className="ml-auto text-caption text-ink-3">{p}</span>}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
