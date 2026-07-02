@@ -3,7 +3,10 @@
 **Para:** os agentes de auditoria/análise do MyPKA · **De:** trabalho feito na branch `claude/financial-planner-audit-fnd1tv` · **Data:** 02/07/2026
 
 ## Por que você está lendo isto
-Um assistente auditou o sistema `planejador-financeiro` e propôs um plano de melhorias. **Antes de implementar qualquer coisa**, o dono quer que este time critique o trabalho. Sua tarefa **não é implementar** — é **pressionar, refutar e priorizar**. Um "está tudo certo" tem pouco valor; o valor está em achar onde o diagnóstico está errado, exagerado, ou desalinhado com o uso real da família.
+Um assistente auditou o sistema `planejador-financeiro` e propôs um plano de melhorias. O trabalho dele termina neste pacote: **a revisão e a execução são deste time**. O processo tem duas etapas:
+
+1. **Revisão (esta etapa):** criticar o trabalho. Aqui sua tarefa **não é implementar** — é **pressionar, refutar e priorizar**. Um "está tudo certo" tem pouco valor; o valor está em achar onde o diagnóstico está errado, exagerado, ou desalinhado com o uso real da família.
+2. **Execução (após o dono aprovar o parecer):** este time implementa, usando `PLANO-DE-MELHORIAS.md` + `MELHORIAS-VISUAIS.md` como especificação e a ordem repriorizada pelo próprio parecer (ver seção final).
 
 ## O pacote a revisar (tudo nesta branch, em `docs/`)
 1. `AUDITORIA-2026-07.md` — os achados, com referências `arquivo:linha`.
@@ -60,9 +63,22 @@ Estes pontos eu **não consegui verificar** deste ambiente. São o coração da 
 ---
 
 ## Como devolver a crítica
-Sugestão de formato para o resultado da auditoria de vocês (para eu incorporar antes de implementar):
+Sugestão de formato para o resultado da auditoria de vocês (a incorporar ao plano antes da execução):
 - Um arquivo `docs/REVISAO-RESULTADOS.md` na mesma branch (ou comentários no PR), organizado por: **Concordo / Discordo / Falta / Reprioriza**.
 - Para cada discordância, **a evidência** (`arquivo:linha`, um print da regra do Firestore, ou o hábito real que contradiz a premissa).
 - Uma **ordem de implementação recomendada por vocês**, que pode diferir das fases propostas.
 
 Sejam adversariais. O melhor resultado desta revisão é uma lista de coisas que o plano errou — não uma validação.
+
+---
+
+## Depois da revisão: a execução é de vocês
+
+Aprovado o parecer pelo dono, este time assume a implementação. Guia de execução:
+
+- **Especificação:** `PLANO-DE-MELHORIAS.md` (o quê e por quê, por fase) + `MELHORIAS-VISUAIS.md` (tokens, componentes e tema de gráficos em código pronto) + `AUDITORIA-2026-07.md` (o apêndice de bugs por `arquivo:linha` funciona como checklist de correção).
+- **Ordem:** a que o parecer de vocês definir — as 5 fases propostas são o default, não um dogma.
+- **Fluxo de trabalho:** uma branch por fase a partir do `master` (após o merge deste pacote); cada push gera um preview deployment no Cloudflare Pages para o casal validar com uso real antes do merge. Nunca desenvolver direto no `master`.
+- **Critério de pronto por fase:** os itens da fase implementados, `tsc` e lint limpos, e o comportamento validado no preview (Fase 1 exige teste real da esposa no celular).
+- **Restrições permanentes:** dados financeiros reais nunca entram no repositório; a pasta `inbox/` de faturas vive fora do repo; segredos (chave Anthropic, service account) só em ambiente local/secrets do Cloudflare, nunca em código ou backup.
+- **Protótipo como referência:** `prototipos/categorizacao-mobile.html` é a direção visual e de interação da Fase 1 — a implementação real deve reproduzir a sensação dele (1 toque, desfazer, progresso, celebração), não necessariamente o código.
