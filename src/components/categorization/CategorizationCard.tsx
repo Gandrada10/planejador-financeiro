@@ -69,13 +69,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
     return picked;
   }, [quickCategoryIds, byId, eligible, suggestion]);
 
-  // Reset ao trocar de transação
-  useEffect(() => {
-    setNotes('');
-    setShowNotes(false);
-    setSearch('');
-    setSheetOpen(false);
-  }, [transaction.id]);
+  // Estado é resetado por remontagem (key={tx.id} no pai), sem efeito.
 
   const handleSelect = useCallback(async (categoryId: string) => {
     if (saving) return;

@@ -157,6 +157,7 @@ export function CategorizationPage() {
       <div className="flex-1 flex items-start justify-center px-3 pb-[env(safe-area-inset-bottom)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
         <div className="w-full max-w-lg pb-4">
           <CategorizationCard
+            key={currentTx.id}
             transaction={currentTx}
             categories={categories}
             quickCategoryIds={session.topCategoryIds}
