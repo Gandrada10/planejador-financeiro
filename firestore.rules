@@ -1,0 +1,65 @@
+rules_version = '2';
+
+// Regras de segurança do Firestore — Fase 0 da auditoria.
+// Deploy: `firebase deploy --only firestore:rules` (precisa do firebase.json).
+// Objetivo: dados privados por usuário; sessão de categorização acessível por
+// quem tem o token (capability URL), mas com escrita pública restrita a poucos
+// campos e apenas enquanto o link não expirou.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Só os campos em `allowed` foram alterados nesta escrita.
+    function changedOnly(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    function sessionOwner(token) {
+      return get(/databases/$(database)/documents/categorizationSessions/$(token)).data.userId;
+    }
+
+    function sessionNotExpired(token) {
+      return request.time < get(/databases/$(database)/documents/categorizationSessions/$(token)).data.expiresAt;
+    }
+
+    // ---- Dados privados do usuário: só o próprio dono ----
+    match /users/{uid}/{document=**} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ---- Sessões de categorização (acesso público por token) ----
+    match /categorizationSessions/{token} {
+      // Leitura de um documento específico (quem tem o link). `list` só para
+      // usuário autenticado (o dono consulta as próprias sessões); a esposa
+      // nunca lista a coleção — abre um token direto.
+      allow get: if true;
+      allow list: if request.auth != null;
+
+      allow create: if isOwner(request.resource.data.userId);
+      allow delete: if isOwner(resource.data.userId);
+      // Dono edita à vontade; público (não autenticado) só mexe nos contadores
+      // e enquanto o link é válido.
+      allow update: if isOwner(resource.data.userId)
+        || (changedOnly(['categorizedCount', 'lastActivityAt'])
+            && request.time < resource.data.expiresAt);
+
+      // Categorias copiadas para a sessão: leitura pública, escrita só do dono.
+      match /categories/{catId} {
+        allow read: if true;
+        allow write: if isOwner(sessionOwner(token));
+      }
+
+      // Transações da sessão: leitura pública; o dono cria/apaga/edita tudo;
+      // o público só pode gravar categoryId/notes/applied e só antes de expirar.
+      match /transactions/{txId} {
+        allow read: if true;
+        allow create, delete: if isOwner(sessionOwner(token));
+        allow update: if isOwner(sessionOwner(token))
+          || (changedOnly(['categoryId', 'notes', 'applied']) && sessionNotExpired(token));
+      }
+    }
+  }
+}

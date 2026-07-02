@@ -21,6 +21,19 @@ function getUserTransactionsRef() {
   return collection(db, 'users', uid, 'transactions');
 }
 
+// Firestore limita um writeBatch a 500 operações. Commit em blocos de 400 para
+// que importações/edições grandes (fatura extensa, "selecionar tudo") não
+// estourem o limite e falhem por inteiro.
+const BATCH_CHUNK = 400;
+
+async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof writeBatch>, item: T) => void) {
+  for (let i = 0; i < items.length; i += BATCH_CHUNK) {
+    const batch = writeBatch(db);
+    for (const item of items.slice(i, i + BATCH_CHUNK)) apply(batch, item);
+    await batch.commit();
+  }
+}
+
 function docToTransaction(id: string, data: Record<string, unknown>): Transaction {
   return {
     id,
@@ -100,9 +113,8 @@ export function useTransactions() {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     const ref = collection(db, 'users', uid, 'transactions');
-    const batch = writeBatch(db);
     const batchId = `import_${Date.now()}`;
-    for (const item of items) {
+    await commitInChunks(items, (batch, item) => {
       const newDoc = doc(ref);
       batch.set(newDoc, {
         ...item,
@@ -112,20 +124,17 @@ export function useTransactions() {
         importBatch: batchId,
         createdAt: Timestamp.now(),
       });
-    }
-    await batch.commit();
+    });
   }
 
   async function batchUpdateReconciled(ids: string[], reconciled: boolean) {
     const uid = auth.currentUser?.uid;
     if (!uid || ids.length === 0) return;
-    const batch = writeBatch(db);
     const now = reconciled ? Timestamp.now() : null;
-    for (const id of ids) {
+    await commitInChunks(ids, (batch, id) => {
       const ref = doc(db, 'users', uid, 'transactions', id);
       batch.update(ref, { reconciled, reconciledAt: now });
-    }
-    await batch.commit();
+    });
   }
 
   async function batchUpdate(ids: string[], data: Partial<Transaction>) {
@@ -140,12 +149,10 @@ export function useTransactions() {
     }
     delete updates.id;
     delete updates.createdAt;
-    const batch = writeBatch(db);
-    for (const id of ids) {
+    await commitInChunks(ids, (batch, id) => {
       const ref = doc(db, 'users', uid, 'transactions', id);
       batch.update(ref, updates);
-    }
-    await batch.commit();
+    });
   }
 
   return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate };
