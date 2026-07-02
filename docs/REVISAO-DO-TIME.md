@@ -8,11 +8,12 @@ Um assistente auditou o sistema `planejador-financeiro` e propôs um plano de me
 1. **Revisão (esta etapa):** criticar o trabalho. Aqui sua tarefa **não é implementar** — é **pressionar, refutar e priorizar**. Um "está tudo certo" tem pouco valor; o valor está em achar onde o diagnóstico está errado, exagerado, ou desalinhado com o uso real da família.
 2. **Execução (após o dono aprovar o parecer):** este time implementa, usando `PLANO-DE-MELHORIAS.md` + `MELHORIAS-VISUAIS.md` como especificação e a ordem repriorizada pelo próprio parecer (ver seção final).
 
-## O pacote a revisar (tudo nesta branch, em `docs/`)
-1. `AUDITORIA-2026-07.md` — os achados, com referências `arquivo:linha`.
-2. `PLANO-DE-MELHORIAS.md` — as mudanças propostas, o roadmap em 5 fases e as decisões da conversa (cadência mensal/anual, integração MyPKA, staging, estética).
-3. `prototipos/categorizacao-mobile.html` — protótipo navegável da nova tela da esposa (demo isolada, dados fictícios). Abra no navegador.
-4. `MELHORIAS-VISUAIS.md` — auditoria visual do app inteiro com o código proposto: tokens de design, receitas de componentes, tema de gráficos validado para daltonismo/contraste e melhorias tela a tela.
+## O pacote a revisar (tudo nesta branch)
+1. `docs/AUDITORIA-2026-07.md` — os achados, com referências `arquivo:linha`.
+2. `docs/PLANO-DE-MELHORIAS.md` — as mudanças propostas, o roadmap em 5 fases e as decisões da conversa (cadência mensal/anual, integração MyPKA, staging, estética).
+3. `docs/prototipos/categorizacao-mobile.html` — protótipo navegável da nova tela da esposa (demo isolada, dados fictícios). Abra no navegador.
+4. `docs/MELHORIAS-VISUAIS.md` — auditoria visual do app inteiro com o código proposto: tokens de design, receitas de componentes, tema de gráficos validado para daltonismo/contraste e melhorias tela a tela.
+5. **`docs/IMPLEMENTADO-NESTA-BRANCH.md` + o CÓDIGO** — a branch já contém uma **implementação-teste** das Fases 0 (parte segura) e 1 + fundação visual. Auditem o código rodando (preview do Cloudflare), não só o plano. `docs/SEGURANCA-FASE-0.md` traz o checklist de deploy das regras.
 
 Para revisar: `git fetch && git checkout claude/financial-planner-audit-fnd1tv`, depois leia os três arquivos e o código-fonte referenciado em `src/` e `functions/`.
 
@@ -56,6 +57,12 @@ Estes pontos eu **não consegui verificar** deste ambiente. São o coração da 
 - A troca da fonte monoespaçada pela sans do sistema + `tabular-nums` perde algo que o dono valorize (identidade "terminal")? Confirmar com ele antes de migrar.
 - Os tokens propostos cobrem todos os casos reais das telas, ou alguma tela precisa de um papel que não existe (ex.: terceira cor de status)?
 - A estratégia de migração incremental (§6) é segura, ou há acoplamentos de estilo que quebram no meio do caminho?
+
+### Sobre o código-teste já implementado (IMPLEMENTADO-NESTA-BRANCH)
+- Rodem o preview e testem o fluxo real da esposa: gerar link → categorizar parcialmente → o dono abre o app → as parciais foram aplicadas E a sessão continua ativa? Categorizar o resto depois → foi aplicado? (é o FIX do bug crítico).
+- A sugestão de 1 toque acerta nas faturas reais? A grade de "frequentes" faz sentido?
+- As `firestore.rules` propostas não bloqueiam nenhum fluxo real (dono lê/grava; esposa categoriza; token expirado é barrado)? **Testar em staging antes de publicar.**
+- Alguma regressão visual causada pela troca de tokens em telas que não revisamos aqui?
 
 ### Sobre a ordem
 - As fases estão na ordem certa de valor/risco? O que vocês fariam **primeiro** de tudo?

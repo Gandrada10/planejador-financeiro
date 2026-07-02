@@ -1,6 +1,6 @@
 # Plano de melhorias — proposta para revisão
 
-**Data:** 02/07/2026 · **Status:** proposta, **nada implementado** · **Branch:** `claude/financial-planner-audit-fnd1tv` · **Execução:** time de agentes do MyPKA, após a revisão (`REVISAO-DO-TIME.md`)
+**Data:** 02/07/2026 · **Status:** Fases 0 (parte segura) e 1 + fundação visual **implementadas como teste** nesta branch (ver `IMPLEMENTADO-NESTA-BRANCH.md`); Fases 2–4 pendentes · **Branch:** `claude/financial-planner-audit-fnd1tv` (sem merge) · **Execução das fases restantes:** time de agentes do MyPKA, após a revisão (`REVISAO-DO-TIME.md`)
 
 Este documento consolida as mudanças propostas a partir da auditoria (`AUDITORIA-2026-07.md`) e das decisões tomadas na conversa de planejamento. É a base para a revisão do time de agentes do MyPKA **antes** de qualquer implementação. Leia junto com:
 
