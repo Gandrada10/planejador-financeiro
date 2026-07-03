@@ -321,7 +321,7 @@ export function SettingsPage() {
               value={anthropicKey}
               onChange={(e) => { setAnthropicKey(e.target.value); setKeySaved(false); }}
               placeholder="sk-ant-..."
-              className={`${inputClass} w-full pr-9 font-mono text-xs`}
+              className={`${inputClass} w-full pr-9 text-xs`}
             />
             <button
               type="button"
@@ -396,7 +396,7 @@ export function SettingsPage() {
               value={pluggyClientId}
               onChange={(e) => { setPluggyClientId(e.target.value); setPluggySaved(false); setPluggyTestResult(null); }}
               placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-              className={`${inputClass} w-full font-mono text-xs`}
+              className={`${inputClass} w-full text-xs`}
             />
           </div>
           <div>
@@ -407,7 +407,7 @@ export function SettingsPage() {
                 value={pluggyClientSecret}
                 onChange={(e) => { setPluggyClientSecret(e.target.value); setPluggySaved(false); setPluggyTestResult(null); }}
                 placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-                className={`${inputClass} w-full pr-9 font-mono text-xs`}
+                className={`${inputClass} w-full pr-9 text-xs`}
               />
               <button
                 type="button"
@@ -499,7 +499,7 @@ export function SettingsPage() {
             {mappings.map((m) => (
               <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
                 <div className="flex items-center gap-3">
-                  <span className="text-accent font-mono font-bold">**** {m.cardLastDigits}</span>
+                  <span className="text-accent tnum font-bold">**** {m.cardLastDigits}</span>
                   <span className="text-text-secondary">→</span>
                   <span className="text-text-primary">{m.titularName}</span>
                 </div>

@@ -69,10 +69,11 @@ export function CategorizationPage() {
   const currentFullIndex = findNextUncategorized(cursor);
   const currentTx = currentFullIndex >= 0 ? transactions[currentFullIndex] : null;
 
+  // C7/undo robusto: 8s de janela (era 4s) — única rede de segurança da tela.
   function showUndo(txId: string, label: string) {
     setUndo({ txId, label });
     if (undoTimer.current) window.clearTimeout(undoTimer.current);
-    undoTimer.current = window.setTimeout(() => setUndo(null), 4000);
+    undoTimer.current = window.setTimeout(() => setUndo(null), 8000);
   }
 
   async function handleCategorize(categoryId: string, notes: string) {
@@ -99,6 +100,25 @@ export function CategorizationPage() {
 
   const greet = firstName(session.titularName);
 
+  // C7: o toast precisa existir TAMBÉM na tela de celebração — antes, quando
+  // o item categorizado era o último, o re-render caía na celebração antes do
+  // JSX do toast e o desfazer ficava inalcançável. Alvo do botão ≥44px.
+  const undoToast = undo ? (
+    <div className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex justify-center">
+      <div className="w-full max-w-lg flex items-center justify-between gap-3 bg-elevated border border-border rounded-full pl-4 pr-2 py-1.5 shadow-lg">
+        <span className="text-body text-text-secondary truncate">
+          Marcado como <b className="text-accent font-semibold">{undo.label}</b>
+        </span>
+        <button
+          onClick={handleUndo}
+          className="flex items-center gap-1.5 min-h-[44px] min-w-[44px] px-3 text-body font-semibold text-text-primary whitespace-nowrap"
+        >
+          <Undo2 size={15} /> Desfazer
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   if (allDone) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-bg-primary p-6">
@@ -112,6 +132,7 @@ export function CategorizationPage() {
             Está tudo salvo — pode fechar.{greet ? ` Obrigado, ${greet}! 💚` : ' 💚'}
           </p>
         </div>
+        {undoToast}
       </div>
     );
   }
@@ -169,21 +190,7 @@ export function CategorizationPage() {
       </div>
 
       {/* Toast desfazer */}
-      {undo && (
-        <div className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex justify-center">
-          <div className="w-full max-w-lg flex items-center justify-between gap-3 bg-elevated border border-border rounded-full px-4 py-2.5 shadow-lg">
-            <span className="text-body text-text-secondary truncate">
-              Marcado como <b className="text-accent font-semibold">{undo.label}</b>
-            </span>
-            <button
-              onClick={handleUndo}
-              className="flex items-center gap-1.5 text-body font-semibold text-text-primary whitespace-nowrap"
-            >
-              <Undo2 size={15} /> Desfazer
-            </button>
-          </div>
-        </div>
-      )}
+      {undoToast}
     </div>
   );
 }

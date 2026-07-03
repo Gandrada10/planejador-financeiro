@@ -277,7 +277,7 @@ export function CreditCardPage() {
                         <p className="text-[11px] font-bold text-text-primary truncate">{inv.accountName}</p>
                         <p className="text-[10px] text-text-secondary capitalize">{getMonthLabel(inv.monthYear)}</p>
                       </div>
-                      <span className={`text-[11px] font-bold font-mono flex-shrink-0 ${inv.total < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
+                      <span className={`text-[11px] font-bold tnum flex-shrink-0 ${inv.total < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
                         {formatBRL(inv.total)}
                       </span>
                     </button>

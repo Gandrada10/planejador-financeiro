@@ -341,7 +341,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                       const cardNum = group.transactions[0]?.cardNumber;
                       const last4 = cardNum ? cardNum.replace(/\D/g, '').slice(-4) : null;
                       return last4 ? (
-                        <span className="text-[10px] text-text-secondary font-mono">**** {last4}</span>
+                        <span className="text-[10px] text-text-secondary tnum">**** {last4}</span>
                       ) : null;
                     })()}
                   </div>
@@ -550,7 +550,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                               onClick={(e) => e.stopPropagation()}
                             />
                           ) : t.totalInstallments ? (
-                            <span className="text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded tnum">
                               {t.installmentNumber}/{t.totalInstallments}
                             </span>
                           ) : (

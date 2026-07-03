@@ -103,6 +103,12 @@ export interface CategorizationTransaction {
   suggestedCategoryId: string | null;
   /** Motivo legível da sugestão, ex.: "Você já categorizou assim". */
   suggestionReason: string | null;
+  /**
+   * Conta/cartão de origem (ex.: "Nubank •••• 4535"), copiada da transação
+   * real na criação da sessão. `null` em sessões antigas (campo ausente na
+   * subcoleção) — a UI degrada graciosamente e não mostra o chip.
+   */
+  account: string | null;
 }
 
 export interface Project {

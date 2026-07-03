@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   collection,
   doc,
@@ -7,6 +7,7 @@ import {
   getDocs,
   updateDoc,
   writeBatch,
+  increment,
   Timestamp,
   query,
   where,
@@ -30,6 +31,33 @@ function generateToken(): string {
 }
 
 const HISTORY_RETENTION_DAYS = 90;
+const SESSION_TTL_MS = 48 * 60 * 60 * 1000; // 48h
+
+// Firestore limita um writeBatch a 500 operações. Mesmo padrão de
+// useTransactions.ts (commitInChunks): commit em blocos para que sessões
+// grandes não estourem o limite e falhem por inteiro. `opsPerItem` cobre o
+// apply, que gasta 2 operações por transação (real + subcoleção).
+const BATCH_CHUNK = 400;
+
+async function commitInChunks<T>(
+  items: T[],
+  apply: (batch: ReturnType<typeof writeBatch>, item: T) => void,
+  opsPerItem = 1
+) {
+  const perChunk = Math.max(1, Math.floor(BATCH_CHUNK / opsPerItem));
+  for (let i = 0; i < items.length; i += perChunk) {
+    const batch = writeBatch(db);
+    for (const item of items.slice(i, i + perChunk)) apply(batch, item);
+    await batch.commit();
+  }
+}
+
+// Resultado real do apply — a UI mostra aplicados/pulados e o erro, se houver.
+export interface ApplySessionResult {
+  applied: number;
+  skipped: number;
+  error: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Sugestões pré-calculadas (sem IA): regras do dono + histórico de escolhas.
@@ -111,6 +139,9 @@ function docToSessionTransaction(id: string, td: Record<string, unknown>): Categ
     notes: (td.notes as string) || '',
     suggestedCategoryId: (td.suggestedCategoryId as string) || null,
     suggestionReason: (td.suggestionReason as string) || null,
+    // Sessões criadas antes do chip da conta não têm o campo → null (a UI
+    // simplesmente não mostra o chip).
+    account: (td.account as string) || null,
   };
 }
 
@@ -152,6 +183,13 @@ export function useCategorizationSessions() {
     () => sessions.filter((s) => s.status === 'active' && s.expiresAt > new Date()),
     [sessions]
   );
+  // C1(b): sessões expiradas que nunca foram aplicadas/dispensadas NÃO podem
+  // ficar invisíveis — o dono precisa vê-las ("expirada — X pendentes") com
+  // ação de reabrir ou aplicar as parciais.
+  const expiredSessions = useMemo(
+    () => sessions.filter((s) => s.status === 'active' && s.expiresAt <= new Date()),
+    [sessions]
+  );
   const historySessions = useMemo(
     () => sessions.filter((s) => s.status === 'applied' || s.status === 'dismissed'),
     [sessions]
@@ -174,7 +212,7 @@ export function useCategorizationSessions() {
     if (uncategorized.length === 0) throw new Error('Nenhuma transacao sem categoria encontrada');
 
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48h
+    const expiresAt = new Date(Date.now() + SESSION_TTL_MS);
     const accounts = Array.from(new Set(uncategorized.map((t) => t.account).filter(Boolean))).sort();
     const totalAmount = uncategorized.reduce((s, t) => s + t.amount, 0);
 
@@ -241,20 +279,19 @@ export function useCategorizationSessions() {
       topCategoryIds,
     });
 
-    // Copy categories to session so the public page can access them
-    const catBatch = writeBatch(db);
-    for (const cat of categories) {
+    // Copy categories to session so the public page can access them.
+    // C4: em blocos — um batch único estoura o limite de 500 operações.
+    await commitInChunks(categories, (batch, cat) => {
       const catRef = doc(db, 'categorizationSessions', token, 'categories', cat.id);
-      catBatch.set(catRef, { name: cat.name, icon: cat.icon, color: cat.color, type: cat.type, parentId: cat.parentId ?? null });
-    }
-    await catBatch.commit();
+      batch.set(catRef, { name: cat.name, icon: cat.icon, color: cat.color, type: cat.type, parentId: cat.parentId ?? null });
+    });
 
-    // Copy transactions to session sub-collection, each with its pre-computed suggestion
-    const txBatch = writeBatch(db);
-    for (const t of uncategorized) {
+    // Copy transactions to session sub-collection, each with its pre-computed
+    // suggestion. C4: em blocos (>500 lançamentos falhava por inteiro).
+    await commitInChunks(uncategorized, (batch, t) => {
       const suggestion = suggestFor(t.description, t.amount);
       const txRef = doc(db, 'categorizationSessions', token, 'transactions', t.id);
-      txBatch.set(txRef, {
+      batch.set(txRef, {
         transactionId: t.id,
         description: t.description,
         amount: t.amount,
@@ -265,10 +302,12 @@ export function useCategorizationSessions() {
         notes: '',
         suggestedCategoryId: suggestion.id,
         suggestionReason: suggestion.reason,
+        // Conta/cartão de origem — dá contexto no card da esposa (casal com
+        // vários cartões). Sessões antigas não têm o campo (UI degrada).
+        account: t.account ?? null,
         applied: false,
       });
-    }
-    await txBatch.commit();
+    });
 
     return token;
   }
@@ -279,19 +318,24 @@ export function useCategorizationSessions() {
   // permanece 'active' e cada abertura aplica apenas o DELTA (as ainda não
   // aplicadas, marcadas com applied=true na subcoleção). Assim o trabalho feito
   // aos poucos nunca é descartado.
-  const applyCategorizationsFromSession = useCallback(async (token: string) => {
+  const applyCategorizationsFromSession = useCallback(async (token: string): Promise<ApplySessionResult> => {
     const uid = auth.currentUser?.uid;
     if (!uid) {
-      console.error('applyCategorizationsFromSession: usuario nao autenticado');
-      return 0;
+      return { applied: 0, skipped: 0, error: 'Você precisa estar logado para aplicar.' };
     }
 
     try {
+      const sessionRef = doc(db, 'categorizationSessions', token);
+      const sessionSnap = await getDoc(sessionRef);
+      if (!sessionSnap.exists()) {
+        return { applied: 0, skipped: 0, error: 'Sessão não encontrada.' };
+      }
+      const sessionData = parseSession(sessionSnap.id, sessionSnap.data());
+
       const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
-      const batch = writeBatch(db);
-      let appliedNow = 0;
       let categorized = 0;
       let total = 0;
+      const pendingDeltas: { ref: (typeof txSnap.docs)[number]['ref']; transactionId: string; categoryId: string; notes: string }[] = [];
 
       for (const txDoc of txSnap.docs) {
         total++;
@@ -299,49 +343,111 @@ export function useCategorizationSessions() {
         if (!data.categoryId) continue;
         categorized++;
         if (data.applied) continue; // já aplicada em abertura anterior — pula
-        const realTxRef = doc(db, 'users', uid, 'transactions', data.transactionId);
-        batch.update(realTxRef, {
-          categoryId: data.categoryId,
-          ...(data.notes ? { notes: data.notes } : {}),
+        pendingDeltas.push({
+          ref: txDoc.ref,
+          transactionId: data.transactionId as string,
+          categoryId: data.categoryId as string,
+          notes: (data.notes as string) || '',
         });
-        batch.update(txDoc.ref, { applied: true });
-        appliedNow++;
       }
 
-      if (appliedNow > 0) await batch.commit();
+      // C3: transação apagada pelo dono não pode envenenar o apply — um
+      // batch.update em doc inexistente falha o batch INTEIRO. Verifica a
+      // existência antes, aplica as que existem e marca as órfãs como
+      // consumidas (applied + orphaned) para a falha não se repetir a cada
+      // abertura. O resultado real (aplicadas/puladas) vai para a UI.
+      const existence = await Promise.all(
+        pendingDeltas.map((p) => getDoc(doc(db, 'users', uid, 'transactions', p.transactionId)))
+      );
+      const toApply: typeof pendingDeltas = [];
+      const orphaned: typeof pendingDeltas = [];
+      pendingDeltas.forEach((p, i) => (existence[i].exists() ? toApply : orphaned).push(p));
+
+      // C4: 2 operações por transação → chunking obrigatório (>250 deltas
+      // estourava o limite de 500 do writeBatch).
+      await commitInChunks(
+        toApply,
+        (batch, p) => {
+          batch.update(doc(db, 'users', uid, 'transactions', p.transactionId), {
+            categoryId: p.categoryId,
+            ...(p.notes ? { notes: p.notes } : {}),
+          });
+          batch.update(p.ref, { applied: true });
+        },
+        2
+      );
+      await commitInChunks(orphaned, (batch, p) => {
+        batch.update(p.ref, { applied: true, orphaned: true });
+      });
 
       const allDone = total > 0 && categorized === total;
-      const sessionRef = doc(db, 'categorizationSessions', token);
+
+      // C1(a): renovação da janela por atividade, gravada pelo DONO — assim
+      // continua funcionando mesmo com `expiresAt` imutável no update PÚBLICO
+      // das rules (decisão de segurança do Vex). Cada categorização da esposa
+      // grava lastActivityAt (update público); aqui o dono estende expiresAt
+      // para lastActivityAt + 48h (nunca encurta). Limitação aceita e
+      // documentada: a renovação só persiste quando o dono abre o app/aplica;
+      // se ele ficar dias sem abrir, a sessão pode expirar — mas aí ela
+      // aparece na lista como "expirada — X pendentes", com ação de reabrir.
+      let renewedExpiresAt: Timestamp | null = null;
+      if (!allDone && sessionData.status === 'active' && sessionData.lastActivityAt) {
+        const candidate = new Date(sessionData.lastActivityAt.getTime() + SESSION_TTL_MS);
+        if (candidate > sessionData.expiresAt) renewedExpiresAt = Timestamp.fromDate(candidate);
+      }
+
+      // lastActivityAt NÃO é tocado aqui: o campo significa "última atividade
+      // de quem categoriza" (gravado pela página pública), não "último apply".
       await updateDoc(sessionRef, {
         appliedCount: categorized,
-        lastActivityAt: Timestamp.now(),
+        ...(renewedExpiresAt ? { expiresAt: renewedExpiresAt } : {}),
         ...(allDone
           ? { status: 'applied' as CategorizationSessionStatus, appliedAt: Timestamp.now() }
           : {}),
       });
-      return appliedNow;
+      return { applied: toApply.length, skipped: orphaned.length, error: null };
     } catch (err) {
       console.error('Erro ao aplicar categorizacoes:', err);
-      return 0;
+      return {
+        applied: 0,
+        skipped: 0,
+        error: 'Não consegui aplicar as categorizações — verifique a internet e tente de novo.',
+      };
     }
   }, []);
 
   // Apply all pending sessions — called by TransactionsPage on mount.
-  // Reaplica o delta de qualquer sessão ativa que já tenha algo categorizado;
-  // como as transações já aplicadas ficam marcadas, reprocessar é barato.
-  const applyAllPendingSessions = useCallback(async () => {
+  // Reaplica o delta de sessões com status 'active' (inclusive as já
+  // expiradas) que tenham `categorizedCount > 0` no doc da sessão; o delta
+  // real é lido da subcoleção ao aplicar. Como as transações já aplicadas
+  // ficam marcadas, reprocessar é barato.
+  const applyAllPendingSessions = useCallback(async (): Promise<{ applied: number; skipped: number; errors: string[] }> => {
     const uid = auth.currentUser?.uid;
-    if (!uid) return 0;
+    if (!uid) return { applied: 0, skipped: 0, errors: [] };
 
-    let totalApplied = 0;
+    let applied = 0;
+    let skipped = 0;
+    const errors: string[] = [];
     for (const s of sessions) {
       if (s.status === 'active' && s.categorizedCount > 0) {
-        const applied = await applyCategorizationsFromSession(s.id);
-        totalApplied += applied;
+        const res = await applyCategorizationsFromSession(s.id);
+        applied += res.applied;
+        skipped += res.skipped;
+        if (res.error) errors.push(`${s.titularName}: ${res.error}`);
       }
     }
-    return totalApplied;
+    return { applied, skipped, errors };
   }, [sessions, applyCategorizationsFromSession]);
+
+  // C1(b): reabre uma sessão (expirada ou não) por mais 48h a partir de agora.
+  // Ação explícita do DONO autenticado — compatível com rules que tornem
+  // `expiresAt` imutável no update público. Lança em caso de falha (a UI trata).
+  const reopenSession = useCallback(async (token: string) => {
+    const sessionRef = doc(db, 'categorizationSessions', token);
+    await updateDoc(sessionRef, {
+      expiresAt: Timestamp.fromDate(new Date(Date.now() + SESSION_TTL_MS)),
+    });
+  }, []);
 
   const dismissSession = useCallback(async (token: string) => {
     try {
@@ -355,10 +461,12 @@ export function useCategorizationSessions() {
   return {
     sessions,
     activeSessions,
+    expiredSessions,
     historySessions,
     createSession,
     applyCategorizationsFromSession,
     applyAllPendingSessions,
+    reopenSession,
     dismissSession,
   };
 }
@@ -422,13 +530,21 @@ export function usePublicCategorizationSession(token: string) {
     load();
   }, [token]);
 
-  // Atualiza a contagem da sessão a partir do estado local (sem reler a
-  // subcoleção inteira a cada toque — antes era O(n) leituras por categorização).
-  const pushCount = useCallback(
-    (next: CategorizationTransaction[]) => {
-      const count = next.filter((t) => t.categoryId).length;
+  // Espelho do estado atual para calcular deltas fora do updater do setState
+  // (efeito colateral dentro do updater rodaria 2× no StrictMode).
+  const transactionsRef = useRef<CategorizationTransaction[]>([]);
+  useEffect(() => {
+    transactionsRef.current = transactions;
+  }, [transactions]);
+
+  // C5 (parcial): a contagem usa increment() atômico em vez de sobrescrever o
+  // doc com a contagem do estado LOCAL — duas abas/aparelhos não se atropelam
+  // mais com valor stale. As rules podem validar o valor final normalmente
+  // (request.resource.data já reflete o transform aplicado).
+  const pushActivity = useCallback(
+    (delta: number) => {
       const sessionRef = doc(db, 'categorizationSessions', token);
-      updateDoc(sessionRef, { categorizedCount: count, lastActivityAt: Timestamp.now() }).catch(() => {
+      updateDoc(sessionRef, { categorizedCount: increment(delta), lastActivityAt: Timestamp.now() }).catch(() => {
         // não-crítico: a contagem é só para exibição
       });
     },
@@ -440,13 +556,12 @@ export function usePublicCategorizationSession(token: string) {
       const txRef = doc(db, 'categorizationSessions', token, 'transactions', txId);
       // applied:false garante que o dono reaplique este delta na próxima abertura
       await updateDoc(txRef, { categoryId, notes, applied: false });
-      setTransactions((prev) => {
-        const next = prev.map((t) => (t.id === txId ? { ...t, categoryId, notes } : t));
-        pushCount(next);
-        return next;
-      });
+      const prev = transactionsRef.current.find((t) => t.id === txId);
+      const delta = prev && !prev.categoryId ? 1 : 0; // recategorizar não muda a contagem
+      setTransactions((list) => list.map((t) => (t.id === txId ? { ...t, categoryId, notes } : t)));
+      pushActivity(delta);
     },
-    [token, pushCount]
+    [token, pushActivity]
   );
 
   // Desfazer: devolve a transação para o estado não categorizado.
@@ -454,13 +569,12 @@ export function usePublicCategorizationSession(token: string) {
     async (txId: string) => {
       const txRef = doc(db, 'categorizationSessions', token, 'transactions', txId);
       await updateDoc(txRef, { categoryId: null, notes: '', applied: false });
-      setTransactions((prev) => {
-        const next = prev.map((t) => (t.id === txId ? { ...t, categoryId: null, notes: '' } : t));
-        pushCount(next);
-        return next;
-      });
+      const prev = transactionsRef.current.find((t) => t.id === txId);
+      const delta = prev && prev.categoryId ? -1 : 0;
+      setTransactions((list) => list.map((t) => (t.id === txId ? { ...t, categoryId: null, notes: '' } : t)));
+      pushActivity(delta);
     },
-    [token, pushCount]
+    [token, pushActivity]
   );
 
   return { session, transactions, categories, loading, error, categorizeTransaction, uncategorizeTransaction };

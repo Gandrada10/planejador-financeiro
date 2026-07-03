@@ -31,7 +31,13 @@
 
   /* Superfície elevada (hover, inputs, chips) e 3º nível de texto */
   --color-elevated: #232327;
-  --color-ink-3: #6e6d69;           /* mudo: labels uppercase, eixos */
+  /* ink-3: mudo (labels uppercase, eixos, legendas 11px). Valor calibrado
+   * para WCAG AA (≥4,5:1) em TODOS os fundos em que é usado:
+   * 5,92:1 no bg-primary · 5,71:1 no bg-secondary · 5,24:1 no bg-card ·
+   * 4,77:1 no elevated — e segue mais fraco que text-secondary (#a3a29e,
+   * 6,13–7,60:1), preservando a hierarquia ink-1 > ink-2 > ink-3.
+   * (Era #6e6d69 = 3,02–3,75:1, reprovado no gate da Vera.) */
+  --color-ink-3: #8f8e89;
 
   /* Menta translúcida para bordas/realces sutis */
   --color-accent-dim: rgba(94, 224, 160, 0.32);
@@ -74,9 +80,15 @@ body {
 /* Números alinhados em colunas — assume o papel que a fonte mono tinha */
 .tnum { font-variant-numeric: tabular-nums; }
 
-/* Foco visível (acessibilidade) */
+/* Foco visível (acessibilidade — WCAG 1.4.11).
+ * Menta SÓLIDA: 11,69:1 no bg-primary, 9,43:1 até no fundo mais claro
+ * (elevated) — o accent-dim translúcido compunha 2,15–2,19:1, reprovado.
+ * O !important é deliberado: dezenas de inputs legados usam a utility
+ * `focus:outline-none`, que mataria o anel; esta regra global garante o
+ * indicador em TODO elemento focado via teclado (e em campos de texto),
+ * sem precisar tocar componente por componente. Não remover. */
 :focus-visible {
-  outline: 2px solid var(--color-accent-dim);
+  outline: 2px solid var(--color-accent) !important;
   outline-offset: 2px;
 }
 

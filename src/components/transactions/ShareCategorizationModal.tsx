@@ -144,7 +144,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
                 <input
                   readOnly
                   value={generatedLink}
-                  className="flex-1 px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs font-mono truncate"
+                  className="flex-1 px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs truncate"
                 />
                 <button
                   onClick={handleCopy}

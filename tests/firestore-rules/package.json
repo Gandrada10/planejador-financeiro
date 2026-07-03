@@ -1,0 +1,17 @@
+{
+  "name": "planejador-firestore-rules-tests",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Suite de testes das firestore.rules no emulador (zero contato com producao).",
+  "scripts": {
+    "test": "node --test rules.test.mjs",
+    "emulator": "firebase emulators:start --only firestore --project demo-planejador-rules",
+    "test:exec": "firebase emulators:exec --only firestore --project demo-planejador-rules \"node --test rules.test.mjs\""
+  },
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.0",
+    "firebase": "^12.11.0",
+    "firebase-tools": "^14.6.0"
+  }
+}

@@ -8,7 +8,7 @@ Este documento consolida as mudanças propostas a partir da auditoria (`AUDITORI
 - `prototipos/categorizacao-mobile.html` — protótipo navegável da nova tela da esposa (abra no navegador; é uma demo isolada com dados fictícios, não é código de produção).
 - `REVISAO-DO-TIME.md` — o briefing de auditoria (o que pedir aos agentes que pressionem).
 
-> **Nenhuma linha de código de produção foi alterada.** Os únicos arquivos novos estão em `docs/`. O objetivo desta entrega é ser auditável, não executável.
+> **Atenção — esta branch NÃO é só documentação.** A afirmação original ("nenhuma linha de código de produção foi alterada") ficou desatualizada: o diff da branch toca ~27 arquivos, incluindo código de produção em `src/` (fluxo de categorização, fonte/tokens visuais, telas legadas), `public/sw.js`, `firestore.rules` e testes em `tests/`. O inventário fiel do que foi implementado está em `IMPLEMENTADO-NESTA-BRANCH.md` — use-o (e o diff real) como mapa de auditoria, não este parágrafo. Nada foi mergeado nem deployado; o preview do Cloudflare aponta para produção e não deve ser usado como staging.
 
 ---
 

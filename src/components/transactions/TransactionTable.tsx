@@ -449,7 +449,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-center focus:outline-none"
                     />
                   ) : t.totalInstallments ? (
-                    <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
+                    <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] tnum">
                       {t.installmentNumber ?? '?'}/{t.totalInstallments}
                     </span>
                   ) : '—'}
