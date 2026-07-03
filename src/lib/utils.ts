@@ -29,6 +29,48 @@ export function cn(...classes: (string | boolean | undefined | null)[]): string 
   return classes.filter(Boolean).join(' ');
 }
 
+/**
+ * Fuzzy-match a raw statement/import name to a registered member name.
+ * Single source of truth shared by the AI import flow (ImportModal) and the
+ * "Normalizar titulares" maintenance tool. Returns the canonical member name,
+ * or '' when nothing matches with confidence.
+ */
+export function fuzzyMatchMember(statementName: string, memberNames: string[]): string {
+  if (!statementName || memberNames.length === 0) return '';
+  const normalized = statementName.toLowerCase().trim();
+
+  // Exact match
+  const exact = memberNames.find((n) => n.toLowerCase() === normalized);
+  if (exact) return exact;
+
+  // Statement name contains member name or vice versa
+  for (const name of memberNames) {
+    const nameLower = name.toLowerCase();
+    if (normalized.includes(nameLower) || nameLower.includes(normalized)) return name;
+  }
+
+  // All parts of member name appear in statement name (handles abbreviations like "K" matching "Kuhn")
+  for (const name of memberNames) {
+    const parts = name.toLowerCase().split(/\s+/);
+    const statementParts = normalized.split(/\s+/);
+    const allMatch = parts.every((part) =>
+      part.length === 1
+        ? statementParts.some((w) => w.startsWith(part))
+        : statementParts.some((w) => w.startsWith(part) || part.startsWith(w))
+    );
+    if (allMatch) return name;
+  }
+
+  // First name match (min 3 chars)
+  for (const name of memberNames) {
+    const firstName = name.toLowerCase().split(/\s+/)[0];
+    const statementFirst = normalized.split(/\s+/)[0];
+    if (firstName.length >= 3 && firstName === statementFirst) return name;
+  }
+
+  return '';
+}
+
 /** Normalize titular name to Title Case so "JULIANA KUHN" and "juliana kuhn" are treated as the same person */
 export function normalizeTitular(name: string): string {
   if (!name) return '';

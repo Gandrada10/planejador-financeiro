@@ -105,7 +105,7 @@ export function ConfirmDialog({
             onClick={onConfirm}
             className={`min-h-[44px] px-4 rounded-control text-body font-bold transition-colors ${
               destructive
-                ? 'bg-accent-red text-white hover:opacity-90'
+                ? 'bg-accent-red text-bg-primary hover:opacity-90'
                 : 'bg-accent text-bg-primary hover:opacity-90'
             }`}
           >

@@ -13,6 +13,7 @@ import {
   normalizeTitular,
   extractTrailingInstallment,
   normalizeDescriptionForDedup,
+  fuzzyMatchMember,
 } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -61,43 +62,6 @@ interface Props {
   onCreateRule?: (description: string, categoryId: string) => void;
   rules?: CategoryRule[];
   projects?: Project[];
-}
-
-/** Fuzzy match a statement titular name to a registered member name */
-function fuzzyMatchMember(statementName: string, memberNames: string[]): string {
-  if (!statementName || memberNames.length === 0) return '';
-  const normalized = statementName.toLowerCase().trim();
-
-  // Exact match
-  const exact = memberNames.find((n) => n.toLowerCase() === normalized);
-  if (exact) return exact;
-
-  // Statement name contains member name or vice versa
-  for (const name of memberNames) {
-    const nameLower = name.toLowerCase();
-    if (normalized.includes(nameLower) || nameLower.includes(normalized)) return name;
-  }
-
-  // All parts of member name appear in statement name (handles abbreviations like "K" matching "Kuhn")
-  for (const name of memberNames) {
-    const parts = name.toLowerCase().split(/\s+/);
-    const statementParts = normalized.split(/\s+/);
-    const allMatch = parts.every((part) =>
-      part.length === 1
-        ? statementParts.some((w) => w.startsWith(part))
-        : statementParts.some((w) => w.startsWith(part) || part.startsWith(w))
-    );
-    if (allMatch) return name;
-  }
-
-  // First name match (min 3 chars)
-  for (const name of memberNames) {
-    const firstName = name.toLowerCase().split(/\s+/)[0];
-    const statementFirst = normalized.split(/\s+/)[0];
-    if (firstName.length >= 3 && firstName === statementFirst) return name;
-  }
-
-  return '';
 }
 
 /** Generate month options: 6 months back + current + 3 months forward */

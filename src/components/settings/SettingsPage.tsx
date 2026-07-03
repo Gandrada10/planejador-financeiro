@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
-import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink, Download, Upload, Database, AlertTriangle, ArrowRightLeft } from 'lucide-react';
+import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Eye, EyeOff, Landmark, RefreshCw, ExternalLink, Download, Upload, Database, AlertTriangle, ArrowRightLeft, UserCheck } from 'lucide-react';
 import { MigrationMDW } from './MigrationMDW';
+import { NormalizeTitulars } from './NormalizeTitulars';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -590,7 +591,7 @@ export function SettingsPage() {
               <button
                 onClick={handleConfirmRestore}
                 disabled={restoreBusy}
-                className="flex items-center gap-1.5 px-3 py-2 bg-accent-red text-white text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-2 bg-accent-red text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
               >
                 {restoreBusy ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
                 Sim, apagar e restaurar
@@ -617,6 +618,22 @@ export function SettingsPage() {
           </p>
         </div>
         <MigrationMDW />
+      </div>
+
+      {/* Normalizar titulares / membros (ferramenta one-time) */}
+      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+        <div>
+          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+            <UserCheck size={16} className="text-accent" /> Normalizar Titulares
+          </h3>
+          <p className="text-[10px] text-text-secondary mt-1">
+            Consolida nomes de titular/membro duplicados que vieram da importação ou da migração (ex.: "Juliana",
+            "kuhn coutinho" e "coutinho" viram o mesmo membro cadastrado). Ferramenta de uso pontual, com
+            pré-visualização antes de gravar. A atribuição feita a mão no cadastro de lançamento já usa o membro
+            cadastrado e não precisa desta correção.
+          </p>
+        </div>
+        <NormalizeTitulars />
       </div>
     </div>
   );
