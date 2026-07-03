@@ -38,7 +38,10 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, onSkip, remaining }: Props) {
-  const [notes, setNotes] = useState('');
+  // Semeado com a observação já salva: ao revisitar um item categorizado (ou
+  // reabrir o mesmo), o texto digitado antes não se perde. O card remonta por
+  // key={tx.id} no pai, então isso reinicializa corretamente a cada lançamento.
+  const [notes, setNotes] = useState(transaction.notes ?? '');
   const [showNotes, setShowNotes] = useState(false);
   const [saving, setSaving] = useState(false);
   const [exiting, setExiting] = useState(false);
@@ -68,6 +71,14 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
 
   // Sugestão pré-calculada (validada para o sinal do valor)
   const suggestion = transaction.suggestedCategoryId ? byId.get(transaction.suggestedCategoryId) : undefined;
+
+  // Item já categorizado (revisão): a categoria escolhida, para destacar no card
+  // e nos controles. Fallback em `categories` caso não esteja no conjunto
+  // elegível ao sinal (defensivo — normalmente estará).
+  const selectedId = transaction.categoryId;
+  const currentCategory = selectedId
+    ? (byId.get(selectedId) ?? categories.find((c) => c.id === selectedId))
+    : undefined;
 
   // Grade de acesso rápido: top categorias do histórico, válidas para o sinal,
   // excluindo a sugestão; completa até 6 com as demais em ordem alfabética.
@@ -214,6 +225,18 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
           )}
         </div>
       )}
+      {/* Revisão: item já categorizado. Deixa claro a categoria atual e convida
+          a trocar (a grade, a busca e o "É X?" continuam funcionando). */}
+      {currentCategory && (
+        <div className="flex items-center gap-3 bg-accent/10 border border-accent-dim rounded-card px-4 py-3">
+          <CategoryIcon icon={currentCategory.icon} size={22} style={{ color: currentCategory.color }} />
+          <div className="min-w-0">
+            <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold">Categorizado como</p>
+            <p className="text-body font-bold text-text-primary truncate">{currentCategory.name}</p>
+          </div>
+          <span className="ml-auto text-caption font-semibold text-accent whitespace-nowrap">toque p/ trocar</span>
+        </div>
+      )}
       {/* Cartão da transação */}
       <div className="bg-bg-card border border-border rounded-card p-5">
         <p className={`text-caption uppercase tracking-[0.12em] font-semibold ${isIncome ? 'text-accent-green' : 'text-ink-3'}`}>
@@ -245,7 +268,10 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
             <button
               onClick={() => handleSelect(suggestion.id)}
               disabled={saving}
-              className="mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 border border-accent-dim text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50"
+              aria-pressed={selectedId === suggestion.id}
+              className={`mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50 ${
+                selectedId === suggestion.id ? 'border-2 border-accent' : 'border border-accent-dim'
+              }`}
             >
               <CategoryIcon icon={suggestion.icon} size={22} style={{ color: suggestion.color }} />
               <span><span className="text-text-secondary font-medium">É </span>{suggestion.name}<span className="text-text-secondary font-medium">?</span></span>
@@ -274,7 +300,10 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
               key={c.id}
               onClick={() => handleSelect(c.id)}
               disabled={saving}
-              className="min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card border border-border rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50"
+              aria-pressed={selectedId === c.id}
+              className={`min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 ${
+                selectedId === c.id ? 'border-2 border-accent' : 'border border-border'
+              }`}
             >
               <CategoryIcon icon={c.icon} size={21} style={{ color: c.color }} />
               <span className="text-center leading-tight line-clamp-2">{c.name}</span>
@@ -405,11 +434,13 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
                     <button
                       key={c.id}
                       onClick={() => handleSelect(c.id)}
+                      aria-pressed={selectedId === c.id}
                       className="flex items-center gap-3.5 py-3 px-1.5 min-h-[50px] border-b border-border text-left active:bg-bg-card transition-colors"
                     >
                       <CategoryIcon icon={c.icon} size={20} style={{ color: c.color }} />
-                      <span className="text-text-primary text-[15px] font-medium">{c.name}</span>
+                      <span className={`text-[15px] font-medium ${selectedId === c.id ? 'text-accent font-semibold' : 'text-text-primary'}`}>{c.name}</span>
                       {p && <span className="ml-auto text-caption text-ink-3">{p}</span>}
+                      {selectedId === c.id && <Check size={16} className={`text-accent ${p ? 'ml-2' : 'ml-auto'}`} aria-hidden="true" />}
                     </button>
                   );
                 })

@@ -2,7 +2,7 @@ import { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePublicCategorizationSession } from '../../hooks/useCategorizationSession';
 import { CategorizationCard } from './CategorizationCard';
-import { Check, Undo2, Inbox } from 'lucide-react';
+import { Check, Undo2, Inbox, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function firstName(name: string): string {
   const n = (name || '').trim();
@@ -15,8 +15,13 @@ export function CategorizationPage() {
   const { session, transactions, categories, loading, error, categorizeTransaction, uncategorizeTransaction } =
     usePublicCategorizationSession(token || '');
   const [cursor, setCursor] = useState(0);
+  // navIndex sobrepõe o ponteiro de pendências quando o usuário navega à mão
+  // (Voltar/Avançar) para revisar um item. null = seguindo o próximo pendente.
+  const [navIndex, setNavIndex] = useState<number | null>(null);
   const [undo, setUndo] = useState<{ txId: string; label: string } | null>(null);
   const undoTimer = useRef<number | undefined>(undefined);
+  const backBtnRef = useRef<HTMLButtonElement>(null);
+  const fwdBtnRef = useRef<HTMLButtonElement>(null);
 
   if (loading) {
     return (
@@ -66,10 +71,38 @@ export function CategorizationPage() {
     return -1;
   }
 
-  const currentFullIndex = findNextUncategorized(cursor);
-  const currentTx = currentFullIndex >= 0 ? transactions[currentFullIndex] : null;
+  // Ponteiro do "caminho feliz": próximo pendente a partir do frontier (cursor).
+  const pendingIndex = findNextUncategorized(cursor);
+  // Índice de navegação explícito sobre a lista da sessão. Quando o usuário
+  // navega à mão, navIndex manda; senão o card segue o próximo pendente (o
+  // fluxo linear de quem só quer ir em frente fica idêntico ao de antes).
+  const displayIndex = navIndex !== null ? navIndex : pendingIndex;
+  const currentTx =
+    displayIndex >= 0 && displayIndex < transactions.length ? transactions[displayIndex] : null;
+  // Um item categorizado só aparece via navegação manual (o ponteiro de
+  // pendências nunca aponta para um já-categorizado) → isso é "revisão".
+  const isReviewing = !!currentTx?.categoryId;
 
-  // C7/undo robusto: 8s de janela (era 4s) — única rede de segurança da tela.
+  function goBack() {
+    const target = displayIndex - 1;
+    if (target < 0) return;
+    setUndo(null);
+    setNavIndex(target);
+    // "Voltar" some no 1º item → move o foco para "Avançar" p/ não ficar órfão.
+    if (target === 0) requestAnimationFrame(() => fwdBtnRef.current?.focus());
+  }
+
+  function goForward() {
+    const target = displayIndex + 1;
+    if (target > total - 1) return;
+    setUndo(null);
+    // Ao reencontrar o frontier de trabalho, reata o caminho feliz (navIndex null).
+    setNavIndex(target === pendingIndex ? null : target);
+    if (target === total - 1) requestAnimationFrame(() => backBtnRef.current?.focus());
+  }
+
+  // C7/undo robusto: 8s de janela (era 4s) — rede de segurança do ÚLTIMO item.
+  // O "Voltar" é adicional; não substitui o undo.
   function showUndo(txId: string, label: string) {
     setUndo({ txId, label });
     if (undoTimer.current) window.clearTimeout(undoTimer.current);
@@ -79,22 +112,38 @@ export function CategorizationPage() {
   async function handleCategorize(categoryId: string, notes: string) {
     if (!currentTx) return;
     const txId = currentTx.id;
+    const wasCategorized = !!currentTx.categoryId;
     const label = categories.find((c) => c.id === categoryId)?.name ?? 'Categoria';
     await categorizeTransaction(txId, categoryId, notes);
-    setCursor(currentFullIndex + 1);
-    showUndo(txId, label);
+    if (navIndex !== null) {
+      // (Re)categorizou um item revisitado → volta ao ponto de trabalho (próximo
+      // pendente do frontier). Retoma exatamente de onde havia parado.
+      setNavIndex(null);
+    } else {
+      setCursor(displayIndex + 1);
+    }
+    // Undo só quando o item passou de pendente → categorizado. Numa TROCA
+    // (categorizado → categorizado) "Desfazer" apagaria a categoria sem
+    // restaurar a anterior; nesse caso a própria navegação é a rede.
+    if (!wasCategorized) showUndo(txId, label);
   }
 
   function handleSkip() {
-    const next = findNextUncategorized(currentFullIndex + 1);
-    if (next >= 0) setCursor(next);
+    const next = findNextUncategorized(displayIndex + 1);
+    if (next >= 0) {
+      setNavIndex(null);
+      setCursor(next);
+    }
   }
 
   async function handleUndo() {
     if (!undo) return;
     const idx = transactions.findIndex((t) => t.id === undo.txId);
     await uncategorizeTransaction(undo.txId);
-    if (idx >= 0) setCursor(idx);
+    if (idx >= 0) {
+      setNavIndex(null);
+      setCursor(idx);
+    }
     setUndo(null);
   }
 
@@ -173,6 +222,45 @@ export function CategorizationPage() {
           </div>
         </div>
       </header>
+
+      {/* Navegação livre: Voltar/Avançar por toda a ordem da sessão. Discreto,
+          não compete com a ação principal (categorizar). A posição de navegação
+          ("Item X de Y") é distinta do PROGRESSO (a barra acima = categorizados). */}
+      <nav aria-label="Navegação entre lançamentos" className="px-4 pb-1">
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
+          <button
+            ref={backBtnRef}
+            onClick={goBack}
+            disabled={displayIndex <= 0}
+            aria-label="Voltar ao lançamento anterior"
+            className="min-h-[44px] px-3 -ml-1 inline-flex items-center gap-1.5 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
+          >
+            <ChevronLeft size={18} aria-hidden="true" /> Voltar
+          </button>
+          <span className="text-caption font-semibold text-ink-3 tnum whitespace-nowrap" aria-hidden="true">
+            Item {displayIndex + 1} de {total}
+            {isReviewing ? ' · revisando' : ''}
+          </span>
+          <button
+            ref={fwdBtnRef}
+            onClick={goForward}
+            disabled={displayIndex >= total - 1}
+            aria-label="Avançar para o próximo lançamento"
+            className="min-h-[44px] px-3 -mr-1 inline-flex items-center gap-1.5 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
+          >
+            Avançar <ChevronRight size={18} aria-hidden="true" />
+          </button>
+        </div>
+      </nav>
+
+      {/* Anúncio de posição/estado para leitores de tela ao mudar de card. */}
+      <div aria-live="polite" className="sr-only">
+        {`Lançamento ${displayIndex + 1} de ${total}. ${
+          currentTx?.categoryId
+            ? `Categorizado como ${categories.find((c) => c.id === currentTx.categoryId)?.name ?? 'categoria'}. Toque numa categoria para trocar.`
+            : 'Ainda não categorizado.'
+        }`}
+      </div>
 
       {/* Card */}
       <div className="flex-1 flex items-start justify-center px-3 pb-[env(safe-area-inset-bottom)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
