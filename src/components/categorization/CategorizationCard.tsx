@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Search, X, MessageSquare, ChevronRight, Sparkles, Check } from 'lucide-react';
+import { Search, X, MessageSquare, Sparkles, Check } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
@@ -9,7 +9,6 @@ interface Props {
   categories: Category[];
   quickCategoryIds: string[];
   onCategorize: (categoryId: string, notes: string) => Promise<void>;
-  onSkip: () => void;
   remaining: number;
 }
 
@@ -37,7 +36,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, onSkip, remaining }: Props) {
+export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, remaining }: Props) {
   // Semeado com a observação já salva: ao revisitar um item categorizado (ou
   // reabrir o mesmo), o texto digitado antes não se perde. O card remonta por
   // key={tx.id} no pai, então isso reinicializa corretamente a cada lançamento.
@@ -269,8 +268,8 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
               onClick={() => handleSelect(suggestion.id)}
               disabled={saving}
               aria-pressed={selectedId === suggestion.id}
-              className={`mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50 ${
-                selectedId === suggestion.id ? 'border-2 border-accent' : 'border border-accent-dim'
+              className={`mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50 border-2 ${
+                selectedId === suggestion.id ? 'border-accent' : 'border-accent-dim'
               }`}
             >
               <CategoryIcon icon={suggestion.icon} size={22} style={{ color: suggestion.color }} />
@@ -301,8 +300,8 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
               onClick={() => handleSelect(c.id)}
               disabled={saving}
               aria-pressed={selectedId === c.id}
-              className={`min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 ${
-                selectedId === c.id ? 'border-2 border-accent' : 'border border-border'
+              className={`min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
+                selectedId === c.id ? 'border-accent' : 'border-border'
               }`}
             >
               <CategoryIcon icon={c.icon} size={21} style={{ color: c.color }} />
@@ -311,25 +310,19 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
           ))}
         </div>
 
-        <div className="flex gap-2">
-          <button
-            ref={sheetTriggerRef}
-            onClick={() => setSheetOpen(true)}
-            disabled={saving}
-            aria-haspopup="dialog"
-            aria-expanded={sheetOpen}
-            className="flex-1 min-h-[48px] flex items-center justify-center gap-2 bg-bg-card border border-border rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-50"
-          >
-            <Search size={17} /> Buscar categoria
-          </button>
-          <button
-            onClick={onSkip}
-            disabled={saving}
-            className="flex-1 min-h-[48px] flex items-center justify-center gap-2 bg-bg-card border border-border rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-50"
-          >
-            Pular <ChevronRight size={17} />
-          </button>
-        </div>
+        {/* "Buscar categoria" sozinho em linha própria, largura total, logo abaixo
+            da grade de sugestões. O "Pular" subiu para a barra de topo (ao lado do
+            indicador "Item X de Y"). */}
+        <button
+          ref={sheetTriggerRef}
+          onClick={() => setSheetOpen(true)}
+          disabled={saving}
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
+          className="w-full min-h-[48px] flex items-center justify-center gap-2 bg-bg-card border border-border rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-50"
+        >
+          <Search size={17} /> Buscar categoria
+        </button>
 
         {/* Observação — opcional, mas inequívoca: rótulo próprio, campo tocável
             de largura total (min-h 56px), borda sólida e ícone/rótulo em tom de

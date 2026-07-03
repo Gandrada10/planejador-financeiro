@@ -223,33 +223,47 @@ export function CategorizationPage() {
         </div>
       </header>
 
-      {/* Navegação livre: Voltar/Avançar por toda a ordem da sessão. Discreto,
-          não compete com a ação principal (categorizar). A posição de navegação
-          ("Item X de Y") é distinta do PROGRESSO (a barra acima = categorizados). */}
+      {/* Barra de topo: [ Voltar ] · Item X de Y · [ Pular / Avançar ]. O slot da
+          direita é CONTEXTUAL — no fluxo normal (item do frontier ainda não
+          categorizado) é "Pular" (avançar-sem-categorizar); ao VOLTAR para revisar
+          um item já tratado vira "Avançar" (retoma o ponto onde estava). Assim o
+          "Pular" fica ao lado do indicador, como pedido, sem perder a ida à frente.
+          A posição ("Item X de Y") é distinta do PROGRESSO (a barra acima). */}
       <nav aria-label="Navegação entre lançamentos" className="px-4 pb-1">
-        <div className="max-w-lg mx-auto flex items-center justify-between gap-2">
+        <div className="max-w-lg mx-auto flex items-center justify-between gap-1.5">
           <button
             ref={backBtnRef}
             onClick={goBack}
             disabled={displayIndex <= 0}
             aria-label="Voltar ao lançamento anterior"
-            className="min-h-[44px] px-3 -ml-1 inline-flex items-center gap-1.5 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
+            className="min-h-[44px] px-2.5 -ml-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
           >
             <ChevronLeft size={18} aria-hidden="true" /> Voltar
           </button>
-          <span className="text-caption font-semibold text-ink-3 tnum whitespace-nowrap" aria-hidden="true">
+          <span className="text-caption font-semibold text-ink-3 tnum whitespace-nowrap text-center" aria-hidden="true">
             Item {displayIndex + 1} de {total}
             {isReviewing ? ' · revisando' : ''}
           </span>
-          <button
-            ref={fwdBtnRef}
-            onClick={goForward}
-            disabled={displayIndex >= total - 1}
-            aria-label="Avançar para o próximo lançamento"
-            className="min-h-[44px] px-3 -mr-1 inline-flex items-center gap-1.5 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
-          >
-            Avançar <ChevronRight size={18} aria-hidden="true" />
-          </button>
+          {isReviewing ? (
+            <button
+              ref={fwdBtnRef}
+              onClick={goForward}
+              disabled={displayIndex >= total - 1}
+              aria-label="Avançar para o próximo lançamento"
+              className="min-h-[44px] px-2.5 -mr-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
+            >
+              Avançar <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          ) : (
+            <button
+              ref={fwdBtnRef}
+              onClick={handleSkip}
+              aria-label="Pular este lançamento sem categorizar"
+              className="min-h-[44px] px-2.5 -mr-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition"
+            >
+              Pular <ChevronRight size={18} aria-hidden="true" />
+            </button>
+          )}
         </div>
       </nav>
 
@@ -271,7 +285,6 @@ export function CategorizationPage() {
             categories={categories}
             quickCategoryIds={session.topCategoryIds}
             onCategorize={handleCategorize}
-            onSkip={handleSkip}
             remaining={uncategorized.length}
           />
         </div>
