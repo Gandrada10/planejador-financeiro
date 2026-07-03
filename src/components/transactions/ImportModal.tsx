@@ -646,7 +646,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   <span className="text-xs text-text-primary font-bold">{fileName}</span>
                   <span className="text-xs text-text-secondary">— {items.length} transacoes encontradas</span>
                   {duplicateCount > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-amber-400">
+                    <span className="flex items-center gap-1 text-xs text-status-warn">
                       <AlertTriangle size={12} /> {duplicateCount} possiveis duplicatas
                     </span>
                   )}
@@ -741,10 +741,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               {/* Blindagem de titular: aviso quando há lançamentos com titular
                   cru não vinculado a um membro cadastrado. */}
               {hasUnresolved && (
-                <div role="alert" className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 flex items-start gap-2.5">
-                  <UserX size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-lg p-3 flex items-start gap-2.5">
+                  <UserX size={16} className="text-status-warn shrink-0 mt-0.5" />
                   <div className="text-xs text-text-primary leading-relaxed">
-                    <p className="font-bold text-amber-300">
+                    <p className="font-bold text-status-warn">
                       {unresolvedIndices.length} lançamento{unresolvedIndices.length > 1 ? 's' : ''} com titular não reconhecido
                     </p>
                     <p className="text-text-secondary mt-0.5">
@@ -780,7 +780,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     {items.map((item, i) => (
                       <tr
                         key={i}
-                        className={`border-b border-border/40 ${item.isDuplicate ? 'bg-amber-500/5' : ''} ${selected.has(i) ? '' : 'opacity-40'}`}
+                        className={`border-b border-border/40 ${item.isDuplicate ? 'bg-status-warn/5' : ''} ${selected.has(i) ? '' : 'opacity-40'}`}
                       >
                         <td className="p-2">
                           <input type="checkbox" checked={selected.has(i)} onChange={() => toggleItem(i)} className="accent-accent" />
@@ -838,6 +838,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         <td className="p-1">
                           {accountNames.length > 0 ? (
                             <select
+                              aria-label="Conta"
                               value={item.account}
                               onChange={(e) => updateRow(i, 'account', e.target.value)}
                               className={inputClass}
@@ -859,6 +860,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             )}
                             {categories.length > 0 ? (
                               <select
+                                aria-label="Categoria"
                                 value={item.categoryId ?? ''}
                                 onChange={(e) => updateRow(i, 'categoryId', e.target.value)}
                                 className={inputClass + (item.aiSuggested ? ' border-purple-400/30' : '')}
@@ -914,19 +916,20 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               return (
                                 <div className="flex flex-col gap-0.5">
                                   <select
+                                    aria-label="Membro"
                                     value={selVal}
                                     onChange={(e) => {
                                       const v = e.target.value === '__none__' ? '' : e.target.value;
                                       updateRow(i, 'familyMember', v);
                                     }}
-                                    className={inputClass + (unresolved ? ' !border-amber-500 border-2 ring-1 ring-amber-500/40' : '')}
+                                    className={inputClass + (unresolved ? ' !border-status-warn border-2 ring-1 ring-status-warn/40' : '')}
                                   >
                                     <option value="" disabled>Escolher…</option>
                                     {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
                                     <option value="__none__">Sem membro</option>
                                   </select>
                                   {unresolved && (
-                                    <span className="text-[10px] text-amber-400/90 truncate" title={item.titular}>
+                                    <span className="text-[10px] text-status-warn/90 truncate" title={item.titular}>
                                       extrato: “{item.titular}”
                                     </span>
                                   )}
@@ -940,6 +943,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         {projects.length > 0 && (
                           <td className="p-1">
                             <select
+                              aria-label="Projeto"
                               value={item.projectId ?? ''}
                               onChange={(e) => updateRow(i, 'projectId', e.target.value)}
                               className={inputClass}
@@ -960,7 +964,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         <td className="p-2 text-center">
                           {item.isDuplicate && (
                             <span title="Possivel duplicata — ja existe transacao com mesma data, valor e descricao">
-                              <AlertTriangle size={13} className="text-amber-400" />
+                              <AlertTriangle size={13} className="text-status-warn" />
                             </span>
                           )}
                         </td>
@@ -1121,7 +1125,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           <div className="p-4 border-t border-border flex items-center justify-between gap-3">
             <span className="text-xs text-text-secondary">
               {hasUnresolved ? (
-                <span className="flex items-center gap-1.5 text-amber-400">
+                <span className="flex items-center gap-1.5 text-status-warn">
                   <UserX size={13} /> {unresolvedIndices.length} titular{unresolvedIndices.length > 1 ? 'es' : ''} a resolver
                 </span>
               ) : (

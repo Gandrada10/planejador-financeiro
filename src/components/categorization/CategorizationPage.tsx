@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePublicCategorizationSession } from '../../hooks/useCategorizationSession';
 import { CategorizationCard } from './CategorizationCard';
@@ -19,6 +19,11 @@ export function CategorizationPage() {
   // (Voltar/Avançar) para revisar um item. null = seguindo o próximo pendente.
   const [navIndex, setNavIndex] = useState<number | null>(null);
   const [undo, setUndo] = useState<{ txId: string; label: string } | null>(null);
+  const [undoError, setUndoError] = useState<string | null>(null);
+  // Card em voo (salvando ~220ms exit + write): trava a barra de navegação para
+  // eliminar a corrida de double-tap (tocar categoria + Pular na mesma janela).
+  const [cardBusy, setCardBusy] = useState(false);
+  const handleBusyChange = useCallback((busy: boolean) => setCardBusy(busy), []);
   const undoTimer = useRef<number | undefined>(undefined);
   const backBtnRef = useRef<HTMLButtonElement>(null);
   const fwdBtnRef = useRef<HTMLButtonElement>(null);
@@ -104,6 +109,7 @@ export function CategorizationPage() {
   // C7/undo robusto: 8s de janela (era 4s) — rede de segurança do ÚLTIMO item.
   // O "Voltar" é adicional; não substitui o undo.
   function showUndo(txId: string, label: string) {
+    setUndoError(null);
     setUndo({ txId, label });
     if (undoTimer.current) window.clearTimeout(undoTimer.current);
     undoTimer.current = window.setTimeout(() => setUndo(null), 8000);
@@ -139,7 +145,18 @@ export function CategorizationPage() {
   async function handleUndo() {
     if (!undo) return;
     const idx = transactions.findIndex((t) => t.id === undo.txId);
-    await uncategorizeTransaction(undo.txId);
+    try {
+      // Offline/rules: sem try/catch a rejeição do uncategorize borbulhava e o
+      // desfazer falhava em silêncio. Agora mostra o mesmo padrão de erro
+      // visível do card (C2), com ação de tentar de novo, e mantém a janela.
+      await uncategorizeTransaction(undo.txId);
+    } catch {
+      // Mantém `undo` vivo para nova tentativa (cancela o timeout de 8s).
+      if (undoTimer.current) window.clearTimeout(undoTimer.current);
+      setUndoError('Não consegui desfazer — verifique a internet e tente de novo.');
+      return;
+    }
+    setUndoError(null);
     if (idx >= 0) {
       setNavIndex(null);
       setCursor(idx);
@@ -152,9 +169,9 @@ export function CategorizationPage() {
   // C7: o toast precisa existir TAMBÉM na tela de celebração — antes, quando
   // o item categorizado era o último, o re-render caía na celebração antes do
   // JSX do toast e o desfazer ficava inalcançável. Alvo do botão ≥44px.
-  const undoToast = undo ? (
+  const undoToast = undo && !undoError ? (
     <div className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex justify-center">
-      <div className="w-full max-w-lg flex items-center justify-between gap-3 bg-elevated border border-border rounded-full pl-4 pr-2 py-1.5 shadow-lg">
+      <div role="status" aria-live="polite" className="w-full max-w-lg flex items-center justify-between gap-3 bg-elevated border border-border rounded-full pl-4 pr-2 py-1.5 shadow-lg">
         <span className="text-body text-text-secondary truncate">
           Marcado como <b className="text-accent font-semibold">{undo.label}</b>
         </span>
@@ -163,6 +180,22 @@ export function CategorizationPage() {
           className="flex items-center gap-1.5 min-h-[44px] min-w-[44px] px-3 text-body font-semibold text-text-primary whitespace-nowrap"
         >
           <Undo2 size={15} /> Desfazer
+        </button>
+      </div>
+    </div>
+  ) : null;
+
+  // Falha ao desfazer (C2): banner vermelho visível com nova tentativa — nunca
+  // silêncio offline. Substitui o toast enquanto o erro estiver ativo.
+  const undoErrorBanner = undoError ? (
+    <div className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex justify-center">
+      <div role="alert" className="w-full max-w-lg flex items-center justify-between gap-3 bg-accent-red/10 border border-accent-red/50 rounded-full pl-4 pr-2 py-1.5 shadow-lg">
+        <span className="text-body text-text-primary truncate">{undoError}</span>
+        <button
+          onClick={handleUndo}
+          className="flex items-center gap-1.5 min-h-[44px] min-w-[44px] px-3 text-body font-semibold text-text-primary whitespace-nowrap"
+        >
+          <Undo2 size={15} /> Tentar de novo
         </button>
       </div>
     </div>
@@ -181,6 +214,7 @@ export function CategorizationPage() {
             Está tudo salvo — pode fechar.{greet ? ` Obrigado, ${greet}! 💚` : ' 💚'}
           </p>
         </div>
+        {undoErrorBanner}
         {undoToast}
       </div>
     );
@@ -234,23 +268,27 @@ export function CategorizationPage() {
           <button
             ref={backBtnRef}
             onClick={goBack}
-            disabled={displayIndex <= 0}
+            disabled={displayIndex <= 0 || cardBusy}
             aria-label="Voltar ao lançamento anterior"
-            className="min-h-[44px] px-2.5 -ml-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
+            className={`min-h-[44px] px-2.5 -ml-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition ${
+              displayIndex <= 0 ? 'opacity-0 pointer-events-none' : cardBusy ? 'opacity-50 pointer-events-none' : ''
+            }`}
           >
             <ChevronLeft size={18} aria-hidden="true" /> Voltar
           </button>
-          <span className="text-caption font-semibold text-ink-3 tnum whitespace-nowrap text-center" aria-hidden="true">
+          <span className="text-caption font-semibold text-ink-3 tnum text-center min-w-0 truncate" aria-hidden="true">
             Item {displayIndex + 1} de {total}
-            {isReviewing ? ' · revisando' : ''}
+            {isReviewing && <span className="hidden min-[360px]:inline"> · revisando</span>}
           </span>
           {isReviewing ? (
             <button
               ref={fwdBtnRef}
               onClick={goForward}
-              disabled={displayIndex >= total - 1}
+              disabled={displayIndex >= total - 1 || cardBusy}
               aria-label="Avançar para o próximo lançamento"
-              className="min-h-[44px] px-2.5 -mr-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-0 disabled:pointer-events-none"
+              className={`min-h-[44px] px-2.5 -mr-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition ${
+                displayIndex >= total - 1 ? 'opacity-0 pointer-events-none' : cardBusy ? 'opacity-50 pointer-events-none' : ''
+              }`}
             >
               Avançar <ChevronRight size={18} aria-hidden="true" />
             </button>
@@ -258,8 +296,11 @@ export function CategorizationPage() {
             <button
               ref={fwdBtnRef}
               onClick={handleSkip}
+              disabled={cardBusy}
               aria-label="Pular este lançamento sem categorizar"
-              className="min-h-[44px] px-2.5 -mr-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition"
+              className={`min-h-[44px] px-2.5 -mr-1 inline-flex items-center gap-1 rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition ${
+                cardBusy ? 'opacity-50 pointer-events-none' : ''
+              }`}
             >
               Pular <ChevronRight size={18} aria-hidden="true" />
             </button>
@@ -285,12 +326,14 @@ export function CategorizationPage() {
             categories={categories}
             quickCategoryIds={session.topCategoryIds}
             onCategorize={handleCategorize}
+            onBusyChange={handleBusyChange}
             remaining={uncategorized.length}
           />
         </div>
       </div>
 
-      {/* Toast desfazer */}
+      {/* Toast desfazer / erro de desfazer */}
+      {undoErrorBanner}
       {undoToast}
     </div>
   );

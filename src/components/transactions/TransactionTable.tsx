@@ -34,6 +34,28 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   // Exclusão exige confirmação (ação irreversível). Guarda o alvo pendente:
   // um id (linha) ou 'batch' (seleção múltipla).
   const [pendingDelete, setPendingDelete] = useState<string | 'batch' | null>(null);
+  // Confirmação acessível reaproveitável (substitui window.confirm nativo nos
+  // fluxos que precisam de um booleano de volta): guarda a config do diálogo +
+  // o resolver da Promise. askConfirm resolve quando o usuário decide.
+  const [confirmState, setConfirmState] = useState<
+    | {
+        title: string;
+        message?: string;
+        confirmLabel?: string;
+        destructive?: boolean;
+        resolve: (ok: boolean) => void;
+      }
+    | null
+  >(null);
+
+  function askConfirm(opts: {
+    title: string;
+    message?: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+  }): Promise<boolean> {
+    return new Promise((resolve) => setConfirmState({ ...opts, resolve }));
+  }
 
   function toggleSort(field: 'date' | 'purchaseDate') {
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -60,9 +82,11 @@ export function TransactionTable({ transactions, categories, projects = [], acco
     if (!checkClosedCycle || !reopenCycle) return true;
     const closed = checkClosedCycle(t);
     if (!closed) return true;
-    const ok = window.confirm(
-      `A fatura "${closed.label}" esta encerrada.\n\nDeseja reabri-la para editar esta transacao?`
-    );
+    const ok = await askConfirm({
+      title: 'Fatura encerrada',
+      message: `A fatura "${closed.label}" está encerrada. Deseja reabri-la para editar esta transação?`,
+      confirmLabel: 'Reabrir',
+    });
     if (!ok) return false;
     await reopenCycle(closed.cycleId);
     return true;
@@ -228,10 +252,12 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 if (closed) closedMap.set(closed.cycleId, closed.label);
               }
               if (closedMap.size > 0) {
-                const labels = [...closedMap.values()].join('\n');
-                const ok = window.confirm(
-                  `As seguintes faturas estao encerradas:\n${labels}\n\nDeseja reabri-las para editar?`
-                );
+                const labels = [...closedMap.values()].join(', ');
+                const ok = await askConfirm({
+                  title: 'Faturas encerradas',
+                  message: `As seguintes faturas estão encerradas: ${labels}. Deseja reabri-las para editar?`,
+                  confirmLabel: 'Reabrir',
+                });
                 if (!ok) return;
                 for (const cycleId of closedMap.keys()) await reopenCycle(cycleId);
               }
@@ -393,10 +419,13 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         if (!ok) return;
                         const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
                         if (existingRule && onDeleteRule && val !== t.categoryId) {
-                          const confirm = window.confirm(
-                            `Existe uma regra de categorização para "${t.description}".\n\nAo mudar a categoria, a regra será removida. Deseja continuar?`
-                          );
-                          if (!confirm) return;
+                          const ok = await askConfirm({
+                            title: 'Remover regra de categorização?',
+                            message: `Existe uma regra de categorização para "${t.description}". Ao mudar a categoria, a regra será removida.`,
+                            confirmLabel: 'Continuar',
+                            destructive: true,
+                          });
+                          if (!ok) return;
                           await onDeleteRule(existingRule.id);
                         }
                         onUpdate(t.id, { categoryId: val });
@@ -587,6 +616,23 @@ export function TransactionTable({ transactions, categories, projects = [], acco
             setPendingDelete(null);
             if (target === 'batch') performDeleteSelected();
             else if (target) performDeleteRow(target);
+          }}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          destructive={confirmState.destructive}
+          onConfirm={() => {
+            confirmState.resolve(true);
+            setConfirmState(null);
+          }}
+          onCancel={() => {
+            confirmState.resolve(false);
+            setConfirmState(null);
           }}
         />
       )}

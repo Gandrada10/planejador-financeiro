@@ -10,6 +10,10 @@ interface Props {
   quickCategoryIds: string[];
   onCategorize: (categoryId: string, notes: string) => Promise<void>;
   remaining: number;
+  /** Eleva o estado "salvando" (exit ~220ms + write) para o pai, que desabilita
+   *  a barra de navegação e evita a corrida de double-tap (tocar categoria +
+   *  Pular na mesma janela). */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 function removeAccents(str: string) {
@@ -36,7 +40,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, remaining }: Props) {
+export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, remaining, onBusyChange }: Props) {
   // Semeado com a observação já salva: ao revisitar um item categorizado (ou
   // reabrir o mesmo), o texto digitado antes não se perde. O card remonta por
   // key={tx.id} no pai, então isso reinicializa corretamente a cada lançamento.
@@ -128,6 +132,14 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
       setSaveError('Não consegui salvar — verifique a internet e tente de novo.');
     }
   }, [saving, onCategorize, notes]);
+
+  // Espelha o estado "salvando" para o pai (barra de navegação) enquanto a
+  // categorização está em voo. Cleanup no unmount garante que a nav destrave
+  // mesmo se o card remontar (key={tx.id}) no meio da transição.
+  useEffect(() => {
+    onBusyChange?.(saving);
+  }, [saving, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   // Busca (bottom-sheet): lista plana, ordem alfabética, filtro por acento-insensível
   const searchResults = useMemo(() => {
@@ -269,7 +281,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
               disabled={saving}
               aria-pressed={selectedId === suggestion.id}
               className={`mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50 border-2 ${
-                selectedId === suggestion.id ? 'border-accent' : 'border-accent-dim'
+                selectedId === suggestion.id ? 'border-accent' : 'border-border'
               }`}
             >
               <CategoryIcon icon={suggestion.icon} size={22} style={{ color: suggestion.color }} />
@@ -349,6 +361,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
             <div className="flex flex-col gap-2">
               <textarea
                 autoFocus
+                aria-label="Observação"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Ex.: presente de aniversário da mãe…"
