@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Search, X, MessageSquare, ChevronRight, Sparkles } from 'lucide-react';
+import { Search, X, MessageSquare, ChevronRight, Sparkles, Check } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
@@ -46,6 +46,9 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
   const [lastCategoryId, setLastCategoryId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
+  // P4: dimensões da área REALMENTE visível (VisualViewport) enquanto o
+  // bottom-sheet está aberto — usado para ancorar o sheet acima do teclado.
+  const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sheetTriggerRef = useRef<HTMLButtonElement>(null);
@@ -141,6 +144,25 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
       const t = setTimeout(() => searchRef.current?.focus(), 240);
       return () => clearTimeout(t);
     }
+  }, [sheetOpen]);
+
+  // P4 (iOS Safari real): ao focar a busca, o teclado virtual sobe e cobre a
+  // base do layout viewport — a lista de resultados ficava atrás dele. Seguimos
+  // o VisualViewport para ancorar o sheet à faixa visível (acima do teclado);
+  // a busca fica fixa no topo e os resultados rolam abaixo dela.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewport({ top: vv.offsetTop, height: vv.height });
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      setViewport(null);
+    };
   }, [sheetOpen]);
 
   // A11y do bottom-sheet (WCAG 2.4.3 / 2.1.2): Esc fecha e Tab fica preso
@@ -280,23 +302,41 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
           </button>
         </div>
 
-        {/* Observação (secundária) */}
+        {/* Observação — opcional, mas com afford claro e alvo ≥48px. Fechada,
+            é um campo tocável de largura total (não um texto minúsculo);
+            aberta, vira textarea com botão "Pronto". Secundária no peso visual
+            (borda tracejada, tom mudo) para não competir com categorizar. */}
         <div className="px-1">
-          <button
-            onClick={() => setShowNotes((s) => !s)}
-            className="flex items-center gap-1.5 text-caption text-ink-3 hover:text-text-secondary transition-colors py-1"
-          >
-            <MessageSquare size={13} />
-            {showNotes ? 'Esconder observação' : 'Adicionar observação'}
-          </button>
-          {showNotes && (
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex.: presente de aniversário da mãe…"
-              rows={2}
-              className="w-full mt-1.5 px-3 py-2 bg-elevated border border-border rounded-control text-text-primary text-[16px] placeholder:text-ink-3 focus:border-accent-dim resize-none"
-            />
+          {!showNotes ? (
+            <button
+              onClick={() => setShowNotes(true)}
+              className="w-full min-h-[48px] flex items-center gap-2.5 px-3.5 rounded-control border border-dashed border-border text-left active:bg-elevated transition-colors"
+            >
+              <MessageSquare size={16} className="shrink-0 text-ink-3" />
+              {notes ? (
+                <span className="flex-1 min-w-0 text-body text-text-primary truncate">{notes}</span>
+              ) : (
+                <span className="flex-1 text-body text-text-secondary">Adicionar observação</span>
+              )}
+              <span className="shrink-0 text-caption text-ink-3">{notes ? 'Editar' : 'Opcional'}</span>
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <textarea
+                autoFocus
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Ex.: presente de aniversário da mãe…"
+                rows={2}
+                className="w-full px-3 py-2.5 bg-elevated border border-accent-dim rounded-control text-text-primary text-[16px] placeholder:text-ink-3 focus:border-accent resize-none"
+              />
+              <button
+                onClick={() => setShowNotes(false)}
+                className="self-end min-h-[44px] px-4 flex items-center justify-center gap-1.5 rounded-control text-body font-semibold text-text-secondary active:bg-elevated transition-colors"
+              >
+                <Check size={15} /> Pronto
+              </button>
+            </div>
           )}
         </div>
 
@@ -309,7 +349,8 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
           Esc fecha, foco preso dentro, botão Fechar visível. */}
       {sheetOpen && (
         <div
-          className="fixed inset-0 z-50 bg-black/50 flex items-end"
+          className="fixed left-0 right-0 z-50 bg-black/50 flex items-end"
+          style={{ top: viewport ? viewport.top : 0, height: viewport ? viewport.height : '100%' }}
           onClick={closeSheet}
         >
           <div
@@ -317,10 +358,10 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
             role="dialog"
             aria-modal="true"
             aria-labelledby="sheet-busca-titulo"
-            className="w-full max-h-[78%] bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-8 flex flex-col gap-3"
+            className="w-full max-h-[92%] bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-[max(2rem,env(safe-area-inset-bottom))] flex flex-col gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="shrink-0 flex items-center justify-between gap-2">
               <h2 id="sheet-busca-titulo" className="text-title font-bold text-text-primary">
                 Buscar categoria
               </h2>
@@ -331,7 +372,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
                 <X size={16} aria-hidden="true" /> Fechar
               </button>
             </div>
-            <div className="relative">
+            <div className="relative shrink-0">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
               <input
                 ref={searchRef}
@@ -351,7 +392,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
                 </button>
               )}
             </div>
-            <div className="overflow-y-auto overscroll-contain flex flex-col">
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col">
               {searchResults.length === 0 ? (
                 <p className="text-body text-text-secondary text-center py-6">Nenhuma categoria encontrada</p>
               ) : (

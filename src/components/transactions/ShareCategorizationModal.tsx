@@ -24,10 +24,21 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // O seletor oferece o nome CANÔNICO do membro (allTitulars prioriza
+  // familyMember). Uma transação guarda o membro em DOIS campos-texto:
+  // `familyMember` (canônico, casado no import) e `titular` (string crua do
+  // cartão/legado MDW). Comparar só com `titular` fazia o filtro "não achar"
+  // (bug reportado). Casa contra os dois, normalizando caixa/espaços — igual ao
+  // filtro da própria página de Transações.
+  const matchesTitular = (t: Transaction, sel: string) => {
+    if (!sel) return true;
+    const s = sel.trim().toLowerCase();
+    return (t.familyMember || '').trim().toLowerCase() === s ||
+      (t.titular || '').trim().toLowerCase() === s;
+  };
+
   const eligibleTx = useMemo(
-    () => transactions.filter(
-      (t) => !t.categoryId && (!selectedTitular || t.titular === selectedTitular)
-    ),
+    () => transactions.filter((t) => !t.categoryId && matchesTitular(t, selectedTitular)),
     [transactions, selectedTitular]
   );
   const uncategorizedCount = eligibleTx.length;
@@ -42,7 +53,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
     setError('');
     try {
       const filteredTx = selectedTitular
-        ? transactions.filter((t) => t.titular === selectedTitular)
+        ? transactions.filter((t) => matchesTitular(t, selectedTitular))
         : transactions;
       const token = await createSession(
         selectedTitular || 'Todos',

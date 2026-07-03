@@ -236,15 +236,37 @@ export function useCategorizationSessions() {
       .map(([id]) => id)
       .slice(0, 8);
 
-    function suggestFor(description: string, amount: number): { id: string | null; reason: string | null } {
-      // 1) Regras explícitas do dono
-      const byRule = matchRule(description, rules);
-      if (byRule && allowedForAmount(catById.get(byRule), amount)) {
-        return { id: byRule, reason: 'Regra automática' };
+    // Granularidade: quando a escolha recai num PAI (ex.: "Alimentação") mas o
+    // histórico daquela mesma descrição também traz uma SUBcategoria desse pai
+    // (ex.: "Mercado"), preferir a sub. Sem isso, o auto-preenchimento por regra
+    // — que costuma apontar para o pai — colapsava a sugestão no nível errado,
+    // mesmo havendo sinal claro do dono para a sub. Só troca quando há sinal
+    // (uma sub válida para o sinal do valor aparece no histórico da descrição).
+    function refineToSub(chosenId: string, m: Map<string, number> | undefined, amount: number): string {
+      const chosen = catById.get(chosenId);
+      if (!chosen || chosen.parentId) return chosenId; // já é sub (ou desconhecida)
+      if (!m) return chosenId;
+      let bestChild: string | null = null;
+      let bestN = 0;
+      for (const [cid, n] of m) {
+        const c = catById.get(cid);
+        if (c && c.parentId === chosenId && allowedForAmount(c, amount) && n > bestN) {
+          bestChild = cid;
+          bestN = n;
+        }
       }
-      // 2) Histórico: categoria mais frequente para a mesma descrição
+      return bestChild ?? chosenId;
+    }
+
+    function suggestFor(description: string, amount: number): { id: string | null; reason: string | null } {
       const key = normalizeDescriptionForDedup(description);
       const m = history.get(key);
+      // 1) Regras explícitas do dono (refinadas para a sub, se houver sinal)
+      const byRule = matchRule(description, rules);
+      if (byRule && allowedForAmount(catById.get(byRule), amount)) {
+        return { id: refineToSub(byRule, m, amount), reason: 'Regra automática' };
+      }
+      // 2) Histórico: categoria mais frequente para a mesma descrição
       if (m) {
         let best: string | null = null;
         let bestN = 0;
@@ -255,7 +277,10 @@ export function useCategorizationSessions() {
           }
         }
         if (best) {
-          return { id: best, reason: bestN > 1 ? `Você já categorizou assim ${bestN}×` : 'Você já categorizou assim' };
+          // Não colapsar no pai quando a sub tem sinal no mesmo histórico.
+          const refined = refineToSub(best, m, amount);
+          const n = m.get(refined) ?? bestN;
+          return { id: refined, reason: n > 1 ? `Você já categorizou assim ${n}×` : 'Você já categorizou assim' };
         }
       }
       return { id: null, reason: null };

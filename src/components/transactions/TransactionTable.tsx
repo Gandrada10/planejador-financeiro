@@ -5,6 +5,7 @@ import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } f
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 import { BatchEditModal } from '../shared/BatchEditModal';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 
 interface Props {
   transactions: Transaction[];
@@ -30,6 +31,9 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   const [sortField, setSortField] = useState<'date' | 'purchaseDate'>('date');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [showBatchEdit, setShowBatchEdit] = useState(false);
+  // Exclusão exige confirmação (ação irreversível). Guarda o alvo pendente:
+  // um id (linha) ou 'batch' (seleção múltipla).
+  const [pendingDelete, setPendingDelete] = useState<string | 'batch' | null>(null);
 
   function toggleSort(field: 'date' | 'purchaseDate') {
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -146,9 +150,18 @@ export function TransactionTable({ transactions, categories, projects = [], acco
     }
   }
 
-  function deleteSelected() {
+  function performDeleteSelected() {
     selectedIds.forEach((id) => onDelete(id));
     setSelectedIds(new Set());
+  }
+
+  async function performDeleteRow(id: string) {
+    const t = sorted.find((x) => x.id === id);
+    if (t) {
+      const ok = await guardClosedCycle(t);
+      if (!ok) return;
+    }
+    onDelete(id);
   }
 
   function reconcileSelected(reconcile: boolean) {
@@ -191,7 +204,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
               <Pencil size={12} /> Edicao em lote
             </button>
           )}
-          <button onClick={deleteSelected} className="text-accent-red hover:underline flex items-center gap-1">
+          <button onClick={() => setPendingDelete('batch')} className="text-accent-red hover:underline flex items-center gap-1">
             <Trash2 size={12} /> Excluir
           </button>
         </div>
@@ -541,11 +554,13 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 </td>
 
                 <td className="p-2">
-                  <button tabIndex={-1} onClick={async () => {
-                    const ok = await guardClosedCycle(t);
-                    if (!ok) return;
-                    onDelete(t.id);
-                  }} className="text-text-secondary hover:text-accent-red">
+                  <button
+                    tabIndex={-1}
+                    aria-label="Excluir transação"
+                    title="Excluir transação"
+                    onClick={() => setPendingDelete(t.id)}
+                    className="text-text-secondary hover:text-accent-red"
+                  >
                     <Trash2 size={14} />
                   </button>
                 </td>
@@ -554,6 +569,27 @@ export function TransactionTable({ transactions, categories, projects = [], acco
           </tbody>
         </table>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          destructive
+          title={
+            pendingDelete === 'batch'
+              ? `Excluir ${selectedIds.size} transaç${selectedIds.size === 1 ? 'ão' : 'ões'}?`
+              : 'Excluir transação?'
+          }
+          message="Esta ação não pode ser desfeita."
+          confirmLabel="Excluir"
+          cancelLabel="Cancelar"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const target = pendingDelete;
+            setPendingDelete(null);
+            if (target === 'batch') performDeleteSelected();
+            else if (target) performDeleteRow(target);
+          }}
+        />
+      )}
     </div>
   );
 }
