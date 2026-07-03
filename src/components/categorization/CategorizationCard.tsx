@@ -302,23 +302,26 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
           </button>
         </div>
 
-        {/* Observação — opcional, mas com afford claro e alvo ≥48px. Fechada,
-            é um campo tocável de largura total (não um texto minúsculo);
-            aberta, vira textarea com botão "Pronto". Secundária no peso visual
-            (borda tracejada, tom mudo) para não competir com categorizar. */}
-        <div className="px-1">
+        {/* Observação — opcional, mas inequívoca: rótulo próprio, campo tocável
+            de largura total (min-h 56px), borda sólida e ícone/rótulo em tom de
+            leitura alto (não some no fundo). Peso visual abaixo da ação mint de
+            categorizar (sem fill de marca), mas nunca discreto. */}
+        <div className="flex flex-col gap-1.5 px-1 pt-1">
+          <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-0.5">
+            Observação <span className="normal-case tracking-normal font-medium">(opcional)</span>
+          </p>
           {!showNotes ? (
             <button
               onClick={() => setShowNotes(true)}
-              className="w-full min-h-[48px] flex items-center gap-2.5 px-3.5 rounded-control border border-dashed border-border text-left active:bg-elevated transition-colors"
+              className="w-full min-h-[56px] flex items-center gap-3 px-3.5 py-3 rounded-control bg-bg-card border border-border text-left active:bg-elevated transition-colors"
             >
-              <MessageSquare size={16} className="shrink-0 text-ink-3" />
+              <MessageSquare size={20} className="shrink-0 text-accent" />
               {notes ? (
-                <span className="flex-1 min-w-0 text-body text-text-primary truncate">{notes}</span>
+                <span className="flex-1 min-w-0 text-body font-medium text-text-primary truncate">{notes}</span>
               ) : (
-                <span className="flex-1 text-body text-text-secondary">Adicionar observação</span>
+                <span className="flex-1 text-body font-semibold text-text-primary">Adicionar observação</span>
               )}
-              <span className="shrink-0 text-caption text-ink-3">{notes ? 'Editar' : 'Opcional'}</span>
+              <span className="shrink-0 text-caption font-semibold text-accent">{notes ? 'Editar' : 'Adicionar'}</span>
             </button>
           ) : (
             <div className="flex flex-col gap-2">

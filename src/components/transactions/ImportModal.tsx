@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
@@ -436,7 +436,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         ...item,
         ...(batchAccount ? { account: batchAccount } : {}),
         ...(batchCategory ? { categoryId: batchCategory } : {}),
-        ...(batchMember ? { familyMember: batchMember } : {}),
+        // Aplicar membro em lote também sincroniza o titular canônico.
+        ...(batchMember ? { familyMember: batchMember, titular: batchMember } : {}),
         ...(batchProject ? { projectId: batchProject } : {}),
       };
     }));
@@ -447,7 +448,17 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     // Keep string fields as empty string, only use null for ID fields like categoryId
     const nullableFields: (keyof ImportItem)[] = ['categoryId', 'projectId'];
     const finalValue = nullableFields.includes(field) ? (value || null) : value;
-    setItems((prev) => prev.map((item, i) => i === index ? { ...item, [field]: finalValue } : item));
+    setItems((prev) => prev.map((item, i) => {
+      if (i !== index) return item;
+      // Ao escolher o membro, mantemos o `titular` em sincronia com o membro
+      // canônico (ou vazio p/ "sem membro"). Sem isso, a string crua do extrato
+      // continuaria gravada no titular mesmo com o membro corrigido — a raiz das
+      // duplicatas de titular.
+      if (field === 'familyMember') {
+        return { ...item, familyMember: value, titular: value };
+      }
+      return { ...item, [field]: finalValue };
+    }));
   }
 
   function updateInstallmentConfig(index: number, updates: Partial<ImportRow>) {
@@ -474,6 +485,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   }
 
   async function handleImport() {
+    // Trava dura: nenhum lançamento entra com titular cru não-vinculado. Se
+    // sobrou algum não-resolvido entre os selecionados, aborta e sinaliza (o
+    // botão já fica desabilitado; isto é a rede de segurança).
+    if (hasUnresolved) {
+      setError('Há lançamentos com titular não reconhecido. Escolha um membro cadastrado ou marque "Sem membro" antes de importar.');
+      return;
+    }
+    setError('');
     setImporting(true);
     const toImport: ImportItem[] = [];
 
@@ -542,6 +561,26 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   }
 
   const duplicateCount = items.filter((i) => i.isDuplicate).length;
+
+  // Blindagem anti-titular-cru: uma linha SELECIONADA está "não resolvida"
+  // quando carrega um titular vindo do extrato (string bruta) que NÃO é um
+  // membro cadastrado. fuzzyMatchMember já normaliza os que reconhece (titular =
+  // nome canônico ∈ memberOptions); o que sobra é justamente o que criaria
+  // titulares duplicados. Só vale quando existe lista de membros p/ escolher —
+  // sem membros cadastrados não há o que deduplicar e o gate ficaria impossível.
+  const memberSet = useMemo(() => new Set(memberOptions), [memberOptions]);
+  const unresolvedIndices = useMemo(() => {
+    if (memberOptions.length === 0) return [] as number[];
+    const out: number[] = [];
+    items.forEach((it, i) => {
+      if (!selected.has(i)) return;
+      const t = (it.titular || '').trim();
+      if (t && !memberSet.has(t)) out.push(i);
+    });
+    return out;
+  }, [items, selected, memberSet, memberOptions.length]);
+  const hasUnresolved = unresolvedIndices.length > 0;
+  const unresolvedSet = useMemo(() => new Set(unresolvedIndices), [unresolvedIndices]);
 
   // Category helper for select options
   const rootCats = categories.filter((c) => !c.parentId);
@@ -699,6 +738,24 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 </div>
               </div>
 
+              {/* Blindagem de titular: aviso quando há lançamentos com titular
+                  cru não vinculado a um membro cadastrado. */}
+              {hasUnresolved && (
+                <div role="alert" className="bg-amber-500/10 border border-amber-500/40 rounded-lg p-3 flex items-start gap-2.5">
+                  <UserX size={16} className="text-amber-400 shrink-0 mt-0.5" />
+                  <div className="text-xs text-text-primary leading-relaxed">
+                    <p className="font-bold text-amber-300">
+                      {unresolvedIndices.length} lançamento{unresolvedIndices.length > 1 ? 's' : ''} com titular não reconhecido
+                    </p>
+                    <p className="text-text-secondary mt-0.5">
+                      Na coluna <b className="text-text-primary">Membro</b> (destacada), escolha um membro cadastrado
+                      ou marque <b className="text-text-primary">“Sem membro”</b>. Isso evita criar titulares duplicados —
+                      a importação só conclui quando todos estiverem resolvidos.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Preview table */}
               <div className="overflow-auto max-h-[45vh] border border-border rounded">
                 <table className="w-full text-xs">
@@ -846,14 +903,36 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         {/* Editable: family member */}
                         <td className="p-1">
                           {memberOptions.length > 0 ? (
-                            <select
-                              value={item.familyMember}
-                              onChange={(e) => updateRow(i, 'familyMember', e.target.value)}
-                              className={inputClass}
-                            >
-                              <option value="">—</option>
-                              {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                            (() => {
+                              const unresolved = unresolvedSet.has(i);
+                              // value: membro casado → nome; "sem membro" explícito
+                              // (titular vazio) → sentinela __none__; não resolvido
+                              // → placeholder desabilitado "Escolher…".
+                              const selVal = memberSet.has(item.familyMember)
+                                ? item.familyMember
+                                : (unresolved ? '' : '__none__');
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  <select
+                                    value={selVal}
+                                    onChange={(e) => {
+                                      const v = e.target.value === '__none__' ? '' : e.target.value;
+                                      updateRow(i, 'familyMember', v);
+                                    }}
+                                    className={inputClass + (unresolved ? ' !border-amber-500 border-2 ring-1 ring-amber-500/40' : '')}
+                                  >
+                                    <option value="" disabled>Escolher…</option>
+                                    {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                                    <option value="__none__">Sem membro</option>
+                                  </select>
+                                  {unresolved && (
+                                    <span className="text-[10px] text-amber-400/90 truncate" title={item.titular}>
+                                      extrato: “{item.titular}”
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()
                           ) : (
                             <span className="text-text-secondary">{item.familyMember || '—'}</span>
                           )}
@@ -1039,8 +1118,16 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
         {/* Footer */}
         {step === 'preview' && (
-          <div className="p-4 border-t border-border flex items-center justify-between">
-            <span className="text-xs text-text-secondary">{selected.size} de {items.length} selecionadas</span>
+          <div className="p-4 border-t border-border flex items-center justify-between gap-3">
+            <span className="text-xs text-text-secondary">
+              {hasUnresolved ? (
+                <span className="flex items-center gap-1.5 text-amber-400">
+                  <UserX size={13} /> {unresolvedIndices.length} titular{unresolvedIndices.length > 1 ? 'es' : ''} a resolver
+                </span>
+              ) : (
+                `${selected.size} de ${items.length} selecionadas`
+              )}
+            </span>
             <div className="flex gap-2">
               <button
                 onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); }}
@@ -1050,7 +1137,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               </button>
               <button
                 onClick={handleImport}
-                disabled={selected.size === 0 || importing}
+                disabled={selected.size === 0 || importing || hasUnresolved}
+                title={hasUnresolved ? 'Resolva os titulares não reconhecidos antes de importar' : undefined}
                 className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
               >
                 {importing ? 'Importando...' : `Importar ${selected.size} transacoes`}
