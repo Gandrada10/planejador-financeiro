@@ -49,13 +49,16 @@ removido de propósito). Como a rotação da chave ainda está pendente:
 6. **Fase 3/4 + D2a:** telas/gráficos consumindo o tema, remoção de código morto
    confirmado (FamilyView), Consultor de Fechamento como skill+runner.
 
-## Backlog de polimento (limpeza única antes do merge)
-- [MEDIUM] guardar a nav (Voltar/Pular/Avançar) com o estado `saving` (race de
-  double-tap Pular durante o save ~220ms; sem perda de dado).
-- [MEDIUM a11y] `aria-label` no textarea de observação e nos selects de membro.
-- [LOW] truncar "· revisando" < 360px para contagens de 4 dígitos.
-- [LOW] paridade visual do realce selecionado na sugestão (base border-border).
-- [LOW] undo sem try/catch (falha silenciosa offline) + `aria-live` no toast.
-- [LOW design] âmbar → token `status-warn` (Iris).
-- [LOW] `window.confirm` nativo em 3 pontos da TransactionTable → ConfirmDialog.
-- [LOW] `familyMemberId` FK no tipo Transaction (blindagem definitiva — Silas).
+## Backlog de polimento — LIMPO no round 7 (`875f5de`, Vera PASS)
+Feitos: guard de save na nav (corrida do double-tap), aria-label (observação +
+4 selects de import), truncate "· revisando" <360px, realce da sugestão,
+undo resiliente + aria-live, window.confirm→ConfirmDialog (3 pontos), âmbar→
+status-warn no ImportModal.
+
+## Backlog remanescente (LOW, para uma passada futura — não bloqueia merge)
+- [LOW] `ConfirmDialog` não restaura o foco ao elemento que o abriu (Felix, rápido).
+- [MEDIUM latente] `BatchEditModal` sem focus-trap/Esc próprios quando aberto sozinho.
+- [LOW] selects do bloco "aplicar em lote" do ImportModal sem `aria-label`.
+- [LOW design] drift de `yellow-*` (regra) e `purple-*` (IA) fora do token system.
+- [LOW] âmbar ainda em `TransactionsPage`/`CategorizationHistoryModal` (não tocados) → unificar em status-warn.
+- [LOW] `familyMemberId` FK no tipo Transaction (blindagem definitiva — Silas, Fase 2).
