@@ -295,11 +295,21 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                   title={allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
                 />
               </th>
-              <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('date')}>
-                Data <SortIcon field="date" />
+              <th
+                className="p-2 text-left cursor-pointer select-none hover:text-text-primary"
+                onClick={() => toggleSort('date')}
+                title="Data de pagamento/vencimento — define o mês do lançamento no fluxo de caixa (quando o dinheiro sai)"
+              >
+                <span className="flex items-center gap-1">Data <SortIcon field="date" /></span>
+                <span className="block text-[10px] font-normal normal-case text-text-secondary">pagamento / vencimento</span>
               </th>
-              <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('purchaseDate')}>
-                Competencia <SortIcon field="purchaseDate" />
+              <th
+                className="p-2 text-left cursor-pointer select-none hover:text-text-primary"
+                onClick={() => toggleSort('purchaseDate')}
+                title="Data em que a compra foi efetivamente feita (competência). Referência — não define o mês."
+              >
+                <span className="flex items-center gap-1">Competência <SortIcon field="purchaseDate" /></span>
+                <span className="block text-[10px] font-normal normal-case text-text-secondary">data da compra</span>
               </th>
               <th className="p-2 text-left">Descricao</th>
               <th className="p-2 text-left">Categoria</th>

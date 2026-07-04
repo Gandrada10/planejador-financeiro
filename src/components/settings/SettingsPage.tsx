@@ -251,13 +251,18 @@ export function SettingsPage() {
             </button>
           </div>
           {accountType === 'cartao' && (
-            <div className="flex gap-2 flex-wrap pl-1">
-              <input type="number" value={accountClosingDay} onChange={(e) => setAccountClosingDay(e.target.value)}
-                placeholder="Dia fechamento" min={1} max={28} className={`${inputClass} w-36`} />
-              <input type="number" value={accountDueDay} onChange={(e) => setAccountDueDay(e.target.value)}
-                placeholder="Dia vencimento" min={1} max={28} className={`${inputClass} w-36`} />
-              <input type="text" value={accountCreditLimit} onChange={(e) => setAccountCreditLimit(e.target.value)}
-                placeholder="Limite (R$)" className={`${inputClass} w-36`} />
+            <div className="pl-1 space-y-1">
+              <div className="flex gap-2 flex-wrap">
+                <input type="number" value={accountClosingDay} onChange={(e) => setAccountClosingDay(e.target.value)}
+                  placeholder="Dia fechamento" min={1} max={28} className={`${inputClass} w-36`} />
+                <input type="number" value={accountDueDay} onChange={(e) => setAccountDueDay(e.target.value)}
+                  placeholder="Dia vencimento" min={1} max={28} className={`${inputClass} w-36`} />
+                <input type="text" value={accountCreditLimit} onChange={(e) => setAccountCreditLimit(e.target.value)}
+                  placeholder="Limite (R$)" className={`${inputClass} w-36`} />
+              </div>
+              <p className="text-[10px] text-text-secondary">
+                O <b className="text-text-primary">dia de vencimento</b> vira a data dos lançamentos ao importar a fatura — é o dia em que o gasto entra no fluxo de caixa do mês.
+              </p>
             </div>
           )}
         </form>
@@ -272,8 +277,8 @@ export function SettingsPage() {
                     <span className="text-text-primary font-bold">{a.name}</span>
                     <span className="text-[10px] text-text-secondary uppercase">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
                     {a.bank && <span className="text-text-secondary">({a.bank})</span>}
-                    {a.type === 'cartao' && a.closingDay && (
-                      <span className="text-[10px] text-text-secondary">Fech. dia {a.closingDay} | Venc. dia {a.dueDay || '—'}</span>
+                    {a.type === 'cartao' && (a.closingDay || a.dueDay) && (
+                      <span className="text-[10px] text-text-secondary">Fech. dia {a.closingDay || '—'} | Venc. dia {a.dueDay || '—'}</span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">

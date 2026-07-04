@@ -186,12 +186,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
           )}
           <span className="text-[10px] text-text-secondary">
             Ordenar:
-            <button onClick={() => toggleSort('date')} className="ml-1 hover:text-text-primary">
+            <button onClick={() => toggleSort('date')} className="ml-1 hover:text-text-primary" title="Data de pagamento/vencimento — define o mês no fluxo de caixa">
               Data <SortIcon field="date" />
             </button>
             <span className="mx-1">·</span>
-            <button onClick={() => toggleSort('purchaseDate')} className="hover:text-text-primary">
-              Competencia <SortIcon field="purchaseDate" />
+            <button onClick={() => toggleSort('purchaseDate')} className="hover:text-text-primary" title="Data da compra efetiva (competência) — não define o mês">
+              Competência <SortIcon field="purchaseDate" />
             </button>
           </span>
         </div>
@@ -376,7 +376,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                           title="Selecionar todas"
                         />
                       </div>
-                      <div className="w-[80px] flex-shrink-0">Competencia</div>
+                      <div className="w-[80px] flex-shrink-0" title="Data da compra efetiva (competência) — não define o mês">Competência</div>
                       <div className="flex-1 min-w-0 max-w-[320px] px-2">Descricao</div>
                       <div className="flex-1 min-w-[200px] mr-2">Categoria</div>
                       <div className="flex-shrink-0 w-[110px] text-right mr-2">Valor</div>
