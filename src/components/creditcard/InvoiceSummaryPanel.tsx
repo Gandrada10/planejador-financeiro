@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Lock, LockOpen, DollarSign } from 'lucide-react';
-import { formatBRL, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
+import { formatBRL, parseMoneyInput, applyMoneyMask, invoiceDateFor } from '../../lib/utils';
 import type { BillingCycle, Account } from '../../types';
 
 interface TitularTotal {
@@ -27,6 +27,7 @@ interface Props {
 export function InvoiceSummaryPanel({
   account,
   cycle,
+  monthYear,
   totalExpenses,
   totalCredits,
   totalInvoice,
@@ -38,9 +39,18 @@ export function InvoiceSummaryPanel({
   onReopenCycle,
   onRegisterPayment,
 }: Props) {
+  // Padrão do "lançar pagamento" = data de VENCIMENTO do cartão no mês da
+  // fatura (não "hoje") — assim pagar em dia mantém os lançamentos no
+  // vencimento; só uma data diferente (ex.: paguei dia 21, vence dia 20)
+  // sobrescreve. Sem dueDay cadastrado, invoiceDateFor cai no dia 1º do mês.
+  const dueDateISO = (() => {
+    const d = invoiceDateFor(monthYear, account.dueDay);
+    return d ? d.toISOString().split('T')[0] : new Date().toISOString().slice(0, 10);
+  })();
+
   const [showPayForm, setShowPayForm] = useState(false);
   const [payAmount, setPayAmount] = useState('');
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(dueDateISO);
 
   const paidAmount = cycle?.paidAmount || 0;
   // totalInvoice/previousBalance seguem a convenção interna do app (negativo =
@@ -147,7 +157,12 @@ export function InvoiceSummaryPanel({
           </button>
         ) : null}
         <button
-          onClick={() => setShowPayForm(!showPayForm)}
+          onClick={() => {
+            // Ao ABRIR o form, semeia a data com o vencimento do mês atual
+            // (useState só pega o valor inicial; ao navegar de mês, re-semeia).
+            if (!showPayForm) setPayDate(dueDateISO);
+            setShowPayForm((v) => !v);
+          }}
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-bold rounded hover:bg-accent/20"
         >
           <DollarSign size={12} /> Lancar pagamento

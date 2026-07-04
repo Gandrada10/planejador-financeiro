@@ -384,6 +384,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                           title="Selecionar todas"
                         />
                       </div>
+                      <div className="w-[80px] flex-shrink-0" title="Data de pagamento/vencimento — muda ao lançar o pagamento da fatura; define o mês no fluxo de caixa">Data</div>
                       <div className="w-[80px] flex-shrink-0" title="Data da compra efetiva (competência) — não define o mês">Competência</div>
                       <div className="flex-1 min-w-0 max-w-[320px] px-2">Descricao</div>
                       <div className="flex-1 min-w-[200px] mr-2">Categoria</div>
@@ -426,7 +427,28 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                           />
                         </div>
 
-                        {/* Purchase date - editable */}
+                        {/* Cash date (pagamento/vencimento) - editable. É a coluna
+                            que a baixa da fatura sobrescreve com a data do
+                            pagamento; governa o mês no fluxo de caixa. */}
+                        <div
+                          data-tab-cell
+                          className={`text-xs text-text-primary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'date', t.date.toISOString().split('T')[0])}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'date' ? (
+                            <input
+                              autoFocus
+                              type="date"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                            />
+                          ) : formatDate(t.date)}
+                        </div>
+
+                        {/* Purchase date (competência) - editable */}
                         <div
                           data-tab-cell
                           className={`text-xs text-text-secondary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
