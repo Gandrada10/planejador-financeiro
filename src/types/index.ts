@@ -66,6 +66,14 @@ export interface Transaction {
    * provisória a partir do `dueDay` atual do cartão.
    */
   provisionalDate?: Date | null;
+  /**
+   * Chave natural de dedupe do parser OFX (tag `FITID` do arquivo). Presente
+   * só em transações importadas via extrato OFX de conta corrente; `null`/
+   * ausente nas demais origens (fatura de cartão via IA, Pluggy, manual).
+   * Dedupe contra reimportação usa este campo (ver `ImportModal.tsx`), no
+   * mesmo padrão já usado para `pluggyTransactionId`.
+   */
+  fitid?: string | null;
 }
 
 export interface Account {

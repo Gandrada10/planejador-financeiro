@@ -1,9 +1,10 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX, CalendarClock } from 'lucide-react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX, CalendarClock, Landmark } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account, CategoryRule, Project } from '../../types';
+import { parseOfx, type OfxParseMeta } from '../../lib/parseOfx';
 import { NoteTag } from '../shared/NoteTag';
 import {
   formatBRL,
@@ -50,6 +51,73 @@ function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
   });
 }
 
+// Teto de tamanho para o arquivo OFX (~15 MB). Extrato de conta corrente é
+// texto puro e nunca chega perto disso — o teto só existe pra rejeitar
+// arquivo errado/malicioso antes de carregar os bytes na memória.
+const OFX_MAX_BYTES = 15_000_000;
+
+// ─── OFX (conta corrente) — dedupe, encoding e auto-match de conta ─────────
+//
+// Irmão do caminho de IA acima: dedupe primeiro pelo FITID (chave natural do
+// OFX, mesmo padrão de `pluggyTransactionId` em PluggySync.tsx). FITID é único
+// POR CONTA, não global (dois bancos podem emitir o mesmo FITID) — por isso só
+// tratamos como duplicata quando a CONTA de destino também casa. Sem conta
+// definida na linha OFX, ou sem match de conta, caímos no fallback por
+// data+valor+descrição, que não corre esse risco de colisão entre contas.
+function isOfxDuplicate(item: ImportItem, existing: Transaction[]): boolean {
+  if (item.fitid && item.account) {
+    const fitidMatch = existing.some(
+      (t) => t.fitid === item.fitid && t.account === item.account
+    );
+    if (fitidMatch) return true;
+  }
+  return isDuplicate(item, existing);
+}
+
+// BANKID (OFX) → padrões de nome/banco, para auto-selecionar a conta de
+// destino quando existe uma conta corrente cadastrada daquele banco. Best
+// effort: sem match, cai para seleção manual (MVP), como combinado.
+const OFX_BANK_HINTS: Record<string, string[]> = {
+  '1': ['banco do brasil', ' bb '],
+  '33': ['santander'],
+  '77': ['inter', 'banco inter'],
+  '104': ['caixa', 'cef'],
+  '212': ['original'],
+  '237': ['bradesco'],
+  '260': ['nubank', 'nu pagamentos'],
+  '290': ['pagbank', 'pagseguro'],
+  '336': ['c6', 'c6 bank'],
+  '341': ['itau', 'itaú'],
+  '380': ['pagbank'],
+};
+
+function normalizeBankId(bankId: string | null): string {
+  if (!bankId) return '';
+  const stripped = bankId.trim().replace(/^0+/, '');
+  return stripped === '' ? '0' : stripped;
+}
+
+function stripAccents(s: string): string {
+  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/** Tenta casar o BANKID do OFX com uma conta corrente cadastrada (por nome
+ *  do banco/conta); se não achar e houver exatamente UMA conta elegível,
+ *  usa essa como padrão. Caso contrário devolve '' (seleção manual). */
+function matchOfxAccountName(bankId: string | null, candidates: Account[]): string {
+  const hints = OFX_BANK_HINTS[normalizeBankId(bankId)];
+  if (hints && hints.length > 0) {
+    const found = candidates.find((a) => {
+      // Padding com espaços nas bordas para hints curtos (" bb ") baterem
+      // mesmo quando o token aparece no início/fim do texto concatenado.
+      const hay = stripAccents(` ${a.bank} ${a.name} `.toLowerCase());
+      return hints.some((h) => hay.includes(stripAccents(h)));
+    });
+    if (found) return found.name;
+  }
+  return candidates.length === 1 ? candidates[0].name : '';
+}
+
 interface Props {
   existingTransactions: Transaction[];
   onImport: (items: ImportItem[]) => Promise<void>;
@@ -90,6 +158,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // AI categorization
   const [aiCategorizedDescriptions, setAiCategorizedDescriptions] = useState<Map<string, string>>(new Map());
 
+  // Qual caminho de parse gerou as linhas atuais — governa quais painéis do
+  // preview aparecem (fatura de cartão vs. extrato de conta corrente OFX).
+  const [importKind, setImportKind] = useState<'ai' | 'ofx'>('ai');
+  const [ofxParsing, setOfxParsing] = useState(false);
+  const [ofxMeta, setOfxMeta] = useState<OfxParseMeta | null>(null);
+
   // Credit card billing month (= mês de PAGAMENTO/vencimento da fatura, regime
   // de caixa) e o dia de vencimento aplicado (override do cadastro do cartão).
   const [isCreditCard, setIsCreditCard] = useState(false);
@@ -100,6 +174,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
   const monthOptions = generateMonthOptions();
   const creditCardAccounts = accounts.filter((a) => a.type === 'cartao');
+  // Contas elegíveis pra extrato de conta corrente (OFX): tudo que NÃO é
+  // cartão. No modo OFX SÓ essas podem ser destino — nunca cair pra
+  // `accountNames` cru (que inclui cartões): extrato de conta corrente jamais
+  // deve ser lançado num cartão. Se não houver nenhuma conta elegível, a lista
+  // fica VAZIA (o banner "cadastre uma conta corrente" cobre esse caso).
+  const ofxEligibleAccounts = accounts.filter((a) => a.type !== 'cartao');
+  const rowAccountNames = importKind === 'ofx'
+    ? ofxEligibleAccounts.map((a) => a.name)
+    : accountNames;
 
   // Batch assignment controls
   const [batchAccount, setBatchAccount] = useState('');
@@ -154,11 +237,108 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [billingCardAccount?.dueDay]);
 
-  // Rótulos do placar: cartão fala em Compras/Estornos; conta corrente (OFX, em
-  // breve) fala em Saídas/Entradas — positivos ali são receitas, não estornos.
+  // Rótulos do placar: cartão fala em Compras/Estornos; conta corrente (OFX)
+  // fala em Saídas/Entradas — positivos ali são receitas, não estornos.
   const scoreLabels = isCreditCard
     ? { neg: 'Compras', pos: 'Estornos/créditos', net: 'Líquido do mês' }
     : { neg: 'Saídas', pos: 'Entradas', net: 'Líquido' };
+
+  // ─── Roteamento por formato ─────────────────────────────────────────────────
+  //
+  // .ofx/.ofc → parser determinístico (parseOfx), sem IA, conta corrente.
+  // Todo o resto (.csv/.xlsx/.xls/.pdf) → caminho de IA existente, intacto.
+  function routeFile(file: File) {
+    const ext = file.name.split('.').pop()?.toLowerCase();
+    if (ext === 'ofx' || ext === 'ofc') {
+      handleParseOfx(file);
+    } else {
+      handleParse(file);
+    }
+  }
+
+  // ─── Parse via OFX (determinístico, sem IA) ────────────────────────────────
+
+  async function handleParseOfx(file: File) {
+    setError('');
+    setFileName(file.name);
+    setDeclaredTotal(null);
+    setAiUsage(null);
+    setImportKind('ofx');
+    setIsCreditCard(false);
+
+    // Teto de tamanho: extrato OFX real nunca passa de alguns MB (é texto puro).
+    // Rejeita antes de ler os bytes na memória — blinda tanto o clique quanto o
+    // drop, que passam ambos por aqui. Evita travar a aba com um arquivo
+    // gigante (acidental ou malicioso) chegando no TextDecoder.
+    if (file.size > OFX_MAX_BYTES) {
+      setError(
+        `Arquivo grande demais (${(file.size / 1_000_000).toFixed(1)} MB). ` +
+        `Um extrato OFX de conta corrente não passa de ${OFX_MAX_BYTES / 1_000_000} MB — verifique se o arquivo está correto.`
+      );
+      return;
+    }
+
+    setOfxParsing(true);
+
+    try {
+      // OFX declara CHARSET:1252 (Windows-1252/Latin-1), NÃO UTF-8 — ler como
+      // UTF-8 quebra os acentos do MEMO silenciosamente (mojibake). Ver nota
+      // de encoding no topo de `src/lib/parseOfx.ts`.
+      const buf = await file.arrayBuffer();
+      const text = new TextDecoder('windows-1252').decode(buf);
+      const result = parseOfx(text);
+
+      if (result.transactions.length === 0) {
+        setError(
+          result.meta.warnings[0] ||
+          'Nenhuma transação encontrada no arquivo OFX. Verifique se é um extrato de conta corrente válido.'
+        );
+        setOfxParsing(false);
+        return;
+      }
+
+      const defaultAccountName = matchOfxAccountName(result.account.bankId, ofxEligibleAccounts);
+
+      const parsed: ImportRow[] = result.transactions.map((t) => {
+        const item: ImportItem = {
+          date: t.date,
+          purchaseDate: null,
+          description: t.description,
+          amount: t.amount,
+          categoryId: null,
+          account: defaultAccountName,
+          familyMember: '',
+          titular: '',
+          installmentNumber: null,
+          totalInstallments: null,
+          cardNumber: null,
+          projectId: null,
+          pluggyTransactionId: null,
+          fitid: t.fitid,
+          tags: [],
+          notes: '',
+          importBatch: null,
+          reconciled: false,
+          reconciledAt: null,
+        };
+        return {
+          ...item,
+          isDuplicate: isOfxDuplicate(item, existingTransactions),
+          installmentType: 'unica' as const,
+          periodicity: 1,
+          installmentAmount: null,
+        };
+      });
+
+      setOfxMeta(result.meta);
+      setItems(parsed);
+      setSelected(new Set(parsed.map((_, i) => i).filter((i) => !parsed[i].isDuplicate)));
+      setStep('preview');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao processar arquivo OFX');
+    }
+    setOfxParsing(false);
+  }
 
   // ─── Text extraction ────────────────────────────────────────────────────────
 
@@ -299,6 +479,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     setError('');
     setFileName(file.name);
     setDeclaredTotal(null);
+    setImportKind('ai');
+    setOfxMeta(null);
     setAiParsing(true);
 
     try {
@@ -533,7 +715,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     const file = e.dataTransfer.files[0];
-    if (file) handleParse(file);
+    if (file) routeFile(file);
   }
 
   function toggleItem(i: number) {
@@ -708,10 +890,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           {/* UPLOAD */}
           {step === 'upload' && (
             <div className="space-y-4">
-              {aiParsing ? (
+              {(aiParsing || ofxParsing) ? (
                 <div className="border-2 border-dashed border-accent rounded-lg p-12 text-center">
                   <Sparkles size={32} className="mx-auto mb-3 text-accent animate-pulse" />
-                  <p className="text-sm text-text-primary mb-1">Analisando extrato com IA...</p>
+                  <p className="text-sm text-text-primary mb-1">
+                    {ofxParsing ? 'Lendo extrato OFX...' : 'Analisando extrato com IA...'}
+                  </p>
                   <p className="text-xs text-text-secondary">Isso pode levar alguns segundos</p>
                 </div>
               ) : (
@@ -722,21 +906,21 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   onClick={() => {
                     const input = document.createElement('input');
                     input.type = 'file';
-                    input.accept = '.xlsx,.xls,.csv,.pdf';
+                    input.accept = '.xlsx,.xls,.csv,.pdf,.ofx,.ofc';
                     input.onchange = (e) => {
                       const file = (e.target as HTMLInputElement).files?.[0];
-                      if (file) handleParse(file);
+                      if (file) routeFile(file);
                     };
                     input.click();
                   }}
                 >
                   <Sparkles size={32} className="mx-auto mb-3 text-accent" />
                   <p className="text-sm font-bold text-text-primary mb-1">Arrastar arquivo ou clicar</p>
-                  <p className="text-xs text-text-secondary mb-3">A IA detecta transacoes, parcelas, titulares e categorias</p>
-                  <p className="text-[10px] text-text-secondary">.xlsx .xls .csv .pdf</p>
+                  <p className="text-xs text-text-secondary mb-3">Extrato de conta corrente (.ofx) entra sem IA · fatura de cartão a IA detecta transacoes, parcelas, titulares e categorias</p>
+                  <p className="text-[10px] text-text-secondary">.ofx .ofc .xlsx .xls .csv .pdf</p>
                 </div>
               )}
-              {error && <p className="text-accent-red text-xs mt-3">{error}</p>}
+              {error && <p role="alert" className="text-accent-red text-xs mt-3">{error}</p>}
             </div>
           )}
 
@@ -866,23 +1050,69 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 </div>
               )}
 
+              {/* Extrato OFX de conta corrente: sem mês de fatura/vencimento
+                  (data já vem de DTPOSTED) e sem trava de titular (fica em
+                  branco por padrão) — só um resumo do parse + escolha de
+                  conta (reaproveita o seletor "Aplicar em lote" abaixo). */}
+              {importKind === 'ofx' && ofxMeta && (
+                <div className="bg-accent/5 border border-accent/30 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <Landmark size={16} className="text-accent" />
+                    <span className="text-xs font-bold text-text-primary">Extrato OFX (conta corrente)</span>
+                  </div>
+                  <p className="text-[11px] text-text-secondary">
+                    {ofxMeta.parsedCount} lançamento{ofxMeta.parsedCount !== 1 ? 's' : ''}
+                    {ofxMeta.dtStart && ofxMeta.dtEnd && (
+                      <> · período {formatDate(ofxMeta.dtStart)}–{formatDate(ofxMeta.dtEnd)}</>
+                    )}
+                    {ofxMeta.duplicatesInFile > 0 && (
+                      <> · {ofxMeta.duplicatesInFile} duplicado{ofxMeta.duplicatesInFile !== 1 ? 's' : ''} ignorado{ofxMeta.duplicatesInFile !== 1 ? 's' : ''} no arquivo</>
+                    )}
+                  </p>
+                  {rowAccountNames.length === 0 && (
+                    <span className="w-full text-[11px] text-status-warn">
+                      Nenhuma conta corrente cadastrada — cadastre uma em Configurações antes de importar.
+                    </span>
+                  )}
+                </div>
+              )}
+
+              {/* Warnings do parser OFX (FITID ausente, TRNTYPE divergente,
+                  linhas descartadas) — informativo, não bloqueia a importação. */}
+              {importKind === 'ofx' && ofxMeta && ofxMeta.warnings.length > 0 && (
+                <div className="bg-status-warn/10 border border-status-warn/30 rounded-lg p-3 space-y-1">
+                  <p className="flex items-center gap-1.5 text-[11px] font-bold text-status-warn">
+                    <AlertTriangle size={12} className="shrink-0" />
+                    Avisos do parser OFX ({ofxMeta.warnings.length})
+                  </p>
+                  <div
+                    role="status"
+                    tabIndex={0}
+                    aria-label={`Avisos do parser OFX: ${ofxMeta.warnings.length} ${ofxMeta.warnings.length === 1 ? 'aviso' : 'avisos'}. Role para ver todos.`}
+                    className="text-[11px] text-text-secondary space-y-0.5 max-h-24 overflow-y-auto focus:outline-none focus:ring-1 focus:ring-status-warn/60 rounded"
+                  >
+                    {ofxMeta.warnings.map((w, i) => <p key={i}>{w}</p>)}
+                  </div>
+                </div>
+              )}
+
               {/* Batch controls */}
               <div className="bg-bg-secondary border border-border rounded-lg p-3">
                 <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-2">Aplicar em lote nas selecionadas</p>
                 <div className="flex gap-2 flex-wrap items-end">
-                  {accountNames.length > 0 && (
+                  {rowAccountNames.length > 0 && (
                     <div className="flex-1 min-w-[140px]">
-                      <p className="text-[10px] text-text-secondary mb-1">Conta</p>
-                      <select value={batchAccount} onChange={(e) => setBatchAccount(e.target.value)} className={inputClass}>
+                      <label htmlFor="batch-account" className="block text-[10px] text-text-secondary mb-1">Conta</label>
+                      <select id="batch-account" value={batchAccount} onChange={(e) => setBatchAccount(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
-                        {accountNames.map((a) => <option key={a} value={a}>{a}</option>)}
+                        {rowAccountNames.map((a) => <option key={a} value={a}>{a}</option>)}
                       </select>
                     </div>
                   )}
                   {categories.length > 0 && (
                     <div className="flex-1 min-w-[140px]">
-                      <p className="text-[10px] text-text-secondary mb-1">Categoria</p>
-                      <select value={batchCategory} onChange={(e) => setBatchCategory(e.target.value)} className={inputClass}>
+                      <label htmlFor="batch-category" className="block text-[10px] text-text-secondary mb-1">Categoria</label>
+                      <select id="batch-category" value={batchCategory} onChange={(e) => setBatchCategory(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
                         {rootCats.map((cat) => {
                           const subs = subCats(cat.id);
@@ -898,8 +1128,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   )}
                   {memberOptions.length > 0 && (
                     <div className="flex-1 min-w-[120px]">
-                      <p className="text-[10px] text-text-secondary mb-1">Membro</p>
-                      <select value={batchMember} onChange={(e) => setBatchMember(e.target.value)} className={inputClass}>
+                      <label htmlFor="batch-member" className="block text-[10px] text-text-secondary mb-1">Membro</label>
+                      <select id="batch-member" value={batchMember} onChange={(e) => setBatchMember(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
                         {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
@@ -907,8 +1137,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   )}
                   {projects.length > 0 && (
                     <div className="flex-1 min-w-[120px]">
-                      <p className="text-[10px] text-text-secondary mb-1">Projeto</p>
-                      <select value={batchProject} onChange={(e) => setBatchProject(e.target.value)} className={inputClass}>
+                      <label htmlFor="batch-project" className="block text-[10px] text-text-secondary mb-1">Projeto</label>
+                      <select id="batch-project" value={batchProject} onChange={(e) => setBatchProject(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
                         {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                       </select>
@@ -988,6 +1218,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                           {formatBRL(item.amount)}
                         </td>
                         <td className="p-1 text-center">
+                          {/* Extrato de conta corrente (OFX) já é lançamento
+                              efetivado — parcelar não faz sentido e criaria
+                              parcelas futuras sintéticas. O editor fica travado
+                              no modo OFX (só um "—" estático, sem popup). */}
+                          {importKind === 'ofx' ? (
+                            <span className="text-text-secondary" title="Parcelamento não se aplica a extrato de conta corrente">—</span>
+                          ) : (
                           <button
                             onClick={(e) => {
                               if (editingInstallment === i) {
@@ -1019,10 +1256,11 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                 : 'Unica'}
                             <ChevronDown size={10} className="inline ml-1" />
                           </button>
+                          )}
                         </td>
                         {/* Editable: account */}
                         <td className="p-1">
-                          {accountNames.length > 0 ? (
+                          {rowAccountNames.length > 0 ? (
                             <select
                               aria-label="Conta"
                               value={item.account}
@@ -1030,7 +1268,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               className={inputClass}
                             >
                               <option value="">—</option>
-                              {accountNames.map((a) => <option key={a} value={a}>{a}</option>)}
+                              {rowAccountNames.map((a) => <option key={a} value={a}>{a}</option>)}
                             </select>
                           ) : (
                             <span className="text-text-secondary">{item.account || '—'}</span>
@@ -1320,7 +1558,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
             </span>
             <div className="flex gap-2">
               <button
-                onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); setDeclaredTotal(null); }}
+                onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); setDeclaredTotal(null); setOfxMeta(null); }}
                 className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
               >
                 Voltar
