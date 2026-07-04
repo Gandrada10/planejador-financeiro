@@ -457,15 +457,20 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         }
       }
 
-      // Auto-detect billing month from most common month in transaction dates
+      // Auto-detect billing month from the MOST RECENT transaction date — o mês
+      // de pagamento nunca pode ficar anterior à última compra da fatura. (Antes
+      // usava o mês mais FREQUENTE, o que sugeria um mês passado quando a
+      // maioria das compras caía no mês anterior ao fechamento.)
       if (detectedCreditCard && parsed.length > 0) {
-        const monthCounts = new Map<string, number>();
-        for (const p of parsed) {
-          const my = getMonthYear(p.date);
-          monthCounts.set(my, (monthCounts.get(my) || 0) + 1);
+        // Ignora datas inválidas (Invalid Date) — senão getMonthYear devolveria
+        // "NaN-NaN" e envenenaria o seletor de mês de pagamento.
+        const validDates = parsed
+          .map((p) => p.date)
+          .filter((d): d is Date => d instanceof Date && !isNaN(d.getTime()));
+        if (validDates.length > 0) {
+          const latestDate = validDates.reduce((latest, d) => (d > latest ? d : latest), validDates[0]);
+          setBillingMonth(getMonthYear(latestDate));
         }
-        const detectedMonth = [...monthCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-        setBillingMonth(detectedMonth);
 
         // Auto-select credit card account if only one exists. O pré-preenchimento
         // de "Vence dia:" acontece no efeito acima (reage a billingCardAccount),

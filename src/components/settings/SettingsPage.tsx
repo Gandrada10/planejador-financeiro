@@ -5,6 +5,7 @@ import { NormalizeTitulars } from './NormalizeTitulars';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
+import { parseMoneyInput, applyMoneyMask } from '../../lib/utils';
 import type { Account } from '../../types';
 import {
   exportBackup,
@@ -48,13 +49,11 @@ export function SettingsPage() {
   const [accountName, setAccountName] = useState('');
   const [accountType, setAccountType] = useState<Account['type']>('corrente');
   const [accountBank, setAccountBank] = useState('');
-  const [accountClosingDay, setAccountClosingDay] = useState('');
   const [accountDueDay, setAccountDueDay] = useState('');
   const [accountCreditLimit, setAccountCreditLimit] = useState('');
 
   // Edit card fields
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [editClosingDay, setEditClosingDay] = useState('');
   const [editDueDay, setEditDueDay] = useState('');
   const [editCreditLimit, setEditCreditLimit] = useState('');
 
@@ -130,27 +129,31 @@ export function SettingsPage() {
       bank: accountBank.trim(),
     };
     if (accountType === 'cartao') {
-      if (accountClosingDay) data.closingDay = parseInt(accountClosingDay);
+      // Dia de fechamento não é mais cadastrado aqui (varia mês a mês; ajuste
+      // pontual vai no override do import). Só vencimento + limite.
       if (accountDueDay) data.dueDay = parseInt(accountDueDay);
-      if (accountCreditLimit) data.creditLimit = parseFloat(accountCreditLimit.replace(',', '.'));
+      // Campo mascarado na entrada; só grava quando há dígito (parseMoneyInput
+      // cai em 0 pra texto não numérico, então guardamos contra "-"/lixo).
+      if (/\d/.test(accountCreditLimit)) data.creditLimit = parseMoneyInput(accountCreditLimit);
     }
     await addAccount(data);
     setAccountName(''); setAccountType('corrente'); setAccountBank('');
-    setAccountClosingDay(''); setAccountDueDay(''); setAccountCreditLimit('');
+    setAccountDueDay(''); setAccountCreditLimit('');
   }
 
   function startEditCard(a: Account) {
     setEditingCardId(a.id);
-    setEditClosingDay(a.closingDay?.toString() || '');
     setEditDueDay(a.dueDay?.toString() || '');
-    setEditCreditLimit(a.creditLimit?.toString() || '');
+    // Pré-preenche já mascarado (pt-BR) para casar com a máscara ao-vivo do
+    // input — 5000 → "5.000,00". toFixed(2) dá as 2 casas que o mask espera.
+    setEditCreditLimit(a.creditLimit != null ? applyMoneyMask(a.creditLimit.toFixed(2)) : '');
   }
 
   async function saveEditCard(id: string) {
     await updateAccount(id, {
-      closingDay: editClosingDay ? parseInt(editClosingDay) : undefined,
       dueDay: editDueDay ? parseInt(editDueDay) : undefined,
-      creditLimit: editCreditLimit ? parseFloat(editCreditLimit.replace(',', '.')) : undefined,
+      // Campo mascarado; grava só com dígito (parseMoneyInput não sinaliza erro).
+      creditLimit: /\d/.test(editCreditLimit) ? parseMoneyInput(editCreditLimit) : undefined,
     });
     setEditingCardId(null);
   }
@@ -253,15 +256,13 @@ export function SettingsPage() {
           {accountType === 'cartao' && (
             <div className="pl-1 space-y-1">
               <div className="flex gap-2 flex-wrap">
-                <input type="number" value={accountClosingDay} onChange={(e) => setAccountClosingDay(e.target.value)}
-                  placeholder="Dia fechamento" min={1} max={28} className={`${inputClass} w-36`} />
                 <input type="number" value={accountDueDay} onChange={(e) => setAccountDueDay(e.target.value)}
                   placeholder="Dia vencimento" min={1} max={28} className={`${inputClass} w-36`} />
-                <input type="text" value={accountCreditLimit} onChange={(e) => setAccountCreditLimit(e.target.value)}
+                <input type="text" inputMode="decimal" value={accountCreditLimit} onChange={(e) => setAccountCreditLimit(applyMoneyMask(e.target.value))}
                   placeholder="Limite (R$)" className={`${inputClass} w-36`} />
               </div>
               <p className="text-[10px] text-text-secondary">
-                O <b className="text-text-primary">dia de vencimento</b> vira a data dos lançamentos ao importar a fatura — é o dia em que o gasto entra no fluxo de caixa do mês.
+                O <b className="text-text-primary">dia de vencimento</b> vira a data dos lançamentos ao importar a fatura — é o dia em que o gasto entra no fluxo de caixa do mês. Não pedimos o dia de fechamento aqui (ele varia mês a mês); ajuste pontual é feito no override durante o import.
               </p>
             </div>
           )}
@@ -277,31 +278,43 @@ export function SettingsPage() {
                     <span className="text-text-primary font-bold">{a.name}</span>
                     <span className="text-[10px] text-text-secondary uppercase">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
                     {a.bank && <span className="text-text-secondary">({a.bank})</span>}
-                    {a.type === 'cartao' && (a.closingDay || a.dueDay) && (
-                      <span className="text-[10px] text-text-secondary">Fech. dia {a.closingDay || '—'} | Venc. dia {a.dueDay || '—'}</span>
+                    {a.type === 'cartao' && (
+                      <span className={`text-[10px] ${a.dueDay ? 'text-text-secondary' : 'text-accent'}`}>
+                        Venc. dia {a.dueDay || 'não definido'}
+                      </span>
                     )}
                   </div>
                   <div className="flex items-center gap-1">
                     {a.type === 'cartao' && editingCardId !== a.id && (
-                      <button onClick={() => startEditCard(a)} className="text-text-secondary hover:text-accent p-1">
+                      <button
+                        onClick={() => startEditCard(a)}
+                        className="text-text-secondary hover:text-accent p-1"
+                        title="Editar dia de vencimento"
+                        aria-label={`Editar dia de vencimento de ${a.name}`}
+                      >
                         <Pencil size={13} />
                       </button>
                     )}
-                    <button onClick={() => deleteAccount(a.id)} className="text-text-secondary hover:text-accent-red p-1">
+                    <button
+                      onClick={() => deleteAccount(a.id)}
+                      className="text-text-secondary hover:text-accent-red p-1"
+                      title="Excluir conta"
+                      aria-label={`Excluir conta ${a.name}`}
+                    >
                       <Trash2 size={14} />
                     </button>
                   </div>
                 </div>
                 {editingCardId === a.id && (
                   <div className="flex gap-2 flex-wrap items-center pt-1 border-t border-border/40">
-                    <input type="number" value={editClosingDay} onChange={(e) => setEditClosingDay(e.target.value)}
-                      placeholder="Dia fech." min={1} max={28} className={`${inputClass} w-28 !py-1 !text-xs`} />
-                    <input type="number" value={editDueDay} onChange={(e) => setEditDueDay(e.target.value)}
+                    <label className="sr-only" htmlFor={`edit-due-day-${a.id}`}>Dia de vencimento</label>
+                    <input id={`edit-due-day-${a.id}`} type="number" value={editDueDay} onChange={(e) => setEditDueDay(e.target.value)}
                       placeholder="Dia venc." min={1} max={28} className={`${inputClass} w-28 !py-1 !text-xs`} />
-                    <input type="text" value={editCreditLimit} onChange={(e) => setEditCreditLimit(e.target.value)}
+                    <label className="sr-only" htmlFor={`edit-credit-limit-${a.id}`}>Limite (R$)</label>
+                    <input id={`edit-credit-limit-${a.id}`} type="text" inputMode="decimal" value={editCreditLimit} onChange={(e) => setEditCreditLimit(applyMoneyMask(e.target.value))}
                       placeholder="Limite (R$)" className={`${inputClass} w-32 !py-1 !text-xs`} />
-                    <button onClick={() => saveEditCard(a.id)} className="text-accent-green hover:opacity-80 p-1"><Check size={14} /></button>
-                    <button onClick={() => setEditingCardId(null)} className="text-text-secondary hover:text-accent-red p-1"><X size={14} /></button>
+                    <button onClick={() => saveEditCard(a.id)} className="text-accent-green hover:opacity-80 p-1" title="Salvar" aria-label={`Salvar edição de ${a.name}`}><Check size={14} /></button>
+                    <button onClick={() => setEditingCardId(null)} className="text-text-secondary hover:text-accent-red p-1" title="Cancelar" aria-label={`Cancelar edição de ${a.name}`}><X size={14} /></button>
                   </div>
                 )}
               </div>

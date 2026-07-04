@@ -5,7 +5,7 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { useCategories } from '../../hooks/useCategories';
 import { MonthSelector } from '../shared/MonthSelector';
 import { ReconciliationTable } from './ReconciliationTable';
-import { getMonthYear, formatBRL } from '../../lib/utils';
+import { getMonthYear, formatBRL, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
 
 export function ReconciliationPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
@@ -46,7 +46,11 @@ export function ReconciliationPage() {
 
   const totalCount = accountTransactions.length;
 
-  const parsedBalance = statementBalance ? parseFloat(statementBalance.replace(',', '.')) : null;
+  // Campo mascarado na entrada (applyMoneyMask), então parseMoneyInput recebe
+  // formato pt-BR canônico. GUARD: só parseia quando há dígito — parseMoneyInput
+  // cai em 0 pra texto não numérico, o que mostraria uma divergência falsa
+  // contra R$0. Sem dígito = sem saldo informado (null).
+  const parsedBalance = /\d/.test(statementBalance) ? parseMoneyInput(statementBalance) : null;
   const divergence = parsedBalance !== null && !isNaN(parsedBalance) ? parsedBalance - systemTotal : null;
 
   function handleToggleReconciled(id: string, reconciled: boolean) {
@@ -101,8 +105,9 @@ export function ReconciliationPage() {
           <label className="block text-[10px] text-text-secondary uppercase tracking-wider mb-1">Saldo do Extrato</label>
           <input
             type="text"
+            inputMode="decimal"
             value={statementBalance}
-            onChange={(e) => setStatementBalance(e.target.value)}
+            onChange={(e) => setStatementBalance(applyMoneyMask(e.target.value))}
             placeholder="Ex: -1234,56"
             className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
           />

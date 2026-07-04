@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { formatBRL, formatDate, tabNavigate, getMonthLabel } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
@@ -130,8 +130,16 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
     if (field === 'description' && editValue.trim()) {
       onUpdate(t.id, { description: editValue.trim() });
     } else if (field === 'amount') {
-      const val = parseFloat(editValue.replace(',', '.'));
-      if (!isNaN(val)) onUpdate(t.id, { amount: val });
+      // O campo de valor é mascarado na entrada (applyMoneyMask) e pré-preenchido
+      // já no formato pt-BR canônico ("-8.022,48"), então parseMoneyInput sempre
+      // recebe formato não-ambíguo. GUARD anti-lixo: parseMoneyInput cai em 0 pra
+      // texto não numérico e este commit dispara no onBlur (Tab entre células),
+      // então SEM dígito não commitamos — senão um typo tipo "," zeraria o valor
+      // real da transação no blur, sem aviso.
+      if (/\d/.test(editValue)) {
+        const val = parseMoneyInput(editValue);
+        onUpdate(t.id, { amount: val });
+      }
     } else if (field === 'date' && editValue) {
       const d = new Date(editValue + 'T12:00:00');
       if (!isNaN(d.getTime())) onUpdate(t.id, { date: d });
@@ -516,13 +524,18 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         <div
                           data-tab-cell
                           className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
-                          onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
+                          // Pré-preenche já no formato mascarado pt-BR: toFixed(2)
+                          // garante 2 casas p/ o applyMoneyMask (que lê os dígitos
+                          // como centavos) reconstruir certo — -8022.48 → "-8.022,48",
+                          // -90 → "-90,00" (não "-0,90").
+                          onClick={() => onUpdate && startEdit(t.id, 'amount', applyMoneyMask(t.amount.toFixed(2)))}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'amount' ? (
                             <input
                               autoFocus
+                              inputMode="decimal"
                               value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
+                              onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
                               className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
