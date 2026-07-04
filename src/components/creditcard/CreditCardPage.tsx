@@ -10,13 +10,13 @@ import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
-import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel, invoiceDateFor } from '../../lib/utils';
 
 export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
   const [selectedCardId, setSelectedCardId] = useState('');
 
-  const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled, batchUpdate } = useTransactions();
+  const { transactions, loading: loadingTx, updateTransaction, deleteTransaction, batchUpdateReconciled, batchUpdate, batchUpdateVarying } = useTransactions();
   const { categories, rules, addRule, deleteRule } = useCategories();
   const { cardAccounts, loading: loadingAccounts } = useAccounts();
   const { getCycleForCard, closeCycle, reopenCycle, registerPayment, ensureCycle, getClosedCycle } = useBillingCycles();
@@ -29,12 +29,16 @@ export function CreditCardPage() {
   const activeCardId = selectedCardId || cardAccounts[0]?.id || '';
   const activeCard = cardAccounts.find((a) => a.id === activeCardId);
 
-  // Get transactions for this card + month
+  // Get transactions for this card + month. Vínculo billingMonth-first: depois
+  // que a baixa move `date` para o mês do pagamento, `billingMonth` é o que
+  // mantém a transação ancorada na fatura de origem (senão a view da fatura de
+  // junho esvaziaria ao pagar em julho). Fallback pelo `date` p/ transações
+  // legadas sem `billingMonth`.
   const invoiceTransactions = useMemo(() => {
     if (!activeCard) return [];
     return transactions.filter((t) => {
       if (t.account !== activeCard.name) return false;
-      return getMonthYear(t.date) === monthYear;
+      return t.billingMonth ? t.billingMonth === monthYear : getMonthYear(t.date) === monthYear;
     });
   }, [transactions, activeCard, monthYear]);
 
@@ -67,9 +71,11 @@ export function CreditCardPage() {
     const prevMonth = getMonthYearOffset(monthYear, -1);
     const prevCycle = getCycleForCard(activeCard.id, prevMonth);
     if (!prevCycle) return 0;
-    // Sum previous month transactions
+    // Sum previous month transactions (billingMonth-first, ver invoiceTransactions)
     const prevTxs = transactions.filter(
-      (t) => t.account === activeCard.name && getMonthYear(t.date) === prevMonth
+      (t) =>
+        t.account === activeCard.name &&
+        (t.billingMonth ? t.billingMonth === prevMonth : getMonthYear(t.date) === prevMonth)
     );
     const prevTotal = prevTxs.reduce((s, t) => s + t.amount, 0);
     const prevPaid = prevCycle.paidAmount || 0;
@@ -104,7 +110,10 @@ export function CreditCardPage() {
     for (const t of transactions) {
       const account = cardAccounts.find((a) => a.name === t.account);
       if (!account) continue;
-      const my = getMonthYear(t.date);
+      // Agrupa pela fatura de origem (billingMonth), não pelo mês do `date` já
+      // movido pela baixa — senão um pagamento cross-month geraria uma fatura
+      // "aberta" fantasma no mês do pagamento.
+      const my = t.billingMonth ?? getMonthYear(t.date);
       const key = `${account.id}|${my}`;
       if (!combos.has(key)) {
         combos.set(key, { accountId: account.id, accountName: account.name, monthYear: my, total: 0 });
@@ -130,15 +139,68 @@ export function CreditCardPage() {
     if (cycleId) await closeCycle(cycleId);
   }
 
+  // Reabrir fatura restaura a `date` das transações da fatura para a
+  // provisória (vencimento previsto) — o pagamento que a baixa gravou nunca
+  // fica órfão. Vínculo: `billingMonth` quando presente (sobrevive mesmo que
+  // uma baixa anterior já tenha empurrado `date` para outro mês); senão cai no
+  // critério legado conta+mês-corrente (transações importadas antes deste
+  // campo existir). A restauração usa `provisionalDate` linha a linha quando
+  // gravado; sem ele (transação legada), recalcula a provisória a partir do
+  // dueDay ATUAL do cartão — aproximação aceitável, sem migração retroativa.
   async function handleReopenCycle() {
     if (currentCycle) await reopenCycle(currentCycle.id);
+    if (!activeCard) return;
+
+    const linked = transactions.filter(
+      (t) =>
+        t.account === activeCard.name &&
+        (t.billingMonth ? t.billingMonth === monthYear : getMonthYear(t.date) === monthYear)
+    );
+    if (linked.length === 0) return;
+
+    const withProvisional = linked.filter((t) => t.provisionalDate);
+    const withoutProvisional = linked.filter((t) => !t.provisionalDate);
+
+    if (withProvisional.length > 0) {
+      await batchUpdateVarying(
+        withProvisional.map((t) => ({ id: t.id, data: { date: t.provisionalDate as Date } }))
+      );
+    }
+    if (withoutProvisional.length > 0) {
+      const fallbackProvisional = invoiceDateFor(monthYear, activeCard.dueDay ?? null);
+      if (fallbackProvisional) {
+        await batchUpdate(withoutProvisional.map((t) => t.id), { date: fallbackProvisional });
+      }
+    }
   }
 
+  // Baixa da fatura: além de gravar no ciclo, sobrescreve a `date` (data de
+  // caixa) de TODAS as transações desta fatura (mesmo cartão + mesmo
+  // monthYear da view) com a data real do pagamento — sem isso a fatura fica
+  // "paga" no ciclo mas as transações continuam datadas no vencimento
+  // previsto, dessincronizadas do fluxo de caixa real. Grava/backfilla
+  // `billingMonth` no mesmo passo: é o vínculo que sobrevive mesmo que o
+  // pagamento caia num mês diferente do vencimento (mês da transação muda,
+  // vínculo com o ciclo não) — necessário para (a) uma segunda correção de
+  // data de pagamento na mesma fatura continuar achando as transações mesmo
+  // depois que `date` já saiu do mês de vencimento, e (b) o reopen (T3) achar
+  // as transações de volta depois.
   async function handleRegisterPayment(amount: number, date: Date) {
     if (!activeCard) return;
     const [y, m] = monthYear.split('-').map(Number);
     const cycleId = await ensureCycle(activeCard.id, new Date(y, m - 1, 1));
     if (cycleId) await registerPayment(cycleId, amount, date);
+
+    const invoiceTxIds = transactions
+      .filter(
+        (t) =>
+          t.account === activeCard.name &&
+          (t.billingMonth ? t.billingMonth === monthYear : getMonthYear(t.date) === monthYear)
+      )
+      .map((t) => t.id);
+    if (invoiceTxIds.length > 0) {
+      await batchUpdate(invoiceTxIds, { date, billingMonth: monthYear });
+    }
   }
 
   async function handleBatchMove(ids: string[], targetMonthYear: string) {
@@ -153,10 +215,10 @@ export function CreditCardPage() {
     }
   }
 
-  function checkClosedCycleForTx(t: { account: string; date: Date }): { cycleId: string; label: string } | null {
+  function checkClosedCycleForTx(t: { account: string; date: Date; billingMonth?: string | null }): { cycleId: string; label: string } | null {
     const account = cardAccounts.find((a) => a.name === t.account);
     if (!account) return null;
-    const closed = getClosedCycle(account.id, t.date);
+    const closed = getClosedCycle(account.id, t.date, t.billingMonth);
     if (!closed) return null;
     return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
   }

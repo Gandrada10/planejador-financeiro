@@ -173,7 +173,9 @@ export function TransactionsPage() {
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
     const account = accounts.find((a) => a.name === item.account && a.type === 'cartao');
     if (!account) return null;
-    const closed = getClosedCycle(account.id, item.date);
+    // billingMonth-first: após uma baixa cross-month o `date` já aponta pro mês
+    // do pagamento; o vínculo estável com a fatura é o billingMonth.
+    const closed = getClosedCycle(account.id, item.date, item.billingMonth);
     if (!closed) return null;
     return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
   }

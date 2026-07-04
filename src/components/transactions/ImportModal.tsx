@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX, CalendarClock } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -15,6 +15,7 @@ import {
   extractTrailingInstallment,
   normalizeDescriptionForDedup,
   fuzzyMatchMember,
+  invoiceDateFor,
 } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -74,25 +75,6 @@ function generateMonthOptions(): string[] {
     options.push(getMonthYear(d));
   }
   return options;
-}
-
-/**
- * Data de caixa de uma fatura de cartão (regime de CAIXA): o lançamento entra
- * no fluxo de caixa no DIA de vencimento/pagamento do MÊS de pagamento
- * escolhido no seletor. O mês vem do seletor e é a autoridade — governa o mês
- * do lançamento (inclusive quando a fatura fecha num mês e vence no seguinte).
- * O dia é travado dentro do mês (último dia como teto) para nunca vazar pro mês
- * seguinte por overflow. Sem dia de vencimento configurado, cai no dia 1º
- * (comportamento anterior, retrocompatível).
- */
-function invoiceDateFor(monthYear: string, dueDay: number | null | undefined): Date | null {
-  if (!monthYear) return null;
-  const [year, month] = monthYear.split('-').map(Number);
-  if (!year || !month) return null;
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const raw = dueDay && dueDay > 0 ? dueDay : 1;
-  const day = Math.min(Math.max(raw, 1), daysInMonth);
-  return new Date(year, month - 1, day, 12, 0, 0);
 }
 
 export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, addRule, onCreateRule, rules = [], projects = [] }: Props) {
@@ -158,6 +140,19 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // vencimento do mês de pagamento escolhido). Espelha exatamente o cálculo do
   // handleImport, para o texto de confirmação bater com o que será gravado.
   const resolvedInvoiceDate = isCreditCard ? invoiceDateFor(billingMonth, effectiveDueDay) : null;
+
+  // Pré-preenche "Vence dia:" com o dueDay do cartão RESOLVIDO da importação
+  // (billingCardAccount) assim que ele fica disponível — não só no caso de um
+  // único cartão cadastrado. billingCardAccount só se resolve corretamente com
+  // vários cartões depois que as linhas têm `account` = o cartão certo (auto
+  // no caso de 1 cartão; via "Aplicar em lote" no caso de vários) — o efeito
+  // reage a essa mudança. Só toca o campo enquanto o usuário não digitou nada,
+  // para nunca sobrescrever um override manual.
+  useEffect(() => {
+    if (billingDueDay.trim() !== '') return;
+    if (billingCardAccount?.dueDay) setBillingDueDay(String(billingCardAccount.dueDay));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingCardAccount?.dueDay]);
 
   // Rótulos do placar: cartão fala em Compras/Estornos; conta corrente (OFX, em
   // breve) fala em Saídas/Entradas — positivos ali são receitas, não estornos.
@@ -472,15 +467,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         const detectedMonth = [...monthCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
         setBillingMonth(detectedMonth);
 
-        // Auto-select credit card account if only one exists
+        // Auto-select credit card account if only one exists. O pré-preenchimento
+        // de "Vence dia:" acontece no efeito acima (reage a billingCardAccount),
+        // não aqui — cobre igualmente o caso de vários cartões.
         if (creditCardAccounts.length === 1) {
           const ccName = creditCardAccounts[0].name;
           parsed.forEach((p) => { p.account = ccName; });
-          // Pré-preenche o dia de vencimento com o cadastrado no cartão, para
-          // datar os lançamentos no vencimento (data de caixa) por padrão.
-          if (creditCardAccounts[0].dueDay) {
-            setBillingDueDay(String(creditCardAccounts[0].dueDay));
-          }
         }
       }
 
@@ -586,6 +578,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       const purchaseDate = rest.purchaseDate || rest.date;
       const invoiceDate = billingDate || rest.date;
 
+      // Vínculo ciclo↔transação (T1/T3): gravado só no fluxo de cartão
+      // (billingDate não-nulo). `billingMonth` é o mês da fatura a que a linha
+      // pertence — para a parcela corrente é o mês selecionado; para parcelas
+      // futuras é o mês projetado de cada uma. `provisionalDate` é a data de
+      // caixa no momento da importação (a "provisória"), preservada intacta
+      // quando a baixa da fatura sobrescrever `date` — é o que o reopen (T3)
+      // usa para restaurar. Fora do fluxo de cartão os dois ficam ausentes.
       if (installmentType === 'parcelada' && rest.totalInstallments && rest.totalInstallments > 1) {
         const amount = installmentAmount ?? rest.amount;
         const currentInst = rest.installmentNumber || 1;
@@ -599,6 +598,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           amount,
           installmentNumber: currentInst,
           totalInstallments: rest.totalInstallments,
+          billingMonth: billingDate ? billingMonth : rest.billingMonth,
+          provisionalDate: billingDate ? invoiceDate : rest.provisionalDate,
         });
 
         // Future installments
@@ -612,10 +613,18 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
             amount,
             installmentNumber: currentInst + offset,
             totalInstallments: rest.totalInstallments,
+            billingMonth: billingDate ? getMonthYear(futureDate) : rest.billingMonth,
+            provisionalDate: billingDate ? futureDate : rest.provisionalDate,
           });
         }
       } else {
-        toImport.push({ ...rest, date: invoiceDate, purchaseDate });
+        toImport.push({
+          ...rest,
+          date: invoiceDate,
+          purchaseDate,
+          billingMonth: billingDate ? billingMonth : rest.billingMonth,
+          provisionalDate: billingDate ? invoiceDate : rest.provisionalDate,
+        });
       }
     }
 
@@ -830,10 +839,25 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         As {selected.size} transações selecionadas entram no fluxo de caixa em{' '}
                         <b className="text-text-primary">{formatDate(resolvedInvoiceDate)}</b>{' '}
                         (pagamento da fatura de <b className="text-text-primary">{getMonthLabel(billingMonth)}</b>) — é o mês em que esses gastos contam.
-                        {!effectiveDueDay && ' Cadastre o dia de vencimento do cartão (ou informe acima) para datar no vencimento em vez do dia 1º.'}
                       </span>
                     </p>
                   )}
+                </div>
+              )}
+
+              {/* Fim do fallback silencioso pro dia 1º: quando não há dia de
+                  vencimento resolvido (nem cadastrado no cartão, nem digitado
+                  acima), avisa em destaque em vez de só um texto cinza discreto. */}
+              {isCreditCard && billingMonth && !effectiveDueDay && (
+                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-lg p-3 flex items-start gap-2.5">
+                  <AlertTriangle size={16} className="text-status-warn shrink-0 mt-0.5" />
+                  <div className="text-xs text-text-primary leading-relaxed">
+                    <p className="font-bold text-status-warn">Sem dia de vencimento — as transações cairão no dia 1º</p>
+                    <p className="text-text-secondary mt-0.5">
+                      Cadastre o vencimento deste cartão em <b className="text-text-primary">Configurações</b>, ou
+                      informe o dia acima em <b className="text-text-primary">"Vence dia:"</b>, antes de importar.
+                    </p>
+                  </div>
                 </div>
               )}
 

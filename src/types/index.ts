@@ -48,6 +48,24 @@ export interface Transaction {
   reconciled: boolean;
   reconciledAt: Date | null;
   createdAt: Date;
+  /**
+   * Vínculo estável com a fatura/ciclo do cartão ("YYYY-MM" do mês de
+   * pagamento no momento da importação). Sobrevive a mudanças de `date`
+   * causadas pela baixa da fatura (pagamento em mês diferente do vencimento)
+   * — é o que permite reabrir a fatura depois e achar de volta as transações
+   * dela. `null`/ausente para transações não-cartão ou importadas antes deste
+   * campo existir (sem migração retroativa).
+   */
+  billingMonth?: string | null;
+  /**
+   * Data de caixa provisória (vencimento previsto do cartão no mês da
+   * fatura), gravada no momento da importação. Preservada intacta quando a
+   * baixa sobrescreve `date` com a data real do pagamento; usada para
+   * restaurar `date` ao reabrir a fatura. `null`/ausente fora do fluxo de
+   * cartão ou em transações legadas — nesse caso o reopen recalcula a
+   * provisória a partir do `dueDay` atual do cartão.
+   */
+  provisionalDate?: Date | null;
 }
 
 export interface Account {

@@ -56,6 +56,8 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     reconciled: (data.reconciled as boolean) || false,
     reconciledAt: data.reconciledAt ? (data.reconciledAt as Timestamp).toDate() : null,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+    billingMonth: (data.billingMonth as string) || null,
+    provisionalDate: data.provisionalDate ? (data.provisionalDate as Timestamp).toDate() : null,
   };
 }
 
@@ -83,6 +85,8 @@ export function useTransactions() {
       titular: normalizeTitular(data.titular),
       date: Timestamp.fromDate(data.date),
       purchaseDate: data.purchaseDate ? Timestamp.fromDate(data.purchaseDate) : null,
+      billingMonth: data.billingMonth ?? null,
+      provisionalDate: data.provisionalDate ? Timestamp.fromDate(data.provisionalDate) : null,
       createdAt: Timestamp.now(),
     });
   }
@@ -95,6 +99,7 @@ export function useTransactions() {
     if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
+    if (data.provisionalDate) updates.provisionalDate = Timestamp.fromDate(data.provisionalDate);
     if (data.reconciledAt !== undefined) {
       updates.reconciledAt = data.reconciledAt ? Timestamp.fromDate(data.reconciledAt) : null;
     }
@@ -121,6 +126,8 @@ export function useTransactions() {
         titular: normalizeTitular(item.titular),
         date: Timestamp.fromDate(item.date),
         purchaseDate: item.purchaseDate ? Timestamp.fromDate(item.purchaseDate) : null,
+        billingMonth: item.billingMonth ?? null,
+        provisionalDate: item.provisionalDate ? Timestamp.fromDate(item.provisionalDate) : null,
         importBatch: batchId,
         createdAt: Timestamp.now(),
       });
@@ -144,6 +151,7 @@ export function useTransactions() {
     if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
+    if (data.provisionalDate) updates.provisionalDate = Timestamp.fromDate(data.provisionalDate);
     if (data.reconciledAt !== undefined) {
       updates.reconciledAt = data.reconciledAt ? Timestamp.fromDate(data.reconciledAt) : null;
     }
@@ -155,5 +163,30 @@ export function useTransactions() {
     });
   }
 
-  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate };
+  /**
+   * Como `batchUpdate`, mas cada id recebe seu PRÓPRIO objeto de dados (em vez
+   * de um único `data` aplicado a todos). Usado no reopen de fatura (T3): cada
+   * transação restaura sua própria `provisionalDate`, que pode variar
+   * linha-a-linha (parcelas futuras, edições manuais pós-importação).
+   */
+  async function batchUpdateVarying(updates: { id: string; data: Partial<Transaction> }[]) {
+    const uid = auth.currentUser?.uid;
+    if (!uid || updates.length === 0) return;
+    await commitInChunks(updates, (batch, u) => {
+      const upd: Record<string, unknown> = { ...u.data };
+      if (u.data.titular !== undefined) upd.titular = normalizeTitular(u.data.titular);
+      if (u.data.date) upd.date = Timestamp.fromDate(u.data.date);
+      if (u.data.purchaseDate) upd.purchaseDate = Timestamp.fromDate(u.data.purchaseDate);
+      if (u.data.provisionalDate) upd.provisionalDate = Timestamp.fromDate(u.data.provisionalDate);
+      if (u.data.reconciledAt !== undefined) {
+        upd.reconciledAt = u.data.reconciledAt ? Timestamp.fromDate(u.data.reconciledAt) : null;
+      }
+      delete upd.id;
+      delete upd.createdAt;
+      const ref = doc(db, 'users', uid, 'transactions', u.id);
+      batch.update(ref, upd);
+    });
+  }
+
+  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate, batchUpdateVarying };
 }

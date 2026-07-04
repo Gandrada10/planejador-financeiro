@@ -30,6 +30,30 @@ export function cn(...classes: (string | boolean | undefined | null)[]): string 
 }
 
 /**
+ * Data de caixa de uma fatura de cartão (regime de CAIXA): o lançamento entra
+ * no fluxo de caixa no DIA de vencimento/pagamento do MÊS de pagamento
+ * escolhido. O mês vem do parâmetro e é a autoridade — governa o mês do
+ * lançamento (inclusive quando a fatura fecha num mês e vence no seguinte).
+ * O dia é travado dentro do mês (último dia como teto) para nunca vazar pro
+ * mês seguinte por overflow. Sem dia de vencimento configurado, cai no dia 1º
+ * (fallback retrocompatível — ver aviso explícito no ImportModal quando isso
+ * acontece silenciosamente).
+ *
+ * SSOT compartilhado por ImportModal (importação) e CreditCardPage (reabrir
+ * fatura, que recalcula a provisória para transações legadas sem
+ * `provisionalDate` gravado).
+ */
+export function invoiceDateFor(monthYear: string, dueDay: number | null | undefined): Date | null {
+  if (!monthYear) return null;
+  const [year, month] = monthYear.split('-').map(Number);
+  if (!year || !month) return null;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const raw = dueDay && dueDay > 0 ? dueDay : 1;
+  const day = Math.min(Math.max(raw, 1), daysInMonth);
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+/**
  * Fuzzy-match a raw statement/import name to a registered member name.
  * Single source of truth shared by the AI import flow (ImportModal) and the
  * "Normalizar titulares" maintenance tool. Returns the canonical member name,
