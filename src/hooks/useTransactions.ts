@@ -21,6 +21,19 @@ function getUserTransactionsRef() {
   return collection(db, 'users', uid, 'transactions');
 }
 
+// Firestore limita um writeBatch a 500 operações. Commit em blocos de 400 para
+// que importações/edições grandes (fatura extensa, "selecionar tudo") não
+// estourem o limite e falhem por inteiro.
+const BATCH_CHUNK = 400;
+
+async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof writeBatch>, item: T) => void) {
+  for (let i = 0; i < items.length; i += BATCH_CHUNK) {
+    const batch = writeBatch(db);
+    for (const item of items.slice(i, i + BATCH_CHUNK)) apply(batch, item);
+    await batch.commit();
+  }
+}
+
 function docToTransaction(id: string, data: Record<string, unknown>): Transaction {
   return {
     id,
@@ -43,6 +56,8 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     reconciled: (data.reconciled as boolean) || false,
     reconciledAt: data.reconciledAt ? (data.reconciledAt as Timestamp).toDate() : null,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+    billingMonth: (data.billingMonth as string) || null,
+    provisionalDate: data.provisionalDate ? (data.provisionalDate as Timestamp).toDate() : null,
   };
 }
 
@@ -70,6 +85,8 @@ export function useTransactions() {
       titular: normalizeTitular(data.titular),
       date: Timestamp.fromDate(data.date),
       purchaseDate: data.purchaseDate ? Timestamp.fromDate(data.purchaseDate) : null,
+      billingMonth: data.billingMonth ?? null,
+      provisionalDate: data.provisionalDate ? Timestamp.fromDate(data.provisionalDate) : null,
       createdAt: Timestamp.now(),
     });
   }
@@ -82,6 +99,7 @@ export function useTransactions() {
     if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
+    if (data.provisionalDate) updates.provisionalDate = Timestamp.fromDate(data.provisionalDate);
     if (data.reconciledAt !== undefined) {
       updates.reconciledAt = data.reconciledAt ? Timestamp.fromDate(data.reconciledAt) : null;
     }
@@ -100,32 +118,30 @@ export function useTransactions() {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
     const ref = collection(db, 'users', uid, 'transactions');
-    const batch = writeBatch(db);
     const batchId = `import_${Date.now()}`;
-    for (const item of items) {
+    await commitInChunks(items, (batch, item) => {
       const newDoc = doc(ref);
       batch.set(newDoc, {
         ...item,
         titular: normalizeTitular(item.titular),
         date: Timestamp.fromDate(item.date),
         purchaseDate: item.purchaseDate ? Timestamp.fromDate(item.purchaseDate) : null,
+        billingMonth: item.billingMonth ?? null,
+        provisionalDate: item.provisionalDate ? Timestamp.fromDate(item.provisionalDate) : null,
         importBatch: batchId,
         createdAt: Timestamp.now(),
       });
-    }
-    await batch.commit();
+    });
   }
 
   async function batchUpdateReconciled(ids: string[], reconciled: boolean) {
     const uid = auth.currentUser?.uid;
     if (!uid || ids.length === 0) return;
-    const batch = writeBatch(db);
     const now = reconciled ? Timestamp.now() : null;
-    for (const id of ids) {
+    await commitInChunks(ids, (batch, id) => {
       const ref = doc(db, 'users', uid, 'transactions', id);
       batch.update(ref, { reconciled, reconciledAt: now });
-    }
-    await batch.commit();
+    });
   }
 
   async function batchUpdate(ids: string[], data: Partial<Transaction>) {
@@ -135,18 +151,42 @@ export function useTransactions() {
     if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
+    if (data.provisionalDate) updates.provisionalDate = Timestamp.fromDate(data.provisionalDate);
     if (data.reconciledAt !== undefined) {
       updates.reconciledAt = data.reconciledAt ? Timestamp.fromDate(data.reconciledAt) : null;
     }
     delete updates.id;
     delete updates.createdAt;
-    const batch = writeBatch(db);
-    for (const id of ids) {
+    await commitInChunks(ids, (batch, id) => {
       const ref = doc(db, 'users', uid, 'transactions', id);
       batch.update(ref, updates);
-    }
-    await batch.commit();
+    });
   }
 
-  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate };
+  /**
+   * Como `batchUpdate`, mas cada id recebe seu PRÓPRIO objeto de dados (em vez
+   * de um único `data` aplicado a todos). Usado no reopen de fatura (T3): cada
+   * transação restaura sua própria `provisionalDate`, que pode variar
+   * linha-a-linha (parcelas futuras, edições manuais pós-importação).
+   */
+  async function batchUpdateVarying(updates: { id: string; data: Partial<Transaction> }[]) {
+    const uid = auth.currentUser?.uid;
+    if (!uid || updates.length === 0) return;
+    await commitInChunks(updates, (batch, u) => {
+      const upd: Record<string, unknown> = { ...u.data };
+      if (u.data.titular !== undefined) upd.titular = normalizeTitular(u.data.titular);
+      if (u.data.date) upd.date = Timestamp.fromDate(u.data.date);
+      if (u.data.purchaseDate) upd.purchaseDate = Timestamp.fromDate(u.data.purchaseDate);
+      if (u.data.provisionalDate) upd.provisionalDate = Timestamp.fromDate(u.data.provisionalDate);
+      if (u.data.reconciledAt !== undefined) {
+        upd.reconciledAt = u.data.reconciledAt ? Timestamp.fromDate(u.data.reconciledAt) : null;
+      }
+      delete upd.id;
+      delete upd.createdAt;
+      const ref = doc(db, 'users', uid, 'transactions', u.id);
+      batch.update(ref, upd);
+    });
+  }
+
+  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate, batchUpdateVarying };
 }

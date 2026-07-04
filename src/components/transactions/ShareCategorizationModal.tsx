@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { X, Send, Copy, Check, MessageCircle } from 'lucide-react';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
 import { getMonthLabel } from '../../lib/utils';
-import type { Transaction, Category } from '../../types';
+import type { Transaction, Category, CategoryRule } from '../../types';
 
 interface Props {
   transactions: Transaction[];
@@ -10,9 +10,13 @@ interface Props {
   titulars: string[];
   monthFilter: string;
   onClose: () => void;
+  /** Regras do dono, usadas para pré-calcular as sugestões da sessão. */
+  rules?: CategoryRule[];
+  /** Base completa de transações (todos os meses) — fonte do histórico de sugestões. */
+  allTransactions?: Transaction[];
 }
 
-export function ShareCategorizationModal({ transactions, categories, titulars, monthFilter, onClose }: Props) {
+export function ShareCategorizationModal({ transactions, categories, titulars, monthFilter, onClose, rules = [], allTransactions }: Props) {
   const { createSession } = useCategorizationSessions();
   const [selectedTitular, setSelectedTitular] = useState(titulars[0] || '');
   const [generatedLink, setGeneratedLink] = useState('');
@@ -20,10 +24,21 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // O seletor oferece o nome CANÔNICO do membro (allTitulars prioriza
+  // familyMember). Uma transação guarda o membro em DOIS campos-texto:
+  // `familyMember` (canônico, casado no import) e `titular` (string crua do
+  // cartão/legado MDW). Comparar só com `titular` fazia o filtro "não achar"
+  // (bug reportado). Casa contra os dois, normalizando caixa/espaços — igual ao
+  // filtro da própria página de Transações.
+  const matchesTitular = (t: Transaction, sel: string) => {
+    if (!sel) return true;
+    const s = sel.trim().toLowerCase();
+    return (t.familyMember || '').trim().toLowerCase() === s ||
+      (t.titular || '').trim().toLowerCase() === s;
+  };
+
   const eligibleTx = useMemo(
-    () => transactions.filter(
-      (t) => !t.categoryId && (!selectedTitular || t.titular === selectedTitular)
-    ),
+    () => transactions.filter((t) => !t.categoryId && matchesTitular(t, selectedTitular)),
     [transactions, selectedTitular]
   );
   const uncategorizedCount = eligibleTx.length;
@@ -38,13 +53,15 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
     setError('');
     try {
       const filteredTx = selectedTitular
-        ? transactions.filter((t) => t.titular === selectedTitular)
+        ? transactions.filter((t) => matchesTitular(t, selectedTitular))
         : transactions;
       const token = await createSession(
         selectedTitular || 'Todos',
         filteredTx,
         categories,
-        { monthFilter }
+        { monthFilter },
+        rules,
+        allTransactions ?? transactions
       );
       const link = `${window.location.origin}/categorizar/${token}`;
       setGeneratedLink(link);
@@ -138,7 +155,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
                 <input
                   readOnly
                   value={generatedLink}
-                  className="flex-1 px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs font-mono truncate"
+                  className="flex-1 px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs truncate"
                 />
                 <button
                   onClick={handleCopy}

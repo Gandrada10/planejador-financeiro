@@ -1,0 +1,91 @@
+# Briefing de auditoria — para o time de agentes do MyPKA
+
+**Para:** os agentes de auditoria/análise do MyPKA · **De:** trabalho feito na branch `claude/financial-planner-audit-fnd1tv` · **Data:** 02/07/2026
+
+## Por que você está lendo isto
+Um assistente auditou o sistema `planejador-financeiro` e propôs um plano de melhorias. O trabalho dele termina neste pacote: **a revisão e a execução são deste time**. O processo tem duas etapas:
+
+1. **Revisão (esta etapa):** criticar o trabalho. Aqui sua tarefa **não é implementar** — é **pressionar, refutar e priorizar**. Um "está tudo certo" tem pouco valor; o valor está em achar onde o diagnóstico está errado, exagerado, ou desalinhado com o uso real da família.
+2. **Execução (após o dono aprovar o parecer):** este time implementa, usando `PLANO-DE-MELHORIAS.md` + `MELHORIAS-VISUAIS.md` como especificação e a ordem repriorizada pelo próprio parecer (ver seção final).
+
+## O pacote a revisar (tudo nesta branch)
+1. `docs/AUDITORIA-2026-07.md` — os achados, com referências `arquivo:linha`.
+2. `docs/PLANO-DE-MELHORIAS.md` — as mudanças propostas, o roadmap em 5 fases e as decisões da conversa (cadência mensal/anual, integração MyPKA, staging, estética).
+3. `docs/prototipos/categorizacao-mobile.html` — protótipo navegável da nova tela da esposa (demo isolada, dados fictícios). Abra no navegador.
+4. `docs/MELHORIAS-VISUAIS.md` — auditoria visual do app inteiro com o código proposto: tokens de design, receitas de componentes, tema de gráficos validado para daltonismo/contraste e melhorias tela a tela.
+5. **`docs/IMPLEMENTADO-NESTA-BRANCH.md` + o CÓDIGO** — a branch já contém uma **implementação-teste** das Fases 0 (parte segura) e 1 + fundação visual. Auditem o código rodando (preview do Cloudflare), não só o plano. `docs/SEGURANCA-FASE-0.md` traz o checklist de deploy das regras.
+
+Para revisar: `git fetch && git checkout claude/financial-planner-audit-fnd1tv`, depois leia os três arquivos e o código-fonte referenciado em `src/` e `functions/`.
+
+---
+
+## Onde o julgamento de vocês vale MAIS que o meu
+Estes pontos eu **não consegui verificar** deste ambiente. São o coração da auditoria de vocês:
+
+1. **As regras do Firestore em produção.** Não existe `firestore.rules` no repo. Toda a severidade do §2.1 depende do que está publicado no console do Firebase. **Verifiquem no console:** as regras estão restritivas (`request.auth.uid == uid`) ou no modo de teste permissivo? Isso muda a prioridade de "crítico" para "já resolvido" ou vice-versa.
+2. **Se a dupla contagem de pagamento de fatura (§1.4) realmente acontece.** Ela só ocorre se vocês importam o extrato da conta corrente *além* das faturas dos cartões. Se vocês só importam faturas, o problema não existe. **Confirmem o hábito real de importação.**
+3. **O que é código morto de verdade.** Projetos, Pluggy, MigrationMDW — a auditoria assume que estão abandonados. **Vocês usam algum deles?** Remover algo em uso seria um erro.
+4. **A precisão do parser de titular/parcelas nas faturas reais.** A auditoria leu a lógica; vocês têm as faturas de verdade. **A extração acerta os titulares dos cartões da família? As parcelas caem na fatura certa?**
+5. **Viabilidade da ponte MyPKA no ambiente de vocês.** A service account, a pasta `inbox/`, o cron do Consultor — encaixam na arquitetura atual do MyPKA? Que agente existente assume cada papel?
+
+---
+
+## Perguntas para pressionar, por área
+
+### Sobre os achados (AUDITORIA)
+- Algum achado está **factualmente errado** ao reler o código? (cite `arquivo:linha` que refute)
+- Algum está **certo, mas irrelevante** para o uso real da família? (rebaixar prioridade)
+- Falta algum problema que a auditoria **não pegou**? (bugs, riscos, fricções que vocês sentem no dia a dia)
+- A classificação de severidade (crítico/alto/médio) bate com o impacto real?
+
+### Sobre o plano da esposa (Fase 1 + protótipo)
+- O bug da sessão `applied` (§1.1) é mesmo o mais grave? A correção proposta cobre todos os cenários de uso irregular dela?
+- A sugestão pré-calculada de 1 toque de fato elimina fricção, ou adiciona um passo de "confirmar" que atrapalha quando a sugestão está errada?
+- O protótipo está na direção certa de estética e fluidez? O que **removeriam** dele (menos é mais)?
+- Falta algo para ela **amar** o processo que nem a auditoria nem o protótipo cobrem?
+
+### Sobre dados confiáveis (Fase 2)
+- O campo `kind` + detecção automática na importação é robusto, ou vai gerar classificações erradas que poluem os números de outro jeito?
+- O hash de dedupe idempotente (conta+data+valor+descrição+parcela) tem colisões ou falsos positivos plausíveis nas faturas reais?
+
+### Sobre a integração MyPKA (D2)
+- Faz sentido dividir app (interface) e MyPKA (back-office)? Ou o upload pelo app deveria continuar sendo o caminho principal?
+- Dois caminhos de escrita (app + MyPKA) valem a complexidade, dado que exigem idempotência como pré-requisito?
+- Qual agente existente do time assume Extrator e qual assume Consultor de Fechamento?
+
+### Sobre a interface visual (MELHORIAS-VISUAIS)
+- A troca da fonte monoespaçada pela sans do sistema + `tabular-nums` perde algo que o dono valorize (identidade "terminal")? Confirmar com ele antes de migrar.
+- Os tokens propostos cobrem todos os casos reais das telas, ou alguma tela precisa de um papel que não existe (ex.: terceira cor de status)?
+- A estratégia de migração incremental (§6) é segura, ou há acoplamentos de estilo que quebram no meio do caminho?
+
+### Sobre o código-teste já implementado (IMPLEMENTADO-NESTA-BRANCH)
+- Rodem o preview e testem o fluxo real da esposa: gerar link → categorizar parcialmente → o dono abre o app → as parciais foram aplicadas E a sessão continua ativa? Categorizar o resto depois → foi aplicado? (é o FIX do bug crítico).
+- A sugestão de 1 toque acerta nas faturas reais? A grade de "frequentes" faz sentido?
+- As `firestore.rules` propostas não bloqueiam nenhum fluxo real (dono lê/grava; esposa categoriza; token expirado é barrado)? **Testar em staging antes de publicar.**
+- Alguma regressão visual causada pela troca de tokens em telas que não revisamos aqui?
+
+### Sobre a ordem
+- As fases estão na ordem certa de valor/risco? O que vocês fariam **primeiro** de tudo?
+
+---
+
+## Como devolver a crítica
+Sugestão de formato para o resultado da auditoria de vocês (a incorporar ao plano antes da execução):
+- Um arquivo `docs/REVISAO-RESULTADOS.md` na mesma branch (ou comentários no PR), organizado por: **Concordo / Discordo / Falta / Reprioriza**.
+- Para cada discordância, **a evidência** (`arquivo:linha`, um print da regra do Firestore, ou o hábito real que contradiz a premissa).
+- Uma **ordem de implementação recomendada por vocês**, que pode diferir das fases propostas.
+
+Sejam adversariais. O melhor resultado desta revisão é uma lista de coisas que o plano errou — não uma validação.
+
+---
+
+## Depois da revisão: a execução é de vocês
+
+Aprovado o parecer pelo dono, este time assume a implementação. Guia de execução:
+
+- **Especificação:** `PLANO-DE-MELHORIAS.md` (o quê e por quê, por fase) + `MELHORIAS-VISUAIS.md` (tokens, componentes e tema de gráficos em código pronto) + `AUDITORIA-2026-07.md` (o apêndice de bugs por `arquivo:linha` funciona como checklist de correção).
+- **Ordem:** a que o parecer de vocês definir — as 5 fases propostas são o default, não um dogma.
+- **Fluxo de trabalho:** uma branch por fase a partir do `master` (após o merge deste pacote); cada push gera um preview deployment no Cloudflare Pages para o casal validar com uso real antes do merge. Nunca desenvolver direto no `master`.
+- **Critério de pronto por fase:** os itens da fase implementados, `tsc` e lint limpos, e o comportamento validado no preview (Fase 1 exige teste real da esposa no celular).
+- **Restrições permanentes:** dados financeiros reais nunca entram no repositório; a pasta `inbox/` de faturas vive fora do repo; segredos (chave Anthropic, service account) só em ambiente local/secrets do Cloudflare, nunca em código ou backup.
+- **Protótipo como referência:** `prototipos/categorizacao-mobile.html` é a direção visual e de interação da Fase 1 — a implementação real deve reproduzir a sensação dele (1 toque, desfazer, progresso, celebração), não necessariamente o código.

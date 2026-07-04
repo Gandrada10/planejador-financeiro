@@ -90,7 +90,7 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
         return (
           <td
             key={m}
-            className="px-2 py-1 text-right font-mono tabular-nums whitespace-nowrap align-top min-w-[100px]"
+            className="px-2 py-1 text-right tabular-nums whitespace-nowrap align-top min-w-[100px]"
             style={heatStyle}
           >
             {val !== 0 ? (
@@ -105,12 +105,12 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
         );
       })}
 
-      <td className="px-2 py-1 text-right font-mono tabular-nums whitespace-nowrap min-w-[100px] bg-bg-secondary/20">
+      <td className="px-2 py-1 text-right tabular-nums whitespace-nowrap min-w-[100px] bg-bg-secondary/20">
         {average !== 0
           ? <span className={`text-xs ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>
           : <span className="text-[10px] text-text-secondary/40">—</span>}
       </td>
-      <td className="px-2 py-1 text-right font-bold font-mono tabular-nums whitespace-nowrap min-w-[110px] bg-bg-secondary/30">
+      <td className="px-2 py-1 text-right font-bold tabular-nums whitespace-nowrap min-w-[110px] bg-bg-secondary/30">
         {total !== 0
           ? <span className={`text-xs ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>
           : <span className="text-[10px] text-text-secondary/40">—</span>}
@@ -133,15 +133,15 @@ function SectionHeaderRow({ label, months, monthTotals, colorClass }: {
       {months.map((m) => {
         const val = monthTotals[m] ?? 0;
         return (
-          <td key={m} className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap">
+          <td key={m} className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap">
             {val !== 0 ? <span className={`text-xs ${colorClass}`}>{formatBRL(val)}</span> : <span className="text-[10px] text-text-secondary/40">—</span>}
           </td>
         );
       })}
-      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/20">
+      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/20">
         {average !== 0 && <span className={`text-xs ${colorClass}`}>{formatBRL(average)}</span>}
       </td>
-      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/40">
+      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/40">
         {total !== 0 && <span className={`text-xs ${colorClass}`}>{formatBRL(total)}</span>}
       </td>
     </tr>
@@ -164,15 +164,15 @@ function ResultadoRow({ months, receitas, despesas }: {
       {months.map((m) => {
         const val = resultados[m] ?? 0;
         return (
-          <td key={m} className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap">
+          <td key={m} className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap">
             {val !== 0 ? <span className={`text-xs ${val >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(val)}</span> : <span className="text-[10px] text-text-secondary/40">—</span>}
           </td>
         );
       })}
-      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/20">
+      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/20">
         {average !== 0 && <span className={`text-xs ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>}
       </td>
-      <td className="px-2 py-1.5 text-right font-bold font-mono tabular-nums whitespace-nowrap bg-bg-secondary/40">
+      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/40">
         {total !== 0 && <span className={`text-xs ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>}
       </td>
     </tr>

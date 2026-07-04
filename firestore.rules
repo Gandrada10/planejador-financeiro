@@ -1,0 +1,109 @@
+rules_version = '2';
+
+// Regras de segurança do Firestore — Fase 0 da auditoria (rev. GREEN 2026-07-03,
+// cobre as 4 condições do parecer YELLOW→GREEN + validações do snapshot de produção).
+// Deploy: `firebase deploy --only firestore:rules` (precisa do firebase.json).
+// ANTES de qualquer deploy: rodar a suite do emulador em `tests/firestore-rules/`
+// (zero contato com produção — ver README de lá).
+// Objetivo: dados privados por usuário; sessão de categorização acessível por
+// quem tem o token (capability URL), mas com escrita pública restrita a poucos
+// campos VALIDADOS e leitura das subcoleções bloqueada após a expiração.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // Só os campos em `allowed` foram alterados nesta escrita.
+    function changedOnly(allowed) {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(allowed);
+    }
+
+    function session(token) {
+      return get(/databases/$(database)/documents/categorizationSessions/$(token)).data;
+    }
+
+    function isSessionOwner(token) {
+      return isOwner(session(token).userId);
+    }
+
+    function sessionNotExpired(token) {
+      return request.time < session(token).expiresAt;
+    }
+
+    // ---- Dados privados do usuário: só o próprio dono ----
+    match /users/{uid}/{document=**} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // ---- Sessões de categorização (acesso público por token) ----
+    match /categorizationSessions/{token} {
+      // `get` fica aberto DE PROPÓSITO: a página pública precisa ler o doc da
+      // sessão mesmo expirado para mostrar "este link expirou" (o doc só tem
+      // metadados; os dados financeiros vivem nas subcoleções, que TÊM check
+      // de expiração abaixo). `list` só o dono: as rules avaliam a query, então
+      // só passa um list cujo filtro garanta userId == request.auth.uid —
+      // bloqueia a enumeração de tokens por conta autenticada qualquer.
+      allow get: if true;
+      allow list: if request.auth != null && resource.data.userId == request.auth.uid;
+
+      // Criação: só autenticado E em nome de quem cria (bloqueia forja de
+      // sessão apontando para o userId de outra conta). Os campos dos quais as
+      // regras abaixo dependem precisam nascer com o tipo certo.
+      allow create: if isOwner(request.resource.data.userId)
+        && request.resource.data.expiresAt is timestamp
+        && request.resource.data.transactionIds is list;
+      allow delete: if isOwner(resource.data.userId);
+
+      // Dono edita à vontade — é por AQUI que o apply renova `expiresAt`
+      // (lastActivityAt + 48h) e o reopenSession dá +48h: renovação de prazo
+      // é escrita do DONO, nunca do público. Público (quem tem o link) só
+      // mexe nos contadores, só enquanto o link é válido, e com tipo/faixa
+      // validados — inclusive via increment() atômico: as rules avaliam
+      // request.resource.data já com o field transform aplicado, então o
+      // VALOR RESULTANTE do increment precisa cair no range. `expiresAt`
+      // fica FORA da allow-list pública → imutável (ninguém estende o próprio
+      // prazo com o token); idem `status`, `applied*` e `transactionIds`.
+      allow update: if isOwner(resource.data.userId)
+        || (changedOnly(['categorizedCount', 'lastActivityAt'])
+            && request.time < resource.data.expiresAt
+            && request.resource.data.categorizedCount is int
+            && request.resource.data.categorizedCount >= 0
+            && request.resource.data.categorizedCount <= resource.data.transactionIds.size()
+            && request.resource.data.lastActivityAt is timestamp);
+
+      // Categorias copiadas para a sessão: leitura pública só enquanto o link
+      // vale (o dono lê sempre); escrita só do dono da sessão-pai.
+      match /categories/{catId} {
+        allow read: if isSessionOwner(token) || sessionNotExpired(token);
+        allow write: if isSessionOwner(token);
+      }
+
+      // Transações da sessão: leitura pública só enquanto o link vale; o dono
+      // lê SEMPRE (o apply do delta pode acontecer depois da expiração —
+      // applyAllPendingSessions varre sessões 'active' já expiradas).
+      // O dono cria/apaga/edita tudo (create/delete presos ao dono da
+      // sessão-pai — conta estranha não forja transação em sessão alheia).
+      // O público só grava categoryId/notes validados e applied=false:
+      // categorizar/desfazer sempre escreve applied:false no app; applied=true
+      // é exclusivo do apply do dono — quem tem o token não consegue fazer o
+      // apply pular itens. O dono também marca `applied:true, orphaned:true`
+      // nas transações reais já excluídas (C3 — consome o delta órfão);
+      // `orphaned` fica FORA da allow-list pública.
+      match /transactions/{txId} {
+        allow read: if isSessionOwner(token) || sessionNotExpired(token);
+        allow create, delete: if isSessionOwner(token);
+        allow update: if isSessionOwner(token)
+          || (changedOnly(['categoryId', 'notes', 'applied'])
+              && sessionNotExpired(token)
+              && (request.resource.data.categoryId == null
+                  || (request.resource.data.categoryId is string
+                      && request.resource.data.categoryId.size() <= 128))
+              && request.resource.data.notes is string
+              && request.resource.data.notes.size() <= 500
+              && request.resource.data.applied == false);
+      }
+    }
+  }
+}

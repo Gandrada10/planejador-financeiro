@@ -300,7 +300,7 @@ export function ExpenseGoalsTab() {
           />
         </div>
         <span
-          className={`text-[10px] w-12 text-right font-mono ${
+          className={`text-[10px] w-12 text-right tnum ${
             isOver ? 'text-accent-red font-bold' : 'text-text-secondary'
           }`}
         >
@@ -377,7 +377,7 @@ export function ExpenseGoalsTab() {
           ) : (
             <button
               onClick={() => startEdit(row.budgetId, row.meta)}
-              className="text-xs font-mono text-text-primary hover:text-accent transition-colors"
+              className="text-xs tnum text-text-primary hover:text-accent transition-colors"
               title="Clique para editar"
             >
               {formatBRL(row.meta)}
@@ -388,7 +388,7 @@ export function ExpenseGoalsTab() {
         {/* Realizado */}
         <div className="text-right">
           <span
-            className={`text-xs font-mono ${
+            className={`text-xs tnum ${
               isOver ? 'text-accent-red font-bold' : 'text-text-primary'
             }`}
           >
@@ -398,7 +398,7 @@ export function ExpenseGoalsTab() {
 
         {/* A realizar */}
         <div className="text-right">
-          <span className="text-xs font-mono text-text-secondary">
+          <span className="text-xs tnum text-text-secondary">
             {formatBRL(row.aRealizar)}
           </span>
         </div>
@@ -406,7 +406,7 @@ export function ExpenseGoalsTab() {
         {/* Excedente */}
         <div className="text-right">
           <span
-            className={`text-xs font-mono ${
+            className={`text-xs tnum ${
               row.excedente > 0 ? 'text-accent-red font-bold' : 'text-text-secondary'
             }`}
           >
@@ -459,26 +459,26 @@ export function ExpenseGoalsTab() {
             <div className="space-y-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-text-secondary">Total das metas</span>
-                <span className="text-text-primary font-bold font-mono">
+                <span className="text-text-primary font-bold tnum">
                   {formatBRL(grandTotalMeta)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-secondary">Total confirmado</span>
-                <span className="text-accent-red font-bold font-mono">
+                <span className="text-accent-red font-bold tnum">
                   -{formatBRL(grandTotalRealizado)}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-text-secondary">Total a realizar</span>
-                <span className="text-text-primary font-mono">
+                <span className="text-text-primary tnum">
                   {formatBRL(grandTotalARealizar)}
                 </span>
               </div>
               {grandTotalExcedente > 0 && (
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Excedente</span>
-                  <span className="text-accent-red font-bold font-mono">
+                  <span className="text-accent-red font-bold tnum">
                     {formatBRL(grandTotalExcedente)}
                   </span>
                 </div>
@@ -500,19 +500,19 @@ export function ExpenseGoalsTab() {
               <div className="space-y-2 text-xs">
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Meta definida</span>
-                  <span className="text-text-primary font-mono">
+                  <span className="text-text-primary tnum">
                     {formatBRL(grandTotalMeta)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Total confirmado</span>
-                  <span className="text-accent-red font-mono">
+                  <span className="text-accent-red tnum">
                     -{formatBRL(grandTotalRealizado)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Total a realizar</span>
-                  <span className="text-text-primary font-mono">
+                  <span className="text-text-primary tnum">
                     {formatBRL(grandTotalARealizar)}
                   </span>
                 </div>
@@ -590,13 +590,13 @@ export function ExpenseGoalsTab() {
                     )}
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-mono font-bold text-text-primary">
+                    <span className="text-xs tnum font-bold text-text-primary">
                       {formatBRL(grandTotalMeta)}
                     </span>
                   </div>
                   <div className="text-right">
                     <span
-                      className={`text-xs font-mono font-bold ${
+                      className={`text-xs tnum font-bold ${
                         grandTotalRealizado > grandTotalMeta
                           ? 'text-accent-red'
                           : 'text-text-primary'
@@ -606,13 +606,13 @@ export function ExpenseGoalsTab() {
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs font-mono text-text-secondary">
+                    <span className="text-xs tnum text-text-secondary">
                       {formatBRL(grandTotalARealizar)}
                     </span>
                   </div>
                   <div className="text-right">
                     <span
-                      className={`text-xs font-mono ${
+                      className={`text-xs tnum ${
                         grandTotalExcedente > 0
                           ? 'text-accent-red font-bold'
                           : 'text-text-secondary'

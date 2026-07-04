@@ -1,24 +1,95 @@
 @import "tailwindcss";
 
 @theme {
-  --color-bg-primary: #0a0a0a;
-  --color-bg-secondary: #111111;
-  --color-bg-card: #1a1a1a;
-  --color-border: #333333;
-  --color-accent: #f59e0b;
-  --color-accent-green: #22c55e;
-  --color-accent-red: #ef4444;
-  --color-text-primary: #e5e5e5;
-  --color-text-secondary: #a1a1aa;
-  --font-mono: 'JetBrains Mono', 'Fira Code', 'Cascadia Code', monospace;
+  /* ---------------------------------------------------------------------
+   * Sistema visual 2.0 — direção Apple/Linear: superfícies em camadas,
+   * uma única cor de ação (menta), tipografia do sistema, cantos suaves.
+   *
+   * Os NOMES de token abaixo são mantidos iguais aos da v1 para que todas
+   * as classes já usadas nos componentes (bg-bg-primary, text-accent,
+   * text-accent-red, border-border, ...) continuem funcionando — só os
+   * VALORES mudaram. Tokens novos (elevated, ink-3, positive/negative,
+   * status, radius, escala de texto) foram adicionados ao final.
+   * ------------------------------------------------------------------- */
+
+  /* Superfícies (v1 — nomes preservados, valores atualizados) */
+  --color-bg-primary: #0d0d0f;      /* plano da página */
+  --color-bg-secondary: #121212;    /* áreas de conteúdo / header */
+  --color-bg-card: #1b1b1e;         /* cartões */
+  --color-border: #2a2a2e;          /* hairline */
+
+  /* Ação e semântica (v1 — nomes preservados) */
+  --color-accent: #5ee0a0;          /* menta — única cor de marca/ação */
+  --color-accent-green: #5ee0a0;    /* positivo/receita */
+  --color-accent-red: #ff6e5f;      /* negativo/despesa/destrutivo (coral) */
+
+  /* Texto (v1 — nomes preservados) */
+  --color-text-primary: #f5f4f2;
+  --color-text-secondary: #a3a29e;
+
+  /* --- Tokens novos --- */
+
+  /* Superfície elevada (hover, inputs, chips) e 3º nível de texto */
+  --color-elevated: #232327;
+  /* ink-3: mudo (labels uppercase, eixos, legendas 11px). Valor calibrado
+   * para WCAG AA (≥4,5:1) em TODOS os fundos em que é usado:
+   * 5,92:1 no bg-primary · 5,71:1 no bg-secondary · 5,24:1 no bg-card ·
+   * 4,77:1 no elevated — e segue mais fraco que text-secondary (#a3a29e,
+   * 6,13–7,60:1), preservando a hierarquia ink-1 > ink-2 > ink-3.
+   * (Era #6e6d69 = 3,02–3,75:1, reprovado no gate da Vera.) */
+  --color-ink-3: #8f8e89;
+
+  /* Menta translúcida para bordas/realces sutis */
+  --color-accent-dim: rgba(94, 224, 160, 0.32);
+
+  /* Semântica de dinheiro (aliases explícitos) */
+  --color-positive: #5ee0a0;
+  --color-negative: #ff6e5f;
+
+  /* Status de metas (semáforo — reservado; nunca vira cor de série de gráfico) */
+  --color-status-ok: #5ee0a0;
+  --color-status-warn: #fab219;
+  --color-status-over: #ff6e5f;
+
+  /* Raios (2 tamanhos) */
+  --radius-card: 16px;
+  --radius-control: 12px;
+
+  /* Tipografia: sans do sistema (a mesma do iPhone/Mac) — sem fonte externa.
+   * --font-mono é mantido pelo nome mas aponta para a sans, neutralizando
+   * qualquer classe font-mono remanescente (a v1 nunca carregou a mono). */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+  --font-mono: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+
+  /* Escala tipográfica (fonte única de tamanhos) */
+  --text-caption: 11px;   /* labels uppercase, eixos */
+  --text-body: 13px;      /* corpo padrão, tabelas */
+  --text-title: 15px;     /* títulos de card */
+  --text-kpi: 28px;       /* número-herói */
 }
 
 body {
   margin: 0;
   background-color: var(--color-bg-primary);
   color: var(--color-text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Números alinhados em colunas — assume o papel que a fonte mono tinha */
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* Foco visível (acessibilidade — WCAG 1.4.11).
+ * Menta SÓLIDA: 11,69:1 no bg-primary, 9,43:1 até no fundo mais claro
+ * (elevated) — o accent-dim translúcido compunha 2,15–2,19:1, reprovado.
+ * O !important é deliberado: dezenas de inputs legados usam a utility
+ * `focus:outline-none`, que mataria o anel; esta regra global garante o
+ * indicador em TODO elemento focado via teclado (e em campos de texto),
+ * sem precisar tocar componente por componente. Não remover. */
+:focus-visible {
+  outline: 2px solid var(--color-accent) !important;
+  outline-offset: 2px;
 }
 
 ::-webkit-scrollbar {
@@ -37,4 +108,13 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+/* Movimento contido: respeita quem pediu menos animação */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

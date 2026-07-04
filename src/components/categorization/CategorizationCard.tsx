@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, MessageSquare, Search, X } from 'lucide-react';
+import { Search, X, MessageSquare, Sparkles, Check } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
@@ -7,304 +7,454 @@ import { CategoryIcon } from '../shared/CategoryIcon';
 interface Props {
   transaction: CategorizationTransaction;
   categories: Category[];
+  quickCategoryIds: string[];
   onCategorize: (categoryId: string, notes: string) => Promise<void>;
-  onSkip: () => void;
-  onBack?: () => void;
   remaining: number;
+  /** Eleva o estado "salvando" (exit ~220ms + write) para o pai, que desabilita
+   *  a barra de navegação e evita a corrida de double-tap (tocar categoria +
+   *  Pular na mesma janela). */
+  onBusyChange?: (busy: boolean) => void;
 }
 
 function removeAccents(str: string) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
-// Silver color for secondary text on this page (brighter than the global #737373)
-const silver = 'text-[#a8a8a8]';
-const silverPlaceholder = 'placeholder:text-[#a8a8a8]/50';
+function haptic() {
+  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) navigator.vibrate(12);
+}
 
-export function CategorizationCard({ transaction, categories, onCategorize, onSkip, onBack, remaining }: Props) {
-  const [notes, setNotes] = useState('');
+// C2: rede móvel real pendura — sem um teto de tempo o card ficaria invisível
+// e os botões desabilitados para sempre. Se o write do Firestore não resolver
+// nesse prazo, tratamos como falha e devolvemos o controle (o SDK segue
+// tentando em background; o retry é idempotente).
+const SAVE_TIMEOUT_MS = 12000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('save-timeout')), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
+export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, remaining, onBusyChange }: Props) {
+  // Semeado com a observação já salva: ao revisitar um item categorizado (ou
+  // reabrir o mesmo), o texto digitado antes não se perde. O card remonta por
+  // key={tx.id} no pai, então isso reinicializa corretamente a cada lançamento.
+  const [notes, setNotes] = useState(transaction.notes ?? '');
   const [showNotes, setShowNotes] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState('');
   const [exiting, setExiting] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [lastCategoryId, setLastCategoryId] = useState<string | null>(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  // P4: dimensões da área REALMENTE visível (VisualViewport) enquanto o
+  // bottom-sheet está aberto — usado para ancorar o sheet acima do teclado.
+  const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-  const listRef = useRef<HTMLDivElement>(null);
-  const highlightedRef = useRef<HTMLButtonElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const sheetTriggerRef = useRef<HTMLButtonElement>(null);
 
-  const expenseCategories = useMemo(
+  const isIncome = transaction.amount >= 0;
+
+  // Categorias válidas para o sinal do valor (receita vs despesa)
+  const eligible = useMemo(
     () => filterCategoriesByAmount(categories, transaction.amount),
     [categories, transaction.amount]
   );
+  const byId = useMemo(() => new Map(eligible.map((c) => [c.id, c])), [eligible]);
+  const parentName = useCallback(
+    (c: Category) => (c.parentId ? categories.find((p) => p.id === c.parentId)?.name : undefined),
+    [categories]
+  );
 
-  // Group by parent/child hierarchy
-  const groupedCategories = useMemo(() => {
-    const collator = new Intl.Collator('pt-BR', { sensitivity: 'base' });
-    const roots = expenseCategories.filter((c) => !c.parentId).sort((a, b) => collator.compare(a.name, b.name));
-    const children = expenseCategories.filter((c) => c.parentId);
+  // Sugestão pré-calculada (validada para o sinal do valor)
+  const suggestion = transaction.suggestedCategoryId ? byId.get(transaction.suggestedCategoryId) : undefined;
 
-    const groups: { parent: Category; subs: Category[] }[] = [];
-    const standalone: Category[] = [];
+  // Item já categorizado (revisão): a categoria escolhida, para destacar no card
+  // e nos controles. Fallback em `categories` caso não esteja no conjunto
+  // elegível ao sinal (defensivo — normalmente estará).
+  const selectedId = transaction.categoryId;
+  const currentCategory = selectedId
+    ? (byId.get(selectedId) ?? categories.find((c) => c.id === selectedId))
+    : undefined;
 
-    for (const root of roots) {
-      const subs = children.filter((c) => c.parentId === root.id).sort((a, b) => collator.compare(a.name, b.name));
-      if (subs.length > 0) {
-        groups.push({ parent: root, subs });
-      } else {
-        standalone.push(root);
+  // Grade de acesso rápido: top categorias do histórico, válidas para o sinal,
+  // excluindo a sugestão; completa até 6 com as demais em ordem alfabética.
+  const quick = useMemo(() => {
+    const picked: Category[] = [];
+    const seen = new Set<string>();
+    if (suggestion) seen.add(suggestion.id);
+    for (const id of quickCategoryIds) {
+      const c = byId.get(id);
+      if (c && !seen.has(c.id)) { picked.push(c); seen.add(c.id); }
+      if (picked.length >= 6) break;
+    }
+    if (picked.length < 6) {
+      const rest = [...eligible]
+        .filter((c) => !seen.has(c.id))
+        .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+      for (const c of rest) {
+        picked.push(c); seen.add(c.id);
+        if (picked.length >= 6) break;
       }
     }
+    return picked;
+  }, [quickCategoryIds, byId, eligible, suggestion]);
 
-    const groupedChildIds = new Set(groups.flatMap((g) => g.subs.map((s) => s.id)));
-    const orphans = children.filter((c) => !groupedChildIds.has(c.id));
-    standalone.push(...orphans);
-
-    return { groups, standalone };
-  }, [expenseCategories]);
-
-  // Filter by search
-  const filteredGroups = useMemo(() => {
-    if (!search.trim()) return groupedCategories;
-    const term = removeAccents(search.toLowerCase());
-    const match = (c: Category) => removeAccents(c.name.toLowerCase()).includes(term);
-
-    const groups = groupedCategories.groups
-      .map((g) => {
-        const parentMatch = match(g.parent);
-        const filteredSubs = g.subs.filter(match);
-        if (parentMatch) return g;
-        if (filteredSubs.length > 0) return { parent: g.parent, subs: filteredSubs };
-        return null;
-      })
-      .filter(Boolean) as { parent: Category; subs: Category[] }[];
-
-    const standalone = groupedCategories.standalone.filter(match);
-    return { groups, standalone };
-  }, [search, groupedCategories]);
-
-  // Flat list of selectable categories (subs from groups + standalone), in display order
-  const flatCategories = useMemo(() => {
-    const flat: Category[] = [];
-    for (const group of filteredGroups.groups) {
-      for (const sub of group.subs) flat.push(sub);
-    }
-    for (const cat of filteredGroups.standalone) flat.push(cat);
-    return flat;
-  }, [filteredGroups]);
-
-  const hasResults = filteredGroups.groups.length > 0 || filteredGroups.standalone.length > 0;
-
-  // Reset highlight to first item whenever search changes
-  useEffect(() => {
-    setHighlightedIndex(search.trim() ? 0 : -1);
-  }, [search]);
-
-  // Scroll highlighted item into view
-  useEffect(() => {
-    if (highlightedRef.current) {
-      highlightedRef.current.scrollIntoView({ block: 'nearest' });
-    }
-  }, [highlightedIndex]);
-
-  // Reset state when transaction changes
-  useEffect(() => {
-    setSearch('');
-    setShowNotes(false);
-    setNotes('');
-    setHighlightedIndex(-1);
-  }, [transaction.id]);
+  // Estado é resetado por remontagem (key={tx.id} no pai), sem efeito.
 
   const handleSelect = useCallback(async (categoryId: string) => {
-    // Dismiss keyboard on iOS before animating
+    if (saving) return;
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    haptic();
     setSaving(true);
+    setSaveError(null);
+    setSheetOpen(false);
     setExiting(true);
-    // Wait for exit animation before processing
-    await new Promise((r) => setTimeout(r, 250));
-    await onCategorize(categoryId, notes);
-    setNotes('');
-    setShowNotes(false);
-    setSearch('');
-    setHighlightedIndex(-1);
-    setExiting(false);
-    setSaving(false);
-  }, [onCategorize, notes]);
-
-  function handleSearchKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setHighlightedIndex((i) => Math.min(i + 1, flatCategories.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setHighlightedIndex((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (highlightedIndex >= 0 && flatCategories[highlightedIndex]) {
-        handleSelect(flatCategories[highlightedIndex].id);
-      } else if (flatCategories.length === 1) {
-        // If only one result, Enter selects it even without highlight
-        handleSelect(flatCategories[0].id);
-      }
-    } else if (e.key === 'Escape') {
-      setSearch('');
-      setHighlightedIndex(-1);
+    await new Promise((r) => setTimeout(r, 220));
+    try {
+      // C2: sem try/catch, um updateDoc rejeitado (rules) ou pendurado
+      // (offline) deixava o card em opacity-0 e os botões desabilitados —
+      // tela congelada em silêncio. Agora a falha restaura o card e mostra
+      // erro com ação de tentar de novo.
+      await withTimeout(onCategorize(categoryId, notes), SAVE_TIMEOUT_MS);
+      setExiting(false);
+      setSaving(false);
+    } catch {
+      setExiting(false);
+      setSaving(false);
+      setLastCategoryId(categoryId);
+      setSaveError('Não consegui salvar — verifique a internet e tente de novo.');
     }
-  }
+  }, [saving, onCategorize, notes]);
 
-  function CategoryButton({ cat, indent, index, parentName }: { cat: Category; indent?: boolean; index: number; parentName?: string }) {
-    const isHighlighted = index === highlightedIndex;
-    return (
-      <button
-        ref={isHighlighted ? highlightedRef : undefined}
-        onClick={() => handleSelect(cat.id)}
-        disabled={saving}
-        className={`w-full flex items-center gap-3 py-3 bg-bg-secondary border rounded-xl active:scale-[0.98] transition-all disabled:opacity-50 ${indent ? 'pl-9 pr-4' : 'px-4'} ${
-          isHighlighted
-            ? 'border-accent bg-accent/10 text-text-primary'
-            : 'border-border hover:border-accent hover:bg-accent/5'
-        }`}
-      >
-        <CategoryIcon icon={cat.icon} size={18} className="flex-shrink-0" style={{ color: cat.color }} />
-        <div className="flex flex-col text-left min-w-0">
-          <span className="text-sm text-text-primary">{cat.name}</span>
-          {parentName && (
-            <span className={`text-[11px] ${silver} leading-tight`}>{parentName}</span>
-          )}
-        </div>
-      </button>
-    );
-  }
+  // Espelha o estado "salvando" para o pai (barra de navegação) enquanto a
+  // categorização está em voo. Cleanup no unmount garante que a nav destrave
+  // mesmo se o card remontar (key={tx.id}) no meio da transição.
+  useEffect(() => {
+    onBusyChange?.(saving);
+  }, [saving, onBusyChange]);
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
-  // Build indexed flat list tracker for rendering
-  let flatIndex = 0;
+  // Busca (bottom-sheet): lista plana, ordem alfabética, filtro por acento-insensível
+  const searchResults = useMemo(() => {
+    const sorted = [...eligible].sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+    const term = removeAccents(search.trim().toLowerCase());
+    if (!term) return sorted;
+    return sorted.filter((c) => {
+      const p = parentName(c);
+      return removeAccents(c.name.toLowerCase()).includes(term) ||
+        (p ? removeAccents(p.toLowerCase()).includes(term) : false);
+    });
+  }, [eligible, search, parentName]);
+
+  // Fechamento explícito do bottom-sheet: limpa a busca e devolve o foco ao
+  // botão que abriu (padrão de diálogo acessível).
+  const closeSheet = useCallback(() => {
+    setSheetOpen(false);
+    setSearch('');
+    requestAnimationFrame(() => sheetTriggerRef.current?.focus());
+  }, []);
+
+  useEffect(() => {
+    if (sheetOpen) {
+      const t = setTimeout(() => searchRef.current?.focus(), 240);
+      return () => clearTimeout(t);
+    }
+  }, [sheetOpen]);
+
+  // P4 (iOS Safari real): ao focar a busca, o teclado virtual sobe e cobre a
+  // base do layout viewport — a lista de resultados ficava atrás dele. Seguimos
+  // o VisualViewport para ancorar o sheet à faixa visível (acima do teclado);
+  // a busca fica fixa no topo e os resultados rolam abaixo dela.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const update = () => setViewport({ top: vv.offsetTop, height: vv.height });
+    update();
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+      setViewport(null);
+    };
+  }, [sheetOpen]);
+
+  // A11y do bottom-sheet (WCAG 2.4.3 / 2.1.2): Esc fecha e Tab fica preso
+  // dentro do diálogo enquanto ele estiver aberto.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        closeSheet();
+        return;
+      }
+      if (e.key !== 'Tab') return;
+      const root = sheetRef.current;
+      if (!root) return;
+      const focusables = Array.from(
+        root.querySelectorAll<HTMLElement>('button, input, [tabindex]:not([tabindex="-1"])')
+      ).filter((el) => !el.hasAttribute('disabled'));
+      if (focusables.length === 0) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !root.contains(active))) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && (active === last || !root.contains(active))) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [sheetOpen, closeSheet]);
 
   return (
-    <div className={`flex flex-col gap-3 transition-all duration-200 ease-out ${exiting ? 'opacity-0 -translate-x-8 scale-[0.97]' : 'opacity-100 translate-x-0 scale-100'}`}>
-      {/* Transaction info — compact */}
-      <div className="bg-bg-card border border-border rounded-xl p-4 text-center space-y-1">
-        <p className="text-white text-base font-bold leading-tight truncate">
+    <div className={`flex flex-col gap-3 transition-all duration-200 ease-out ${exiting ? 'opacity-0 translate-x-10' : 'opacity-100 translate-x-0'}`}>
+      {/* Erro de escrita (C2): visível, com retry — nunca congelar em silêncio */}
+      {saveError && (
+        <div role="alert" className="bg-accent-red/10 border border-accent-red/50 rounded-card p-4 flex flex-col gap-2.5">
+          <p className="text-body text-text-primary leading-snug">{saveError}</p>
+          {lastCategoryId && (
+            <button
+              onClick={() => handleSelect(lastCategoryId)}
+              disabled={saving}
+              className="min-h-[48px] w-full flex items-center justify-center gap-2 bg-bg-card border border-border rounded-full text-body font-semibold text-text-primary active:bg-elevated transition disabled:opacity-50"
+            >
+              Tentar de novo
+            </button>
+          )}
+        </div>
+      )}
+      {/* Revisão: item já categorizado. Deixa claro a categoria atual e convida
+          a trocar (a grade, a busca e o "É X?" continuam funcionando). */}
+      {currentCategory && (
+        <div className="flex items-center gap-3 bg-accent/10 border border-accent-dim rounded-card px-4 py-3">
+          <CategoryIcon icon={currentCategory.icon} size={22} style={{ color: currentCategory.color }} />
+          <div className="min-w-0">
+            <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold">Categorizado como</p>
+            <p className="text-body font-bold text-text-primary truncate">{currentCategory.name}</p>
+          </div>
+          <span className="ml-auto text-caption font-semibold text-accent whitespace-nowrap">toque p/ trocar</span>
+        </div>
+      )}
+      {/* Cartão da transação */}
+      <div className="bg-bg-card border border-border rounded-card p-5">
+        <p className={`text-caption uppercase tracking-[0.12em] font-semibold ${isIncome ? 'text-accent-green' : 'text-ink-3'}`}>
+          {isIncome ? 'Entrada · confirme a categoria' : 'Gasto · escolha a categoria'}
+        </p>
+        <p className="text-text-primary text-lg font-bold leading-tight mt-1.5 break-words">
           {transaction.description}
         </p>
-        <p className="text-accent-red text-xl font-bold font-mono">
-          {formatBRL(transaction.amount)}
-        </p>
-        <div className={`flex items-center justify-center gap-2 ${silver} text-xs`}>
-          <span>{formatDate(transaction.date)}</span>
-          {transaction.totalInstallments && (
-            <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded font-mono text-[10px]">
-              {transaction.installmentNumber}/{transaction.totalInstallments}
+        <div className="flex items-center gap-2 mt-1 text-body text-text-secondary min-w-0">
+          <span className="whitespace-nowrap">{formatDate(transaction.date)}</span>
+          {transaction.account && (
+            <span className="px-2 py-0.5 bg-elevated rounded-full text-caption tnum truncate">
+              {transaction.account}
             </span>
           )}
-          <span className="opacity-40">•</span>
-          <span>{remaining} restante{remaining !== 1 ? 's' : ''}</span>
+          {transaction.totalInstallments && (
+            <span className="px-2 py-0.5 bg-elevated rounded-full text-caption tnum">
+              Parcela {transaction.installmentNumber}/{transaction.totalInstallments}
+            </span>
+          )}
         </div>
+        <p className={`text-kpi font-bold tnum mt-2 ${isIncome ? 'text-accent-green' : 'text-accent-red'}`}>
+          {formatBRL(transaction.amount)}
+        </p>
+
+        {/* Sugestão mágica — 1 toque */}
+        {suggestion ? (
+          <>
+            <button
+              onClick={() => handleSelect(suggestion.id)}
+              disabled={saving}
+              aria-pressed={selectedId === suggestion.id}
+              className={`mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50 border-2 ${
+                selectedId === suggestion.id ? 'border-accent' : 'border-border'
+              }`}
+            >
+              <CategoryIcon icon={suggestion.icon} size={22} style={{ color: suggestion.color }} />
+              <span><span className="text-text-secondary font-medium">É </span>{suggestion.name}<span className="text-text-secondary font-medium">?</span></span>
+            </button>
+            {transaction.suggestionReason && (
+              <p className="mt-2 text-caption text-ink-3 text-center flex items-center justify-center gap-1.5">
+                <Sparkles size={12} /> {transaction.suggestionReason} · um toque confirma
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="mt-4 text-body text-text-secondary text-center border border-dashed border-border rounded-control py-3 px-3 leading-snug">
+            Primeira vez que isso aparece. Escolha abaixo — o app memoriza para as próximas.
+          </p>
+        )}
       </div>
 
-      {/* Search + Categories */}
-      <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-        {/* Search bar */}
-        <div className="p-3 border-b border-border">
-          <div className="relative">
-            <Search size={14} className={`absolute left-3 top-1/2 -translate-y-1/2 ${silver} pointer-events-none`} />
-            <input
-              ref={searchRef}
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              placeholder="Buscar categoria... (↑↓ navegar, Enter selecionar)"
-              className={`w-full pl-8 pr-8 py-2.5 bg-bg-secondary border border-border rounded-lg text-text-primary text-[16px] focus:outline-none focus:border-accent ${silverPlaceholder}`}
-            />
-            {search && (
-              <button
-                onClick={() => { setSearch(''); setHighlightedIndex(-1); searchRef.current?.focus(); }}
-                className={`absolute right-3 top-1/2 -translate-y-1/2 ${silver} hover:text-text-primary`}
-              >
-                <X size={14} />
-              </button>
-            )}
-          </div>
+      {/* Zona do polegar: categorias frequentes */}
+      <div className="flex flex-col gap-2">
+        <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-1">
+          {suggestion ? 'Outras categorias' : 'Categorias frequentes'}
+        </p>
+        <div className="grid grid-cols-3 gap-2">
+          {quick.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => handleSelect(c.id)}
+              disabled={saving}
+              aria-pressed={selectedId === c.id}
+              className={`min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
+                selectedId === c.id ? 'border-accent' : 'border-border'
+              }`}
+            >
+              <CategoryIcon icon={c.icon} size={21} style={{ color: c.color }} />
+              <span className="text-center leading-tight line-clamp-2">{c.name}</span>
+            </button>
+          ))}
         </div>
 
-        {/* Category list — vertical, grouped, no horizontal scroll */}
-        <div ref={listRef} className="p-3 max-h-[40vh] overflow-y-auto overflow-x-hidden overscroll-contain">
-          {!hasResults ? (
-            <p className={`${silver} text-xs text-center py-4`}>
-              Nenhuma categoria encontrada
-            </p>
+        {/* "Buscar categoria" sozinho em linha própria, largura total, logo abaixo
+            da grade de sugestões. O "Pular" subiu para a barra de topo (ao lado do
+            indicador "Item X de Y"). */}
+        <button
+          ref={sheetTriggerRef}
+          onClick={() => setSheetOpen(true)}
+          disabled={saving}
+          aria-haspopup="dialog"
+          aria-expanded={sheetOpen}
+          className="w-full min-h-[48px] flex items-center justify-center gap-2 bg-bg-card border border-border rounded-full text-body font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-50"
+        >
+          <Search size={17} /> Buscar categoria
+        </button>
+
+        {/* Observação — opcional, mas inequívoca: rótulo próprio, campo tocável
+            de largura total (min-h 56px), borda sólida e ícone/rótulo em tom de
+            leitura alto (não some no fundo). Peso visual abaixo da ação mint de
+            categorizar (sem fill de marca), mas nunca discreto. */}
+        <div className="flex flex-col gap-1.5 px-1 pt-1">
+          <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-0.5">
+            Observação <span className="normal-case tracking-normal font-medium">(opcional)</span>
+          </p>
+          {!showNotes ? (
+            <button
+              onClick={() => setShowNotes(true)}
+              className="w-full min-h-[56px] flex items-center gap-3 px-3.5 py-3 rounded-control bg-bg-card border border-border text-left active:bg-elevated transition-colors"
+            >
+              <MessageSquare size={20} className="shrink-0 text-accent" />
+              {notes ? (
+                <span className="flex-1 min-w-0 text-body font-medium text-text-primary truncate">{notes}</span>
+              ) : (
+                <span className="flex-1 text-body font-semibold text-text-primary">Adicionar observação</span>
+              )}
+              <span className="shrink-0 text-caption font-semibold text-accent">{notes ? 'Editar' : 'Adicionar'}</span>
+            </button>
           ) : (
             <div className="flex flex-col gap-2">
-              {/* Grouped categories (parent + subs) */}
-              {filteredGroups.groups.map((group) => (
-                <div key={group.parent.id} className="flex flex-col gap-1.5">
-                  {/* Parent label */}
-                  <div className="flex items-center gap-2 px-2 pt-2 pb-1 text-[11px] uppercase tracking-wider font-bold text-text-primary">
-                    <CategoryIcon icon={group.parent.icon} size={14} style={{ color: group.parent.color }} />
-                    <span className="truncate">{group.parent.name}</span>
-                  </div>
-                  {/* Subcategories */}
-                  {group.subs.map((sub) => {
-                    const idx = flatIndex++;
-                    return <CategoryButton key={sub.id} cat={sub} indent index={idx} parentName={search.trim() ? group.parent.name : undefined} />;
-                  })}
-                </div>
-              ))}
-
-              {/* Standalone categories (no children) */}
-              {filteredGroups.standalone.length > 0 && filteredGroups.groups.length > 0 && (
-                <div className={`px-2 pt-3 pb-1 ${silver} text-[11px] uppercase tracking-wider font-bold`}>
-                  Outras
-                </div>
-              )}
-              {filteredGroups.standalone.map((cat) => {
-                const idx = flatIndex++;
-                return <CategoryButton key={cat.id} cat={cat} index={idx} />;
-              })}
+              <textarea
+                autoFocus
+                aria-label="Observação"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
+                placeholder="Ex.: presente de aniversário da mãe…"
+                rows={2}
+                className="w-full px-3 py-2.5 bg-elevated border border-accent-dim rounded-control text-text-primary text-[16px] placeholder:text-ink-3 focus:border-accent resize-none"
+              />
+              <button
+                onClick={() => setShowNotes(false)}
+                className="self-end min-h-[44px] px-4 flex items-center justify-center gap-1.5 rounded-control text-body font-semibold text-text-secondary active:bg-elevated transition-colors"
+              >
+                <Check size={15} /> Pronto
+              </button>
             </div>
           )}
         </div>
+
+        <p className="text-caption text-ink-3 text-center pt-1">
+          {remaining} restante{remaining !== 1 ? 's' : ''}
+        </p>
       </div>
 
-      {/* Notes + Navigation */}
-      <div className="bg-bg-card border border-border rounded-xl overflow-hidden">
-        {/* Notes toggle */}
-        <div className="px-4 py-2.5">
-          <button
-            onClick={() => setShowNotes(!showNotes)}
-            className={`flex items-center gap-1.5 text-xs ${silver} hover:text-accent transition-colors`}
+      {/* Bottom-sheet de busca — diálogo modal de verdade: role/aria-modal,
+          Esc fecha, foco preso dentro, botão Fechar visível. */}
+      {sheetOpen && (
+        <div
+          className="fixed left-0 right-0 z-50 bg-black/50 flex items-end"
+          style={{ top: viewport ? viewport.top : 0, height: viewport ? viewport.height : '100%' }}
+          onClick={closeSheet}
+        >
+          <div
+            ref={sheetRef}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sheet-busca-titulo"
+            className="w-full max-h-[92%] bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-[max(2rem,env(safe-area-inset-bottom))] flex flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
           >
-            <MessageSquare size={13} />
-            {showNotes ? 'Esconder observacao' : 'Adicionar observacao'}
-          </button>
-          {showNotes && (
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Ex: presente de aniversario da Mae..."
-              className={`w-full mt-2 px-3 py-2 bg-bg-secondary border border-border rounded-lg text-text-primary text-[16px] focus:outline-none focus:border-accent resize-none ${silverPlaceholder}`}
-              rows={2}
-            />
-          )}
+            <div className="shrink-0 flex items-center justify-between gap-2">
+              <h2 id="sheet-busca-titulo" className="text-title font-bold text-text-primary">
+                Buscar categoria
+              </h2>
+              <button
+                onClick={closeSheet}
+                className="min-h-[44px] min-w-[44px] px-3 -mr-2 flex items-center justify-center gap-1.5 text-body font-semibold text-text-secondary rounded-control active:bg-elevated transition-colors"
+              >
+                <X size={16} aria-hidden="true" /> Fechar
+              </button>
+            </div>
+            <div className="relative shrink-0">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-3 pointer-events-none" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Digite para filtrar…"
+                className="w-full pl-9 pr-12 py-3 bg-elevated border border-border rounded-control text-text-primary text-[16px] placeholder:text-ink-3 focus:border-accent-dim"
+              />
+              {search && (
+                <button
+                  onClick={() => { setSearch(''); searchRef.current?.focus(); }}
+                  aria-label="Limpar busca"
+                  className="absolute right-0 top-1/2 -translate-y-1/2 min-h-[44px] min-w-[44px] flex items-center justify-center text-ink-3 hover:text-text-primary"
+                >
+                  <X size={16} aria-hidden="true" />
+                </button>
+              )}
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col">
+              {searchResults.length === 0 ? (
+                <p className="text-body text-text-secondary text-center py-6">Nenhuma categoria encontrada</p>
+              ) : (
+                searchResults.map((c) => {
+                  const p = parentName(c);
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => handleSelect(c.id)}
+                      aria-pressed={selectedId === c.id}
+                      className="flex items-center gap-3.5 py-3 px-1.5 min-h-[50px] border-b border-border text-left active:bg-bg-card transition-colors"
+                    >
+                      <CategoryIcon icon={c.icon} size={20} style={{ color: c.color }} />
+                      <span className={`text-[15px] font-medium ${selectedId === c.id ? 'text-accent font-semibold' : 'text-text-primary'}`}>{c.name}</span>
+                      {p && <span className="ml-auto text-caption text-ink-3">{p}</span>}
+                      {selectedId === c.id && <Check size={16} className={`text-accent ${p ? 'ml-2' : 'ml-auto'}`} aria-hidden="true" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </div>
-
-        {/* Navigation */}
-        <div className="flex border-t border-border">
-          <button
-            onClick={onBack}
-            disabled={!onBack}
-            className={`flex-1 flex items-center justify-center gap-1 py-3 text-xs ${silver} hover:text-text-primary hover:bg-bg-secondary/50 transition-colors disabled:opacity-30 active:bg-bg-secondary/70`}
-          >
-            <ChevronLeft size={14} /> Voltar
-          </button>
-          <div className="w-px bg-border" />
-          <button
-            onClick={onSkip}
-            className="flex-1 flex items-center justify-center gap-1 py-3.5 text-sm font-bold text-accent border-l-0 hover:bg-accent/10 transition-colors active:bg-accent/20"
-          >
-            Pular <ChevronRight size={16} />
-          </button>
-        </div>
-      </div>
+      )}
     </div>
   );
 }

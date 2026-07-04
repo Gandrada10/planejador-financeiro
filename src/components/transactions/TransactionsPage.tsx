@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X, Landmark, ChevronDown, History } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, Landmark, ChevronDown, History, Clock, RotateCcw } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -24,7 +24,7 @@ export function TransactionsPage() {
   const { accounts, accountNames } = useAccounts();
   const { titularNames } = useTitularMappings();
   const { memberNames: familyMemberNames } = useFamilyMembers();
-  const { sessions, activeSessions, historySessions, applyCategorizationsFromSession, applyAllPendingSessions, dismissSession } = useCategorizationSessions();
+  const { sessions, activeSessions, expiredSessions, historySessions, applyCategorizationsFromSession, applyAllPendingSessions, reopenSession, dismissSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
   const [showForm, setShowForm] = useState(false);
@@ -45,6 +45,7 @@ export function TransactionsPage() {
   const [detailSession, setDetailSession] = useState<CategorizationSession | null>(null);
   const shareMenuRef = useRef<HTMLDivElement | null>(null);
   const autoApplied = useRef(false);
+  const [applyNotice, setApplyNotice] = useState<string | null>(null);
 
   useEffect(() => {
     if (!shareMenuOpen) return;
@@ -57,12 +58,23 @@ export function TransactionsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [shareMenuOpen]);
 
-  // Auto-apply ALL pending categorizations when page loads and sessions are available
-  // This doesn't depend on categorizedCount — it reads the actual session transactions
+  // Auto-apply ALL pending categorizations when page loads and sessions are available.
+  // Nota: applyAllPendingSessions SÓ processa sessões com categorizedCount > 0
+  // no doc da sessão (contador atualizado pela página pública); o delta real
+  // é lido da subcoleção na hora de aplicar. Erros e pulos não são engolidos:
+  // viram o aviso visível abaixo.
   useEffect(() => {
     if (autoApplied.current || sessions.length === 0) return;
     autoApplied.current = true;
-    applyAllPendingSessions();
+    applyAllPendingSessions().then((res) => {
+      if (res.errors.length > 0) {
+        setApplyNotice('Não consegui aplicar algumas categorizações — verifique a internet e recarregue a página.');
+      } else if (res.skipped > 0) {
+        setApplyNotice(
+          `${res.applied} categorização(ões) aplicada(s); ${res.skipped} ignorada(s) porque a(s) transação(ões) foi(ram) excluída(s).`
+        );
+      }
+    });
   }, [sessions, applyAllPendingSessions]);
 
   const months = useMemo(() => {
@@ -161,7 +173,9 @@ export function TransactionsPage() {
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
     const account = accounts.find((a) => a.name === item.account && a.type === 'cartao');
     if (!account) return null;
-    const closed = getClosedCycle(account.id, item.date);
+    // billingMonth-first: após uma baixa cross-month o `date` já aponta pro mês
+    // do pagamento; o vínculo estável com a fatura é o billingMonth.
+    const closed = getClosedCycle(account.id, item.date, item.billingMonth);
     if (!closed) return null;
     return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
   }
@@ -258,6 +272,32 @@ export function TransactionsPage() {
 
     await importBatch(categorized);
   }, [accounts, categories, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Aplica uma sessão e mostra o resultado REAL (aplicadas/puladas/erro) —
+  // nada de sucesso silencioso nem erro engolido (C3).
+  const handleApplySession = useCallback(async (sessionId: string) => {
+    setApplyingSession(sessionId);
+    const res = await applyCategorizationsFromSession(sessionId);
+    setApplyingSession(null);
+    if (res.error) {
+      alert(res.error);
+    } else if (res.skipped > 0) {
+      alert(
+        `${res.applied} categoria(s) aplicada(s). ${res.skipped} ignorada(s) porque a(s) transação(ões) foi(ram) excluída(s).`
+      );
+    } else if (res.applied > 0) {
+      alert(`${res.applied} categoria(s) aplicada(s) com sucesso!`);
+    }
+  }, [applyCategorizationsFromSession]);
+
+  // C1(b): reabrir sessão expirada por mais 48h (o link volta a funcionar).
+  const handleReopenSession = useCallback(async (sessionId: string) => {
+    try {
+      await reopenSession(sessionId);
+    } catch {
+      alert('Não consegui reabrir a sessão — verifique a internet e tente de novo.');
+    }
+  }, [reopenSession]);
 
   const handleCreateRule = useCallback(async (description: string, categoryId: string) => {
     const existing = rules.find((r) => r.pattern.toLowerCase() === description.toLowerCase());
@@ -465,6 +505,19 @@ export function TransactionsPage() {
         )}
       </div>
 
+      {applyNotice && (
+        <div role="alert" className="flex items-center justify-between gap-3 p-3 bg-amber-400/10 border border-amber-400/40 rounded-lg text-xs text-text-primary">
+          <span>{applyNotice}</span>
+          <button
+            onClick={() => setApplyNotice(null)}
+            className="p-1 text-text-secondary hover:text-text-primary shrink-0"
+            title="Dispensar aviso"
+          >
+            <X size={14} />
+          </button>
+        </div>
+      )}
+
       {activeSessions.length > 0 && (
         <div className="space-y-2">
           {activeSessions.length > 1 && (
@@ -489,14 +542,7 @@ export function TransactionsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={async () => {
-                    setApplyingSession(s.id);
-                    const count = await applyCategorizationsFromSession(s.id);
-                    setApplyingSession(null);
-                    if (count > 0) {
-                      alert(`${count} categorias aplicadas com sucesso!`);
-                    }
-                  }}
+                  onClick={() => handleApplySession(s.id)}
                   disabled={applyingSession === s.id}
                   className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
                 >
@@ -520,6 +566,51 @@ export function TransactionsPage() {
         </div>
       )}
 
+      {/* C1(b): sessões expiradas sem apply/dismiss não podem ficar invisíveis —
+          o dono vê "expirada — X pendentes" e pode aplicar parciais ou reabrir. */}
+      {expiredSessions.length > 0 && (
+        <div className="space-y-2">
+          {expiredSessions.map((s) => {
+            const pending = Math.max(0, s.transactionIds.length - s.categorizedCount);
+            return (
+              <div key={s.id} className="flex items-center justify-between gap-3 flex-wrap p-3 bg-bg-secondary border border-amber-400/40 rounded-lg text-xs">
+                <div className="flex items-center gap-2">
+                  <Clock size={14} className="text-amber-400" />
+                  <span className="text-text-primary">
+                    <strong>{s.titularName}</strong> — expirada · {s.categorizedCount}/{s.transactionIds.length} categorizadas
+                    {pending > 0 && ` · ${pending} pendente${pending !== 1 ? 's' : ''}`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {s.categorizedCount > 0 && (
+                    <button
+                      onClick={() => handleApplySession(s.id)}
+                      disabled={applyingSession === s.id}
+                      className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
+                    >
+                      {applyingSession === s.id ? 'Aplicando...' : 'Aplicar parciais'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => handleReopenSession(s.id)}
+                    className="flex items-center gap-1 px-3 py-1.5 bg-bg-card border border-border text-text-primary font-bold rounded hover:bg-elevated"
+                    title="Reabrir por mais 48h — o link volta a funcionar"
+                  >
+                    <RotateCcw size={12} /> Reabrir 48h
+                  </button>
+                  <button
+                    onClick={() => dismissSession(s.id)}
+                    className="p-1 text-text-secondary hover:text-accent-red"
+                    title="Remover"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <TransactionTable
         transactions={filtered}
@@ -571,6 +662,8 @@ export function TransactionsPage() {
           categories={categories}
           titulars={allTitulars}
           monthFilter={filterMonth}
+          rules={rules}
+          allTransactions={transactions}
           onClose={() => setShowShareModal(false)}
         />
       )}

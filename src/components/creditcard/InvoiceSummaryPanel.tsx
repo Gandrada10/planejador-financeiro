@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Lock, LockOpen, DollarSign } from 'lucide-react';
-import { formatBRL } from '../../lib/utils';
+import { formatBRL, parseMoneyInput, applyMoneyMask, invoiceDateFor } from '../../lib/utils';
 import type { BillingCycle, Account } from '../../types';
 
 interface TitularTotal {
@@ -27,6 +27,7 @@ interface Props {
 export function InvoiceSummaryPanel({
   account,
   cycle,
+  monthYear,
   totalExpenses,
   totalCredits,
   totalInvoice,
@@ -38,20 +39,42 @@ export function InvoiceSummaryPanel({
   onReopenCycle,
   onRegisterPayment,
 }: Props) {
+  // Padrão do "lançar pagamento" = data de VENCIMENTO do cartão no mês da
+  // fatura (não "hoje") — assim pagar em dia mantém os lançamentos no
+  // vencimento; só uma data diferente (ex.: paguei dia 21, vence dia 20)
+  // sobrescreve. Sem dueDay cadastrado, invoiceDateFor cai no dia 1º do mês.
+  const dueDateISO = (() => {
+    const d = invoiceDateFor(monthYear, account.dueDay);
+    return d ? d.toISOString().split('T')[0] : new Date().toISOString().slice(0, 10);
+  })();
+
   const [showPayForm, setShowPayForm] = useState(false);
   const [payAmount, setPayAmount] = useState('');
-  const [payDate, setPayDate] = useState(new Date().toISOString().slice(0, 10));
+  const [payDate, setPayDate] = useState(dueDateISO);
 
   const paidAmount = cycle?.paidAmount || 0;
-  const valueToPay = totalInvoice + previousBalance - paidAmount;
+  // totalInvoice/previousBalance seguem a convenção interna do app (negativo =
+  // despesa líquida). "Valor a pagar" é invertido só para EXIBIÇÃO: positivo =
+  // você deve esse valor; zero/negativo = quitado (ou saldo credor a seu
+  // favor). Variável local a este componente — não afeta outras telas.
+  const amountDue = -(totalInvoice + previousBalance) - paidAmount;
 
   const closingDay = account.closingDay;
   const dueDay = account.dueDay;
   const creditLimit = account.creditLimit;
 
   function handlePay() {
-    const amount = parseFloat(payAmount.replace(',', '.'));
-    if (!amount || amount <= 0) return;
+    // O campo usa applyMoneyMask na entrada, então payAmount chega sempre no
+    // formato pt-BR canônico ("8.022,48") — parseMoneyInput o converte certo.
+    // GUARD anti-lixo: parseMoneyInput NUNCA retorna NaN (cai em 0 pra input não
+    // numérico), então rejeitamos ANTES de parsear qualquer coisa sem dígito —
+    // sem isso, "abc"/" "/"," virariam 0 e apagariam um pagamento real em
+    // silêncio. "0,00" (usuário zerando de propósito) tem dígito e passa.
+    if (!/\d/.test(payAmount)) return;
+    const amount = parseMoneyInput(payAmount);
+    // 0 é permitido de propósito: é o único jeito, pela UI, de zerar um
+    // pagamento lançado por engano (sem isso não há como corrigir via tela).
+    if (amount < 0) return;
     onRegisterPayment(amount, new Date(payDate + 'T12:00:00'));
     setShowPayForm(false);
     setPayAmount('');
@@ -106,8 +129,11 @@ export function InvoiceSummaryPanel({
           </div>
         )}
         <div className="flex justify-between font-bold pt-1 border-t border-border/40">
-          <span className="text-text-primary">Valor a pagar</span>
-          <span className={valueToPay <= 0 ? 'text-accent-green' : 'text-accent-red'}>{formatBRL(valueToPay)}</span>
+          {/* amountDue > 0 = você deve; <= 0 = quitado / saldo credor a favor.
+              No credor mostramos o valor absoluto rotulado como "Crédito de"
+              (em vez de um número negativo verde, que confundia). */}
+          <span className="text-text-primary">{amountDue > 0 ? 'Valor a pagar' : amountDue < 0 ? 'Crédito de' : 'Valor a pagar'}</span>
+          <span className={amountDue > 0 ? 'text-accent-red' : 'text-accent-green'}>{formatBRL(Math.abs(amountDue))}</span>
         </div>
       </div>
 
@@ -131,7 +157,12 @@ export function InvoiceSummaryPanel({
           </button>
         ) : null}
         <button
-          onClick={() => setShowPayForm(!showPayForm)}
+          onClick={() => {
+            // Ao ABRIR o form, semeia a data com o vencimento do mês atual
+            // (useState só pega o valor inicial; ao navegar de mês, re-semeia).
+            if (!showPayForm) setPayDate(dueDateISO);
+            setShowPayForm((v) => !v);
+          }}
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-bold rounded hover:bg-accent/20"
         >
           <DollarSign size={12} /> Lancar pagamento
@@ -143,8 +174,9 @@ export function InvoiceSummaryPanel({
         <div className="bg-bg-secondary rounded p-3 space-y-2">
           <input
             type="text"
+            inputMode="decimal"
             value={payAmount}
-            onChange={(e) => setPayAmount(e.target.value)}
+            onChange={(e) => setPayAmount(applyMoneyMask(e.target.value))}
             placeholder="Valor pago"
             className="w-full px-2 py-1.5 bg-bg-primary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
           />
@@ -156,7 +188,7 @@ export function InvoiceSummaryPanel({
           />
           <button
             onClick={handlePay}
-            disabled={!payAmount}
+            disabled={!/\d/.test(payAmount)}
             className="w-full px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
           >
             Confirmar pagamento

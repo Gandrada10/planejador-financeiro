@@ -530,7 +530,7 @@ export function PluggySync({ existingTransactions, accounts, titularNames, onImp
                           <td className="py-1.5 text-text-secondary hidden sm:table-cell truncate max-w-[120px]">
                             {row.pluggyItemName}
                           </td>
-                          <td className={`py-1.5 text-right font-mono whitespace-nowrap ${row.amount < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
+                          <td className={`py-1.5 text-right tnum whitespace-nowrap ${row.amount < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
                             {formatBRL(row.amount)}
                           </td>
                         </tr>

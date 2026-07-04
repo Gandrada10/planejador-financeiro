@@ -373,7 +373,7 @@ export function GoalsEvolutionTab() {
                     {row.values.map((val, i) => (
                       <td
                         key={months[i]}
-                        className={`px-3 py-2 text-right font-mono ${
+                        className={`px-3 py-2 text-right tnum ${
                           isMeta
                             ? 'text-accent-red'
                             : val > 0
@@ -387,7 +387,7 @@ export function GoalsEvolutionTab() {
 
                     {/* Average */}
                     <td
-                      className={`px-3 py-2 text-right font-mono ${
+                      className={`px-3 py-2 text-right tnum ${
                         isMeta ? 'text-accent-red' : 'text-text-primary'
                       }`}
                     >
@@ -396,7 +396,7 @@ export function GoalsEvolutionTab() {
 
                     {/* Total */}
                     <td
-                      className={`px-3 py-2 text-right font-mono font-bold ${
+                      className={`px-3 py-2 text-right tnum font-bold ${
                         isMeta ? 'text-accent-red' : 'text-text-primary'
                       }`}
                     >

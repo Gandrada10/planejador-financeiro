@@ -1,6 +1,6 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { formatBRL, formatDate, tabNavigate, getMonthLabel } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
@@ -130,8 +130,16 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
     if (field === 'description' && editValue.trim()) {
       onUpdate(t.id, { description: editValue.trim() });
     } else if (field === 'amount') {
-      const val = parseFloat(editValue.replace(',', '.'));
-      if (!isNaN(val)) onUpdate(t.id, { amount: val });
+      // O campo de valor é mascarado na entrada (applyMoneyMask) e pré-preenchido
+      // já no formato pt-BR canônico ("-8.022,48"), então parseMoneyInput sempre
+      // recebe formato não-ambíguo. GUARD anti-lixo: parseMoneyInput cai em 0 pra
+      // texto não numérico e este commit dispara no onBlur (Tab entre células),
+      // então SEM dígito não commitamos — senão um typo tipo "," zeraria o valor
+      // real da transação no blur, sem aviso.
+      if (/\d/.test(editValue)) {
+        const val = parseMoneyInput(editValue);
+        onUpdate(t.id, { amount: val });
+      }
     } else if (field === 'date' && editValue) {
       const d = new Date(editValue + 'T12:00:00');
       if (!isNaN(d.getTime())) onUpdate(t.id, { date: d });
@@ -186,12 +194,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
           )}
           <span className="text-[10px] text-text-secondary">
             Ordenar:
-            <button onClick={() => toggleSort('date')} className="ml-1 hover:text-text-primary">
+            <button onClick={() => toggleSort('date')} className="ml-1 hover:text-text-primary" title="Data de pagamento/vencimento — define o mês no fluxo de caixa">
               Data <SortIcon field="date" />
             </button>
             <span className="mx-1">·</span>
-            <button onClick={() => toggleSort('purchaseDate')} className="hover:text-text-primary">
-              Competencia <SortIcon field="purchaseDate" />
+            <button onClick={() => toggleSort('purchaseDate')} className="hover:text-text-primary" title="Data da compra efetiva (competência) — não define o mês">
+              Competência <SortIcon field="purchaseDate" />
             </button>
           </span>
         </div>
@@ -341,7 +349,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                       const cardNum = group.transactions[0]?.cardNumber;
                       const last4 = cardNum ? cardNum.replace(/\D/g, '').slice(-4) : null;
                       return last4 ? (
-                        <span className="text-[10px] text-text-secondary font-mono">**** {last4}</span>
+                        <span className="text-[10px] text-text-secondary tnum">**** {last4}</span>
                       ) : null;
                     })()}
                   </div>
@@ -376,7 +384,8 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                           title="Selecionar todas"
                         />
                       </div>
-                      <div className="w-[80px] flex-shrink-0">Competencia</div>
+                      <div className="w-[80px] flex-shrink-0" title="Data de pagamento/vencimento — muda ao lançar o pagamento da fatura; define o mês no fluxo de caixa">Data</div>
+                      <div className="w-[80px] flex-shrink-0" title="Data da compra efetiva (competência) — não define o mês">Competência</div>
                       <div className="flex-1 min-w-0 max-w-[320px] px-2">Descricao</div>
                       <div className="flex-1 min-w-[200px] mr-2">Categoria</div>
                       <div className="flex-shrink-0 w-[110px] text-right mr-2">Valor</div>
@@ -418,7 +427,28 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                           />
                         </div>
 
-                        {/* Purchase date - editable */}
+                        {/* Cash date (pagamento/vencimento) - editable. É a coluna
+                            que a baixa da fatura sobrescreve com a data do
+                            pagamento; governa o mês no fluxo de caixa. */}
+                        <div
+                          data-tab-cell
+                          className={`text-xs text-text-primary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
+                          onClick={() => onUpdate && startEdit(t.id, 'date', t.date.toISOString().split('T')[0])}
+                        >
+                          {editingCell?.id === t.id && editingCell.field === 'date' ? (
+                            <input
+                              autoFocus
+                              type="date"
+                              value={editValue}
+                              onChange={(e) => setEditValue(e.target.value)}
+                              onBlur={() => commitEdit(t)}
+                              onKeyDown={(e) => handleKeyDown(e, t)}
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                            />
+                          ) : formatDate(t.date)}
+                        </div>
+
+                        {/* Purchase date (competência) - editable */}
                         <div
                           data-tab-cell
                           className={`text-xs text-text-secondary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
@@ -516,13 +546,18 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                         <div
                           data-tab-cell
                           className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
-                          onClick={() => onUpdate && startEdit(t.id, 'amount', String(t.amount))}
+                          // Pré-preenche já no formato mascarado pt-BR: toFixed(2)
+                          // garante 2 casas p/ o applyMoneyMask (que lê os dígitos
+                          // como centavos) reconstruir certo — -8022.48 → "-8.022,48",
+                          // -90 → "-90,00" (não "-0,90").
+                          onClick={() => onUpdate && startEdit(t.id, 'amount', applyMoneyMask(t.amount.toFixed(2)))}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'amount' ? (
                             <input
                               autoFocus
+                              inputMode="decimal"
                               value={editValue}
-                              onChange={(e) => setEditValue(e.target.value)}
+                              onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
                               className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
@@ -550,7 +585,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                               onClick={(e) => e.stopPropagation()}
                             />
                           ) : t.totalInstallments ? (
-                            <span className="text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded font-mono">
+                            <span className="text-[10px] text-accent bg-accent/10 px-1.5 py-0.5 rounded tnum">
                               {t.installmentNumber}/{t.totalInstallments}
                             </span>
                           ) : (

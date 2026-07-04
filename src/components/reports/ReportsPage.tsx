@@ -462,7 +462,7 @@ export function ReportsPage() {
                       <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
                       <span className="text-xs text-text-primary">{group.label}</span>
                       <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
-                      <span className={`ml-auto text-xs font-bold font-mono ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      <span className={`ml-auto text-xs font-bold tnum ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                         {formatBRL(group.total)}
                       </span>
                     </button>
@@ -485,7 +485,7 @@ export function ReportsPage() {
                               <CategoryIcon icon={sub.icon} size={14} style={{ color: sub.category?.color || 'var(--text-primary)' }} />
                               <span className="text-xs text-text-primary">{sub.label}</span>
                               <span className="text-[10px] text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
-                              <span className={`ml-auto text-xs font-bold font-mono ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                              <span className={`ml-auto text-xs font-bold tnum ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                 {formatBRL(sub.total)}
                               </span>
                             </button>
@@ -510,12 +510,12 @@ export function ReportsPage() {
                                     <span className="text-text-primary flex-1 min-w-0 truncate">
                                       {t.description}
                                     </span>
-                                    <span className={`font-mono font-bold w-[100px] flex-shrink-0 text-right tabular-nums ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                    <span className={`font-bold w-[100px] flex-shrink-0 text-right tabular-nums ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                       {formatBRL(t.amount)}
                                     </span>
                                     <span className="w-[56px] flex-shrink-0 text-center">
                                       {t.totalInstallments ? (
-                                        <span className="px-1 py-0 bg-accent/10 text-accent rounded text-[10px] font-mono leading-4">
+                                        <span className="px-1 py-0 bg-accent/10 text-accent rounded text-[10px] tnum leading-4">
                                           {t.installmentNumber ?? '?'}/{t.totalInstallments}
                                         </span>
                                       ) : (

@@ -97,17 +97,35 @@ Regras gerais:
 - CRUCIAL: siga rigorosamente a logica de "titular_ativo" descrita acima — o titular so muda com cabecalho de nome de pessoa, jamais por coluna, pagina ou cabecalho de tabela
 
 Secoes especiais em faturas de cartao (CRITICO):
-- ENCARGOS, SEGUROS, ANUIDADE, IOF, TAXAS: sao cobranças extras que aparecem em secoes separadas (as vezes em colunas menores). Devem ser importadas como transacoes normais. Pertencem ao titular PRINCIPAL do cartao (o primeiro da fatura) a menos que estejam explicitamente dentro de uma secao de outro titular.
-- ESTORNOS / CREDITOS / "OUTROS CREDITOS": sao valores positivos (credito a favor do cliente). Importe-os com amount POSITIVO. Atribua ao titular principal a menos que estejam dentro de secao de outro titular.
-- COMPRAS DE FATURAS FUTURAS / LANCAMENTOS FUTUROS / "PROXIMAS FATURAS": esta secao lista compras que serao cobradas em faturas FUTURAS, nao na fatura atual. NAO IMPORTE essas transacoes — ignore toda a secao de faturas futuras por completo.
-- RESUMO DA FATURA / TOTAIS / "TOTAL DA FATURA": ignore linhas de resumo, totais e subtotais — so importe lancamentos individuais.
+- ENCARGOS, SEGUROS, ANUIDADE, IOF, TAXAS, JUROS, MULTA: sao cobranças reais da fatura (despesas). Importe como transacoes NEGATIVAS normais. Pertencem ao titular PRINCIPAL do cartao (o primeiro da fatura) a menos que estejam explicitamente dentro de uma secao de outro titular.
+- ESTORNO / REEMBOLSO / DEVOLUCAO / CASHBACK / ajuste-a-credito de uma compra: sao devolucoes reais de dinheiro ao cliente e REDUZEM a despesa do mes. Importe com amount POSITIVO. Atribua ao titular principal a menos que estejam dentro de secao de outro titular. ESTES sao os unicos valores positivos que entram.
 
-Responda APENAS com um JSON object com dois campos:
+>>> NAO IMPORTE — EXCLUA SEMPRE (nunca gere transacao para estas linhas, qualquer que seja o sinal) <<<
+Estas linhas NAO sao movimento da fatura atual. No app, a "despesa mensal" e a SOMA de TODAS as linhas importadas — entao qualquer uma destas polui o total (como despesa duplica, como credito subtrai; os dois erram). Ignore-as por completo:
+- PAGAMENTO DA FATURA / quitacao: qualquer linha cujo texto contenha "PAGAMENTO", "PGTO", "PAGTO", "PAG FATURA", "PAGAMENTO EFETUADO", "PAGAMENTO RECEBIDO", "PAGAMENTO DE FATURA", "PAGTO DEBITO CONTA", "PAGAMENTO ON LINE". E a quitacao da fatura ANTERIOR — NAO e estorno nem credito. Costuma ser a PRIMEIRA linha abaixo do cabecalho, com valor alto proximo ao total da fatura passada. NUNCA importe.
+- SALDO ANTERIOR / "SALDO FATURA ANTERIOR" / "SALDO EM DD/MM": carry-over de fatura, nao e transacao. NUNCA importe.
+- RESUMO / TOTAIS / SUBTOTAIS: "TOTAL DA FATURA", "TOTAL A PAGAR", "TOTAL DESTA FATURA", "SUBTOTAL", "TOTAL DE COMPRAS", "TOTAL OUTROS CREDITOS", "Lancamentos no cartao (final XXXX): R$ ...", totais de pagina e rodape. Sao agregados, nao lancamentos individuais. NUNCA importe.
+- ROTULO/CABECALHO de secao NUNCA vira transacao: a propria expressao "OUTROS CREDITOS" (ou "CREDITOS", "PAGAMENTOS E CREDITOS") sozinha numa linha e apenas um titulo. Importe SO os itens individuais listados ABAIXO dela — e, mesmo assim, apenas os que forem estorno/reembolso real (positivo); se o item sob o titulo for PAGAMENTO ou SALDO ANTERIOR, exclua.
+- COMPRAS DE FATURAS FUTURAS / LANCAMENTOS FUTUROS / "PROXIMAS FATURAS": compras que serao cobradas em faturas FUTURAS, nao na atual. NAO IMPORTE — ignore toda a secao.
+
+REGRA-META: o conjunto importado deve conter APENAS compras reais (negativas) + estornos/reembolsos reais (positivos), e a soma de todas as linhas importadas tem de bater com a despesa liquida real do mes. Em duvida num valor POSITIVO: ESTORNO/REEMBOLSO/DEVOLUCAO/CASHBACK -> importe; PAGAMENTO/PGTO/SALDO ANTERIOR -> exclua.
+
+Responda APENAS com um JSON object com tres campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
-- "transactions": array com as transacoes
+- "declaredTotal": em fatura de cartao, o valor total DECLARADO da fatura atual (procure "TOTAL DESTA FATURA", "TOTAL A PAGAR" ou "VALOR A PAGAR" no cabecalho/resumo), como numero POSITIVO. E um METADADO para conferencia — NAO e uma transacao e NAO entra no array. Se nao encontrar, use null.
+- "transactions": array com as transacoes (apenas compras reais negativas e estornos reais positivos, conforme as regras acima)
 
-Sem markdown, sem explicacao, sem code blocks. Exemplo com dois titulares:
-{"isCreditCard":true,"transactions":[{"date":"2025-01-23","purchaseDate":"2025-01-23","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"},{"date":"2025-01-20","purchaseDate":"2025-01-20","description":"AMAZON","amount":-89.90,"titular":"MARIA SILVA","installmentNumber":null,"totalInstallments":null,"cardNumber":"5678"}]}
+Sem markdown, sem explicacao, sem code blocks.
+
+Exemplo de EXCLUSAO — dado o trecho de entrada:
+  PAGAMENTO EFETUADO      5.000,00
+  SALDO ANTERIOR             0,00
+  ESTORNO COMPRA LOJA X    120,00
+  AMAZON                    -89,90
+a saida NAO inclui "PAGAMENTO EFETUADO" nem "SALDO ANTERIOR"; INCLUI "ESTORNO COMPRA LOJA X" com amount +120.00 e "AMAZON" com amount -89.90.
+
+Exemplo de formato de saida (dois titulares):
+{"isCreditCard":true,"declaredTotal":239.80,"transactions":[{"date":"2025-01-23","purchaseDate":"2025-01-23","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"},{"date":"2025-01-20","purchaseDate":"2025-01-20","description":"AMAZON","amount":-89.90,"titular":"MARIA SILVA","installmentNumber":null,"totalInstallments":null,"cardNumber":"5678"}]}
 
 Texto do extrato (pode estar desformatado, PDFs frequentemente tem quebras estranhas):
 ${truncatedText}`;
@@ -163,6 +181,7 @@ ${truncatedText}`;
     // Try direct parse first
     let transactions: ParsedTransaction[] | null = null;
     let isCreditCard = false;
+    let declaredTotal: number | null = null;
     try {
       const parsed = JSON.parse(cleanJson);
       if (Array.isArray(parsed)) {
@@ -170,6 +189,7 @@ ${truncatedText}`;
       } else if (parsed && Array.isArray(parsed.transactions)) {
         transactions = parsed.transactions;
         isCreditCard = !!parsed.isCreditCard;
+        declaredTotal = typeof parsed.declaredTotal === 'number' ? parsed.declaredTotal : null;
       }
     } catch {
       // Try to extract JSON from anywhere in the response
@@ -180,6 +200,7 @@ ${truncatedText}`;
           if (Array.isArray(parsed.transactions)) {
             transactions = parsed.transactions;
             isCreditCard = !!parsed.isCreditCard;
+            declaredTotal = typeof parsed.declaredTotal === 'number' ? parsed.declaredTotal : null;
           }
         } catch {
           // ignore
@@ -209,9 +230,42 @@ ${truncatedText}`;
       });
     }
 
+    // ─── Rede de seguranca deterministica (pos-parse) ───────────────────────────
+    // O prompt ja exclui pagamento de fatura / saldo anterior, mas um modelo
+    // pequeno pode deixar uma linha passar. Em fatura de cartao, um valor POSITIVO
+    // cuja descricao parece pagamento/quitacao ou "saldo anterior" NAO e credito
+    // real (estorno) — e a quitacao da fatura ANTERIOR e poluiria a despesa do mes.
+    // Estornos/reembolsos (ESTORNO/REEMBOLSO/DEVOLUCAO/CASHBACK) tambem sao
+    // positivos e DEVEM permanecer, por isso casamos so palavras de pagamento/saldo.
+    const PAYMENT_LINE = /\b(PAGAMENTO|PGTO|PAGTO|PAG\.?\s*FATURA|PAGAMENTO\s+(RECEBIDO|EFETUADO)|SALDO\s+ANTERIOR)\b/i;
+    // Estorno vence pagamento: uma linha que TAMBEM e reembolso real nunca e
+    // descartada, mesmo contendo "PAGAMENTO" (ex.: "ESTORNO DE PAGAMENTO
+    // DUPLICADO" — credito positivo legitimo). Elimina o falso-negativo que
+    // sumiria o dado ANTES do modal, invisivel para o usuario readicionar.
+    const REFUND_LINE = /ESTORNO|REEMBOLSO|DEVOLU|CASHBACK/i;
+    let droppedPaymentLines = 0;
+    if (isCreditCard) {
+      transactions = transactions.filter((t) => {
+        const desc = t.description || '';
+        const isPaymentLike = t.amount > 0 && PAYMENT_LINE.test(desc) && !REFUND_LINE.test(desc);
+        if (isPaymentLike) droppedPaymentLines++;
+        return !isPaymentLike;
+      });
+    }
+    // Log estruturado: SO a contagem — nunca valores nem descricoes (dado financeiro).
+    if (droppedPaymentLines > 0) {
+      console.log(JSON.stringify({
+        service: 'parse-statement',
+        event: 'dropped_payment_lines',
+        count: droppedPaymentLines,
+        ts: new Date().toISOString(),
+      }));
+    }
+
     return new Response(JSON.stringify({
       transactions,
       isCreditCard,
+      declaredTotal,
       usage: data.usage,
     }), {
       headers: { 'Content-Type': 'application/json' },

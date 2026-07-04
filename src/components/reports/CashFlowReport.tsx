@@ -230,7 +230,7 @@ export function CashFlowReport() {
           {/* Saldo anterior - banner compacto */}
           <div className="flex items-center justify-between px-3 py-1.5 bg-bg-secondary/40 border border-border border-b-0 rounded-t-lg text-xs">
             <span className="text-text-secondary">Saldo anterior ao período</span>
-            <span className={`font-bold font-mono tabular-nums ${saldoAnterior >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            <span className={`font-bold tabular-nums ${saldoAnterior >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
               {formatBRL(saldoAnterior)}
             </span>
           </div>
@@ -253,16 +253,16 @@ export function CashFlowReport() {
                     className={`border-b border-border/20 transition-colors hover:bg-bg-secondary/20 ${row.empty ? 'opacity-40' : ''}`}
                   >
                     <td className="px-3 py-2 text-text-primary capitalize">{row.label}</td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-accent-green">
+                    <td className="px-3 py-2 text-right tabular-nums text-accent-green">
                       {row.entradas > 0 ? formatBRL(row.entradas) : <span className="text-text-secondary">—</span>}
                     </td>
-                    <td className="px-3 py-2 text-right font-mono tabular-nums text-accent-red">
+                    <td className="px-3 py-2 text-right tabular-nums text-accent-red">
                       {row.saidas < 0 ? formatBRL(row.saidas) : <span className="text-text-secondary">—</span>}
                     </td>
-                    <td className={`px-3 py-2 text-right font-mono tabular-nums ${row.resultado === 0 ? 'text-text-secondary' : row.resultado > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    <td className={`px-3 py-2 text-right tabular-nums ${row.resultado === 0 ? 'text-text-secondary' : row.resultado > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                       {row.resultado === 0 ? '—' : formatBRL(row.resultado)}
                     </td>
-                    <td className={`px-3 py-2 text-right font-bold font-mono tabular-nums ${row.saldo >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    <td className={`px-3 py-2 text-right font-bold tabular-nums ${row.saldo >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                       {formatBRL(row.saldo)}
                     </td>
                   </tr>
@@ -271,9 +271,9 @@ export function CashFlowReport() {
                 {/* Total row */}
                 <tr className="border-t-2 border-border bg-bg-secondary/60">
                   <td className="px-3 py-2 font-bold text-text-primary uppercase text-[10px] tracking-wider">Total</td>
-                  <td className="px-3 py-2 text-right font-bold font-mono tabular-nums text-accent-green">{formatBRL(totalEntradas)}</td>
-                  <td className="px-3 py-2 text-right font-bold font-mono tabular-nums text-accent-red">{formatBRL(totalSaidas)}</td>
-                  <td className={`px-3 py-2 text-right font-bold font-mono tabular-nums ${totalResultado >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  <td className="px-3 py-2 text-right font-bold tabular-nums text-accent-green">{formatBRL(totalEntradas)}</td>
+                  <td className="px-3 py-2 text-right font-bold tabular-nums text-accent-red">{formatBRL(totalSaidas)}</td>
+                  <td className={`px-3 py-2 text-right font-bold tabular-nums ${totalResultado >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                     {formatBRL(totalResultado)}
                   </td>
                   <td className="px-3 py-2 text-right text-text-secondary">—</td>

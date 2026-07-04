@@ -53,7 +53,15 @@ export function useAccounts() {
   async function updateAccount(id: string, data: Partial<Account>) {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    const { id: _, createdAt: __, ...update } = data;
+    // O Firestore rejeita `undefined` (sem ignoreUndefinedProperties). Monta o
+    // update pulando id/createdAt e qualquer chave indefinida — assim salvar só
+    // o dia de vencimento com os demais campos do cartão em branco não derruba
+    // o save inteiro (antes, um campo vazio lançava e perdia tudo).
+    const update: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(data)) {
+      if (k === 'id' || k === 'createdAt' || v === undefined) continue;
+      update[k] = v;
+    }
     await updateDoc(doc(db, 'users', uid, 'accounts', id), update);
   }
 

@@ -292,10 +292,10 @@ export function DashboardPage() {
                           {p.startDate ? `Início: ${formatDate(p.startDate)}` : 'Sem data de início'}
                         </p>
                       </div>
-                      <span className={`text-xs font-mono text-right ${p.spentTotal < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
+                      <span className={`text-xs tnum text-right ${p.spentTotal < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
                         {p.spentTotal < 0 ? formatBRL(p.spentTotal) : '—'}
                       </span>
-                      <span className={`text-xs font-mono text-right ${p.spentMonth < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
+                      <span className={`text-xs tnum text-right ${p.spentMonth < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
                         {p.countMonth > 0 && p.spentMonth < 0 ? formatBRL(p.spentMonth) : '—'}
                       </span>
                     </div>
@@ -342,14 +342,14 @@ export function DashboardPage() {
                                 style={{ width: `${barPct}%` }}
                               />
                             </div>
-                            <span className={`text-[10px] font-mono ${over ? 'text-accent-red' : 'text-text-secondary'}`}>
+                            <span className={`text-[10px] tnum ${over ? 'text-accent-red' : 'text-text-secondary'}`}>
                               {pct.toFixed(0)}%
                             </span>
                           </div>
                         </div>
-                        <span className="text-xs font-mono text-text-primary text-right">{formatBRL(b.limit)}</span>
-                        <span className={`text-xs font-mono text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
-                        <span className="text-xs font-mono text-text-secondary text-right">{formatBRL(b.remaining)}</span>
+                        <span className="text-xs tnum text-text-primary text-right">{formatBRL(b.limit)}</span>
+                        <span className={`text-xs tnum text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
+                        <span className="text-xs tnum text-text-secondary text-right">{formatBRL(b.remaining)}</span>
                       </div>
                     );
                   })}
@@ -365,14 +365,14 @@ export function DashboardPage() {
                             style={{ width: `${budgetPct}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] font-mono ${budgetOver ? 'text-accent-red' : 'text-text-secondary'}`}>
+                        <span className={`text-[10px] tnum ${budgetOver ? 'text-accent-red' : 'text-text-secondary'}`}>
                           {budgetPct.toFixed(0)}%
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs font-mono font-bold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
-                    <span className={`text-xs font-mono font-bold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
-                    <span className="text-xs font-mono text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
+                    <span className="text-xs tnum font-bold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
+                    <span className={`text-xs tnum font-bold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
+                    <span className="text-xs tnum text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
                   </div>
                 </div>
               )}

@@ -1,0 +1,563 @@
+<title>Categorização 2.0 — protótipo</title>
+<style>
+  :root {
+    --ground: #0d0d0f;
+    --phone-bg: #121212;
+    --surface: #1b1b1e;
+    --surface-2: #232327;
+    --line: #2a2a2e;
+    --text: #f5f4f2;
+    --text-2: #a3a29e;
+    --text-3: #6e6d69;
+    --mint: #5ee0a0;
+    --mint-dim: rgba(94, 224, 160, 0.32);
+    --coral: #ff6e5f;
+    --radius: 16px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { background: var(--ground); }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 56px;
+    padding: 40px 24px;
+    flex-wrap: wrap;
+  }
+  svg.i { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+
+  /* ---------- side note ---------- */
+  .aside { max-width: 300px; display: flex; flex-direction: column; gap: 14px; }
+  .aside .eyebrow {
+    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--mint); font-weight: 600;
+  }
+  .aside h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; text-wrap: balance; }
+  .aside p { font-size: 14px; line-height: 1.55; color: var(--text-2); }
+  .aside .hint {
+    font-size: 13px; color: var(--text-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 10px 12px; background: var(--surface); line-height: 1.5;
+  }
+  .aside .hint strong { color: var(--text); font-weight: 600; }
+
+  /* ---------- phone frame ---------- */
+  .phone {
+    width: 390px; height: 806px; flex-shrink: 0;
+    background: var(--phone-bg);
+    border-radius: 48px;
+    border: 1px solid #2e2e33;
+    box-shadow: 0 0 0 10px #1a1a1d, 0 30px 80px rgba(0,0,0,0.6);
+    overflow: hidden;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .statusbar {
+    height: 52px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 28px 0;
+    font-size: 14px; font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .statusbar .right { display: flex; gap: 7px; align-items: center; color: var(--text-2); }
+  .statusbar .right svg { width: 17px; height: 17px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; }
+
+  .app { flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 8px 20px 24px; }
+
+  /* ---------- header ---------- */
+  .hdr { flex-shrink: 0; padding: 8px 4px 16px; }
+  .hdr .hello { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  .hdr .sub { font-size: 14px; color: var(--text-2); margin-top: 3px; }
+  .progress-wrap { margin-top: 14px; display: flex; align-items: center; gap: 10px; }
+  .progress {
+    flex: 1; height: 6px; border-radius: 99px; background: var(--surface-2); overflow: hidden;
+  }
+  .progress .fill {
+    height: 100%; width: 0%; border-radius: 99px;
+    background: linear-gradient(90deg, #55555a, var(--mint));
+    transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .progress-label { font-size: 13px; font-weight: 600; color: var(--text-2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  /* ---------- card area ---------- */
+  .cardarea { flex: 1; position: relative; min-height: 0; }
+  .txcard {
+    position: absolute; inset: 0 0 auto 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 20px 18px;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: transform 0.26s cubic-bezier(0.36, 0, 0.66, -0.2), opacity 0.22s ease;
+  }
+  .txcard.leaving { transform: translateX(108%); opacity: 0; }
+  .txcard.entering { animation: cardIn 0.28s cubic-bezier(0.22, 1, 0.36, 1); }
+  @keyframes cardIn {
+    from { transform: translateY(12px) scale(0.985); opacity: 0; }
+    to   { transform: none; opacity: 1; }
+  }
+  .txcard .kind {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--text-3); font-weight: 600;
+  }
+  .txcard .kind.receita { color: var(--mint); }
+  .txcard .desc { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin-top: 6px; }
+  .txcard .meta { font-size: 13px; color: var(--text-2); margin-top: 2px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .txcard .meta .chip {
+    background: var(--surface-2); border-radius: 99px; padding: 2px 9px; font-size: 12px; color: var(--text-2);
+  }
+  .txcard .amount {
+    font-size: 30px; font-weight: 800; letter-spacing: -0.02em;
+    color: var(--coral); margin-top: 10px; font-variant-numeric: tabular-nums;
+  }
+  .txcard .amount.pos { color: var(--mint); }
+
+  /* magic suggestion */
+  .magic {
+    margin-top: 18px;
+    width: 100%; cursor: pointer;
+    border-radius: 14px; padding: 15px 16px;
+    background: rgba(94, 224, 160, 0.09);
+    border: 1px solid var(--mint-dim);
+    color: var(--text);
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    font-size: 17px; font-weight: 700;
+    font-family: inherit;
+    animation: breathe 3.4s ease-in-out infinite;
+    transition: transform 0.12s ease, background 0.15s ease;
+  }
+  .magic svg.i { color: var(--mint); }
+  .magic:active { transform: scale(0.98); background: rgba(94, 224, 160, 0.16); }
+  .magic .q { color: var(--text-2); font-weight: 500; font-size: 15px; }
+  @keyframes breathe {
+    0%, 100% { border-color: var(--mint-dim); }
+    50% { border-color: rgba(94, 224, 160, 0.6); }
+  }
+  .magic-src {
+    margin-top: 8px; font-size: 12px; color: var(--text-3); text-align: center;
+    display: flex; align-items: center; justify-content: center; gap: 5px;
+  }
+  .magic-src svg { width: 12px; height: 12px; stroke: var(--text-3); fill: none; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+
+  .no-magic {
+    margin-top: 18px; text-align: center; font-size: 13.5px; color: var(--text-2);
+    padding: 12px; border: 1px dashed var(--line); border-radius: 14px; line-height: 1.5;
+  }
+
+  /* ---------- thumb zone ---------- */
+  .thumb { flex-shrink: 0; display: flex; flex-direction: column; gap: 10px; padding-top: 12px; }
+  .thumb .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-3); font-weight: 600; padding-left: 4px; }
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .catbtn {
+    border: 1px solid var(--line); background: var(--surface);
+    border-radius: 14px; padding: 12px 6px 10px;
+    min-height: 66px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    color: var(--text); font-family: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; transition: transform 0.1s ease, background 0.15s ease;
+  }
+  .catbtn svg.i { color: var(--text-2); width: 21px; height: 21px; }
+  .catbtn:active { transform: scale(0.95); background: var(--surface-2); }
+  .catbtn:active svg.i { color: var(--mint); }
+  .rowbtns { display: flex; gap: 8px; }
+  .pillbtn {
+    flex: 1; border: 1px solid var(--line); background: var(--surface);
+    border-radius: 99px; padding: 12px; min-height: 48px;
+    color: var(--text-2); font-family: inherit; font-size: 14px; font-weight: 600;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center; gap: 7px;
+  }
+  .pillbtn svg.i { width: 17px; height: 17px; }
+  .pillbtn:active { background: var(--surface-2); }
+
+  /* undo toast */
+  .undo {
+    position: absolute; left: 20px; right: 20px; bottom: 222px;
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 99px; padding: 10px 16px;
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: 14px; opacity: 0; pointer-events: none;
+    transform: translateY(8px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    z-index: 5;
+  }
+  .undo.show { opacity: 1; pointer-events: auto; transform: none; }
+  .undo .what { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .undo .what b { color: var(--mint); font-weight: 700; }
+  .undo button {
+    border: none; background: none; color: var(--text); font-weight: 700;
+    font-family: inherit; font-size: 14px; cursor: pointer; padding: 4px 2px 4px 14px;
+  }
+
+  /* ---------- search sheet ---------- */
+  .sheet {
+    position: absolute; inset: 0; z-index: 10;
+    background: rgba(0,0,0,0.5);
+    opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
+    display: flex; align-items: flex-end;
+  }
+  .sheet.open { opacity: 1; pointer-events: auto; }
+  .sheet .panel {
+    background: var(--phone-bg); width: 100%; max-height: 78%;
+    border-radius: 24px 24px 0 0; border-top: 1px solid var(--line);
+    padding: 16px 20px 28px; display: flex; flex-direction: column; gap: 12px;
+    transform: translateY(30px); transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .sheet.open .panel { transform: none; }
+  .sheet input {
+    width: 100%; border: 1px solid var(--line); background: var(--surface);
+    border-radius: 12px; padding: 13px 14px; font-size: 16px; color: var(--text);
+    font-family: inherit; outline: none;
+  }
+  .sheet input:focus { border-color: var(--mint-dim); }
+  .catlist { overflow-y: auto; display: flex; flex-direction: column; }
+  .catrow {
+    display: flex; align-items: center; gap: 14px;
+    padding: 13px 6px; border: none; background: none; text-align: left;
+    color: var(--text); font-family: inherit; font-size: 15.5px; font-weight: 500;
+    border-bottom: 1px solid var(--line); cursor: pointer; min-height: 50px;
+  }
+  .catrow svg.i { color: var(--text-2); width: 20px; height: 20px; }
+  .catrow:active { background: var(--surface); }
+
+  /* ---------- finish ---------- */
+  .finish {
+    position: absolute; inset: 0; z-index: 8;
+    background: var(--phone-bg);
+    display: none; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 36px 28px; gap: 10px;
+  }
+  .finish.show { display: flex; animation: cardIn 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+  .finish .check {
+    width: 80px; height: 80px; border-radius: 50%;
+    background: rgba(94, 224, 160, 0.1);
+    border: 1.5px solid var(--mint);
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 10px;
+  }
+  .finish .check svg { width: 36px; height: 36px; stroke: var(--mint); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .finish h2 { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; }
+  .finish .stats { font-size: 15px; color: var(--text-2); line-height: 1.5; }
+  .finish .stats b { color: var(--text); font-variant-numeric: tabular-nums; }
+  .learned {
+    margin-top: 18px; width: 100%; text-align: left;
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px 16px;
+  }
+  .learned .t {
+    font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--mint); font-weight: 700; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .learned .t svg { width: 13px; height: 13px; stroke: var(--mint); fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+  .learned .row { font-size: 13.5px; color: var(--text-2); padding: 4px 0; }
+  .learned .row b { color: var(--text); font-weight: 600; }
+  .finish .bye { margin-top: 16px; font-size: 13.5px; color: var(--text-3); }
+  .finish .replay {
+    margin-top: 12px; border: 1px solid var(--line); background: var(--surface);
+    color: var(--text-2); border-radius: 99px; padding: 10px 22px;
+    font-family: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  #confetti { position: absolute; inset: 0; pointer-events: none; z-index: 9; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+  }
+  @media (max-width: 860px) {
+    body { padding: 16px 8px; gap: 24px; }
+    .aside { max-width: 390px; order: 2; }
+    .phone { width: min(390px, 100vw - 16px); height: 780px; }
+  }
+</style>
+
+<aside class="aside">
+  <span class="eyebrow">Protótipo navegável · v2</span>
+  <h1>Categorização 2.0 — a tela que chega no WhatsApp dela</h1>
+  <p>Ícones de linha monocromáticos com peso uniforme, animações contidas, tipografia do sistema (a mesma do iPhone). Um lançamento por vez, sugestão pronta em um toque, categorias frequentes na zona do polegar.</p>
+  <div class="hint"><strong>Experimente:</strong> toque na sugestão em destaque (1 toque), use "Desfazer", pule uma, escolha pela grade ou pela busca. Ao terminar, veja o que o sistema aprendeu.</div>
+</aside>
+
+<div class="phone">
+  <div class="statusbar">
+    <span id="clock">21:37</span>
+    <span class="right">
+      <svg viewBox="0 0 24 24"><path d="M2 20h.01M7 20v-4M12 20v-8M17 20V8M22 20V4"/></svg>
+      <svg viewBox="0 0 24 24"><rect x="2" y="8" width="17" height="8" rx="2.5"/><path d="M21.5 10.5v3"/></svg>
+    </span>
+  </div>
+  <div class="app">
+    <div class="hdr">
+      <div class="hello">Oi, Ju</div>
+      <div class="sub" id="subline">6 lançamentos esperando por você</div>
+      <div class="progress-wrap">
+        <div class="progress"><div class="fill" id="fill"></div></div>
+        <span class="progress-label" id="plabel">0 de 6</span>
+      </div>
+    </div>
+
+    <div class="cardarea" id="cardarea"></div>
+
+    <div class="undo" id="undo">
+      <span class="what" id="undowhat"></span>
+      <button id="undobtn" type="button">Desfazer</button>
+    </div>
+
+    <div class="thumb">
+      <div class="label">Outras categorias</div>
+      <div class="grid" id="grid"></div>
+      <div class="rowbtns">
+        <button class="pillbtn" id="searchbtn" type="button"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7.5"/><path d="M21 21l-4.8-4.8"/></svg>Buscar categoria</button>
+        <button class="pillbtn" id="skipbtn" type="button">Pular<svg class="i" viewBox="0 0 24 24"><path d="M5 12h13M13 6l6 6-6 6"/></svg></button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sheet" id="sheet">
+    <div class="panel">
+      <input id="search" type="text" placeholder="Digite para filtrar…" autocomplete="off">
+      <div class="catlist" id="catlist"></div>
+    </div>
+  </div>
+
+  <div class="finish" id="finish">
+    <div class="check"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></div>
+    <h2>Tudo categorizado!</h2>
+    <p class="stats"><b id="fcount">6</b> lançamentos em <b id="ftime">1m24s</b><br>Salvo automaticamente — pode fechar.</p>
+    <div class="learned">
+      <div class="t"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/></svg>O app aprendeu com você</div>
+      <div class="row"><b>PADARIA STELLA</b> → Padaria &amp; Lanches</div>
+      <div class="row"><b>RAIA DROGASIL</b> → Farmácia</div>
+      <div class="row">No próximo mês, essas já chegam prontas.</div>
+    </div>
+    <p class="bye">Obrigada, Ju — o painel da família já está atualizado.</p>
+    <button class="replay" id="replay" type="button">Reiniciar demonstração</button>
+  </div>
+  <canvas id="confetti"></canvas>
+</div>
+
+<script>
+  /* SF-Symbols-style line icons: single stroke, uniform weight */
+  const ICONS = {
+    cart: '<circle cx="9.5" cy="20" r="1.1"/><circle cx="18" cy="20" r="1.1"/><path d="M2.5 3.5h2.6l2.5 12.2a1.6 1.6 0 0 0 1.57 1.3h8.16a1.6 1.6 0 0 0 1.56-1.24L20.5 8.5H6.1"/>',
+    utensils: '<path d="M4 2.5v6.5a2 2 0 0 0 2 2h3a2 2 0 0 0 2-2V2.5M7.5 2.5V21.5"/><path d="M20 15.5V2.5a4.5 4.5 0 0 0-4.5 4.5v6.5a2 2 0 0 0 2 2H20zm0 0v6"/>',
+    coffee: '<path d="M17.5 9h1a3.5 3.5 0 0 1 0 7h-1"/><path d="M3.5 9h14v7.5a4 4 0 0 1-4 4h-6a4 4 0 0 1-4-4V9z"/><path d="M7.5 2.5v3M10.5 2.5v3M13.5 2.5v3"/>',
+    car: '<path d="M4.5 16.5H3.5a1 1 0 0 1-1-1v-3.2c0-.8.5-1.5 1.2-1.8l1.5-3.2A1.6 1.6 0 0 1 6.6 6.5h7.6c.5 0 1 .2 1.3.6l2.4 2.7 2.7.7c.7.2 1.2.8 1.2 1.6v3.4a1 1 0 0 1-1 1h-1.3"/><circle cx="7.5" cy="16.5" r="2"/><circle cx="16.5" cy="16.5" r="2"/><path d="M9.5 16.5h5"/>',
+    pill: '<path d="M10.3 20.6 3.4 13.7a4.9 4.9 0 1 1 6.9-6.9l6.9 6.9a4.9 4.9 0 1 1-6.9 6.9Z"/><path d="m6.9 10.3 6.9 6.9"/>',
+    home: '<path d="M3.5 9.5 12 2.8l8.5 6.7v10a1.7 1.7 0 0 1-1.7 1.7H5.2a1.7 1.7 0 0 1-1.7-1.7v-10z"/><path d="M9.3 21.2v-8h5.4v8"/>',
+    shirt: '<path d="M7.2 3.8 3.2 7.6l2.6 2.6.9-.7v10.7h10.6V9.5l.9.7 2.6-2.6-4-3.8h-1.9a3 3 0 0 1-5.8 0H7.2z"/>',
+    heart: '<path d="M20.3 5.1a5.2 5.2 0 0 0-7.4 0L12 6l-.9-.9a5.2 5.2 0 1 0-7.4 7.4l.9.9L12 20.8l7.4-7.4.9-.9a5.2 5.2 0 0 0 0-7.4z"/>',
+    book: '<path d="M2.5 4h5.7a3.8 3.8 0 0 1 3.8 3.8V20.5a2.85 2.85 0 0 0-2.85-2.85H2.5V4z"/><path d="M21.5 4h-5.7A3.8 3.8 0 0 0 12 7.8V20.5a2.85 2.85 0 0 1 2.85-2.85h6.65V4z"/>',
+    film: '<rect x="3" y="3.5" width="18" height="17" rx="2.2"/><path d="M8 3.5v17M16 3.5v17M3 8.5h5M3 15.5h5M16 8.5h5M16 15.5h5"/>',
+    paw: '<circle cx="7.2" cy="8.8" r="1.7"/><circle cx="12" cy="6.8" r="1.7"/><circle cx="16.8" cy="8.8" r="1.7"/><path d="M8 16.8c0-2.3 1.8-4.1 4-4.1s4 1.8 4 4.1c0 1.9-1.7 3-4 3s-4-1.1-4-3z"/>',
+    undo: '<path d="M8.5 13.5 4 9l4.5-4.5"/><path d="M4 9h10.7a5.3 5.3 0 0 1 0 10.6H11"/>',
+    sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3z"/>',
+  };
+  const icon = (name, cls = 'i') => '<svg class="' + cls + '" viewBox="0 0 24 24" aria-hidden="true">' + ICONS[name] + '</svg>';
+
+  const CATS = [
+    { id: 'mercado', name: 'Mercado', ico: 'cart' },
+    { id: 'rest', name: 'Restaurante', ico: 'utensils' },
+    { id: 'lanche', name: 'Padaria & Lanches', short: 'Lanches', ico: 'coffee' },
+    { id: 'transp', name: 'Transporte', ico: 'car' },
+    { id: 'farm', name: 'Farmácia', ico: 'pill' },
+    { id: 'casa', name: 'Casa', ico: 'home' },
+    { id: 'vest', name: 'Vestuário', ico: 'shirt' },
+    { id: 'saude', name: 'Saúde', ico: 'heart' },
+    { id: 'edu', name: 'Educação', ico: 'book' },
+    { id: 'lazer', name: 'Lazer', ico: 'film' },
+    { id: 'pet', name: 'Pets', ico: 'paw' },
+    { id: 'estorno', name: 'Estorno / Reembolso', short: 'Estorno', ico: 'undo' },
+  ];
+  const TOP6 = ['mercado', 'rest', 'lanche', 'transp', 'farm', 'casa'];
+
+  const TXS = [
+    { desc: 'PADARIA STELLA', date: '28/06', acc: 'Nubank •••• 4535', amount: -34.9,
+      sug: 'lanche', src: 'Você escolheu isso 8 vezes' },
+    { desc: 'UBER *TRIP', date: '27/06', acc: 'Nubank •••• 4535', amount: -18.45,
+      sug: 'transp', src: 'Regra automática: UBER*' },
+    { desc: 'MERCADOLIVRE*TECH', date: '26/06', acc: 'Itaú •••• 2210', amount: -129.9,
+      parcela: '2/5', sug: null },
+    { desc: 'RAIA DROGASIL', date: '25/06', acc: 'Nubank •••• 4535', amount: -67.32,
+      sug: 'farm', src: 'Sugestão da IA na importação' },
+    { desc: 'ESTORNO IFOOD', date: '24/06', acc: 'Nubank •••• 4535', amount: 42.5,
+      sug: 'estorno', src: 'Detectado como estorno' },
+    { desc: 'CROCS BRASIL', date: '22/06', acc: 'Itaú •••• 2210', amount: -189.9,
+      sug: 'vest', src: 'Você escolheu isso da última vez' },
+  ];
+
+  const $ = (id) => document.getElementById(id);
+  const cat = (id) => CATS.find((c) => c.id === id);
+  const fmt = (v) => (v < 0 ? '−' : '+') + ' R$ ' +
+    Math.abs(v).toFixed(2).replace('.', ',');
+
+  let queue, done, startAt, undoTimer, lastAction = null;
+
+  function reset() {
+    queue = TXS.map((t, i) => ({ ...t, i }));
+    done = 0;
+    startAt = Date.now();
+    lastAction = null;
+    $('finish').classList.remove('show');
+    render();
+  }
+
+  function progress() {
+    const total = TXS.length;
+    $('fill').style.width = (done / total) * 100 + '%';
+    $('plabel').textContent = done + ' de ' + total;
+    const left = total - done;
+    $('subline').textContent = left === 0 ? 'Nenhum pendente'
+      : left + (left === 1 ? ' lançamento esperando' : ' lançamentos esperando por você');
+  }
+
+  function render() {
+    progress();
+    const area = $('cardarea');
+    area.innerHTML = '';
+    const tx = queue[0];
+    if (!tx) return finishScreen();
+
+    const card = document.createElement('div');
+    card.className = 'txcard entering';
+    const isPos = tx.amount > 0;
+    const sug = tx.sug ? cat(tx.sug) : null;
+    card.innerHTML =
+      '<span class="kind' + (isPos ? ' receita' : '') + '">' +
+        (isPos ? 'Entrada · confirme a categoria' : 'Gasto · escolha a categoria') + '</span>' +
+      '<div class="desc">' + tx.desc + '</div>' +
+      '<div class="meta"><span>' + tx.date + '</span><span class="chip">' + tx.acc + '</span>' +
+        (tx.parcela ? '<span class="chip">Parcela ' + tx.parcela + '</span>' : '') + '</div>' +
+      '<div class="amount' + (isPos ? ' pos' : '') + '">' + fmt(tx.amount) + '</div>' +
+      (sug
+        ? '<button class="magic" type="button" id="magicbtn">' +
+            icon(sug.ico) + '<span><span class="q">É </span>' + sug.name + '<span class="q">?</span></span>' +
+          '</button><div class="magic-src">' + icon('sparkle', '') + tx.src + ' · um toque confirma</div>'
+        : '<div class="no-magic">Primeira vez que esse lugar aparece.<br>Escolha abaixo — o app memoriza para as próximas.</div>');
+    area.appendChild(card);
+    const mb = $('magicbtn');
+    if (mb) mb.addEventListener('click', () => choose(tx.sug));
+  }
+
+  function haptic() { if (navigator.vibrate) navigator.vibrate(12); }
+
+  function choose(catId) {
+    const tx = queue.shift();
+    done++;
+    lastAction = { tx, catId };
+    haptic();
+    const card = document.querySelector('.txcard');
+    if (card) card.classList.add('leaving');
+    showUndo(tx, catId);
+    setTimeout(render, 230);
+  }
+
+  function skip() {
+    if (queue.length < 2) return;
+    queue.push(queue.shift());
+    render();
+  }
+
+  function showUndo(tx, catId) {
+    const c = cat(catId);
+    $('undowhat').innerHTML = tx.desc.split('*')[0].trim() + ' → <b>' + (c.short || c.name) + '</b>';
+    $('undo').classList.add('show');
+    clearTimeout(undoTimer);
+    undoTimer = setTimeout(() => $('undo').classList.remove('show'), 3200);
+  }
+
+  $('undobtn').addEventListener('click', () => {
+    if (!lastAction) return;
+    queue.unshift(lastAction.tx);
+    done--;
+    lastAction = null;
+    $('undo').classList.remove('show');
+    $('finish').classList.remove('show');
+    render();
+  });
+
+  /* thumb grid */
+  const grid = $('grid');
+  TOP6.forEach((id) => {
+    const c = cat(id);
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'catbtn';
+    b.innerHTML = icon(c.ico) + '<span>' + (c.short || c.name) + '</span>';
+    b.addEventListener('click', () => { if (queue[0]) choose(id); });
+    grid.appendChild(b);
+  });
+
+  /* search sheet */
+  const sheet = $('sheet');
+  function renderList(filter) {
+    const list = $('catlist');
+    list.innerHTML = '';
+    CATS.filter((c) => c.name.toLowerCase().includes((filter || '').toLowerCase()))
+      .forEach((c) => {
+        const r = document.createElement('button');
+        r.type = 'button';
+        r.className = 'catrow';
+        r.innerHTML = icon(c.ico) + '<span>' + c.name + '</span>';
+        r.addEventListener('click', () => {
+          sheet.classList.remove('open');
+          if (queue[0]) choose(c.id);
+        });
+        list.appendChild(r);
+      });
+  }
+  $('searchbtn').addEventListener('click', () => {
+    renderList('');
+    $('search').value = '';
+    sheet.classList.add('open');
+    setTimeout(() => $('search').focus(), 250);
+  });
+  sheet.addEventListener('click', (e) => { if (e.target === sheet) sheet.classList.remove('open'); });
+  $('search').addEventListener('input', (e) => renderList(e.target.value));
+  $('skipbtn').addEventListener('click', skip);
+
+  /* finish */
+  function finishScreen() {
+    const secs = Math.max(5, Math.round((Date.now() - startAt) / 1000));
+    $('fcount').textContent = TXS.length;
+    $('ftime').textContent = Math.floor(secs / 60) + 'm' + String(secs % 60).padStart(2, '0') + 's';
+    $('finish').classList.add('show');
+    confetti();
+  }
+  $('replay').addEventListener('click', reset);
+
+  function confetti() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const cv = $('confetti');
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = cv.offsetWidth * dpr; cv.height = cv.offsetHeight * dpr;
+    const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+    const colors = ['#5ee0a0', '#f5f4f2', '#a3a29e'];
+    const parts = Array.from({ length: 60 }, () => ({
+      x: Math.random() * cv.offsetWidth, y: -20 - Math.random() * 120,
+      vy: 1.8 + Math.random() * 2.2, vx: -0.8 + Math.random() * 1.6,
+      s: 3 + Math.random() * 4, r: Math.random() * Math.PI,
+      c: colors[(Math.random() * colors.length) | 0],
+    }));
+    let frames = 0;
+    (function tick() {
+      ctx.clearRect(0, 0, cv.offsetWidth, cv.offsetHeight);
+      parts.forEach((p) => {
+        p.y += p.vy; p.x += p.vx; p.r += 0.06;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        ctx.fillStyle = p.c; ctx.globalAlpha = 0.85;
+        ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+        ctx.restore();
+      });
+      if (++frames < 200) requestAnimationFrame(tick);
+      else ctx.clearRect(0, 0, cv.offsetWidth, cv.offsetHeight);
+    })();
+  }
+
+  /* clock */
+  const now = new Date();
+  $('clock').textContent = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0');
+
+  reset();
+</script>

@@ -2,6 +2,12 @@ import { useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
 import { LogIn, UserPlus, Globe } from 'lucide-react';
 
+// Cadastro aberto fica DESLIGADO por padrão (app de uso familiar, 2 contas).
+// Para criar uma conta pontualmente, defina VITE_ALLOW_REGISTRATION=true no
+// ambiente. A proteção real é desativar o cadastro Email/Senha no console do
+// Firebase — este flag apenas esconde a UI. Ver docs/SEGURANCA-FASE-0.md.
+const ALLOW_REGISTRATION = import.meta.env.VITE_ALLOW_REGISTRATION === 'true';
+
 export function LoginForm() {
   const { login, register, loginWithGoogle } = useAuth();
   const [email, setEmail] = useState('');
@@ -15,7 +21,7 @@ export function LoginForm() {
     setError('');
     setLoading(true);
     try {
-      if (isRegister) {
+      if (isRegister && ALLOW_REGISTRATION) {
         await register(email, password);
       } else {
         await login(email, password);
@@ -101,15 +107,17 @@ export function LoginForm() {
           Entrar com Google
         </button>
 
-        <p className="mt-6 text-center text-xs text-text-secondary">
-          {isRegister ? 'Ja tem conta?' : 'Nao tem conta?'}{' '}
-          <button
-            onClick={() => setIsRegister(!isRegister)}
-            className="text-accent hover:underline"
-          >
-            {isRegister ? 'Entrar' : 'Criar conta'}
-          </button>
-        </p>
+        {ALLOW_REGISTRATION && (
+          <p className="mt-6 text-center text-xs text-text-secondary">
+            {isRegister ? 'Ja tem conta?' : 'Nao tem conta?'}{' '}
+            <button
+              onClick={() => setIsRegister(!isRegister)}
+              className="text-accent hover:underline"
+            >
+              {isRegister ? 'Entrar' : 'Criar conta'}
+            </button>
+          </p>
+        )}
       </div>
     </div>
   );

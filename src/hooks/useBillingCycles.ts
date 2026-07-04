@@ -87,9 +87,16 @@ export function useBillingCycles() {
     return cycles.find((c) => c.accountId === accountId && c.monthYear === monthYear);
   }
 
-  /** Returns the cycle for a given account + date, if it exists and is closed */
-  function getClosedCycle(accountId: string, date: Date): BillingCycle | null {
-    const monthYear = getMonthYear(date);
+  /**
+   * Returns the cycle for a given account + date, if it exists and is closed.
+   * `billingMonth` (o vínculo estável da transação com a fatura) tem
+   * precedência sobre o mês do `date`: depois de uma baixa cross-month o `date`
+   * já aponta pro mês do pagamento, então derivar o monthYear dele acharia o
+   * ciclo errado (ou nenhum) e o aviso de "fatura encerrada" sumiria ao editar
+   * a transação. Fallback pelo `date` p/ transações legadas sem `billingMonth`.
+   */
+  function getClosedCycle(accountId: string, date: Date, billingMonth?: string | null): BillingCycle | null {
+    const monthYear = billingMonth || getMonthYear(date);
     return cycles.find(
       (c) => c.accountId === accountId && c.monthYear === monthYear && c.status === 'closed'
     ) ?? null;

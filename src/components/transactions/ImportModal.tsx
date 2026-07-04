@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap } from 'lucide-react';
+import { useState, useMemo, useEffect } from 'react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX, CalendarClock } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
@@ -7,12 +7,15 @@ import type { Transaction, Category, Account, CategoryRule, Project } from '../.
 import { NoteTag } from '../shared/NoteTag';
 import {
   formatBRL,
+  formatDate,
   getMonthYear,
   getMonthLabel,
   filterCategoriesByAmount,
   normalizeTitular,
   extractTrailingInstallment,
   normalizeDescriptionForDedup,
+  fuzzyMatchMember,
+  invoiceDateFor,
 } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -63,43 +66,6 @@ interface Props {
   projects?: Project[];
 }
 
-/** Fuzzy match a statement titular name to a registered member name */
-function fuzzyMatchMember(statementName: string, memberNames: string[]): string {
-  if (!statementName || memberNames.length === 0) return '';
-  const normalized = statementName.toLowerCase().trim();
-
-  // Exact match
-  const exact = memberNames.find((n) => n.toLowerCase() === normalized);
-  if (exact) return exact;
-
-  // Statement name contains member name or vice versa
-  for (const name of memberNames) {
-    const nameLower = name.toLowerCase();
-    if (normalized.includes(nameLower) || nameLower.includes(normalized)) return name;
-  }
-
-  // All parts of member name appear in statement name (handles abbreviations like "K" matching "Kuhn")
-  for (const name of memberNames) {
-    const parts = name.toLowerCase().split(/\s+/);
-    const statementParts = normalized.split(/\s+/);
-    const allMatch = parts.every((part) =>
-      part.length === 1
-        ? statementParts.some((w) => w.startsWith(part))
-        : statementParts.some((w) => w.startsWith(part) || part.startsWith(w))
-    );
-    if (allMatch) return name;
-  }
-
-  // First name match (min 3 chars)
-  for (const name of memberNames) {
-    const firstName = name.toLowerCase().split(/\s+/)[0];
-    const statementFirst = normalized.split(/\s+/)[0];
-    if (firstName.length >= 3 && firstName === statementFirst) return name;
-  }
-
-  return '';
-}
-
 /** Generate month options: 6 months back + current + 3 months forward */
 function generateMonthOptions(): string[] {
   const options: string[] = [];
@@ -124,9 +90,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // AI categorization
   const [aiCategorizedDescriptions, setAiCategorizedDescriptions] = useState<Map<string, string>>(new Map());
 
-  // Credit card billing month
+  // Credit card billing month (= mês de PAGAMENTO/vencimento da fatura, regime
+  // de caixa) e o dia de vencimento aplicado (override do cadastro do cartão).
   const [isCreditCard, setIsCreditCard] = useState(false);
   const [billingMonth, setBillingMonth] = useState('');
+  const [billingDueDay, setBillingDueDay] = useState('');
+  // Total-a-pagar declarado na fatura (lido pelo parser) — valida o total
+  // importado contra a fatura (pega pagamento fantasma / linhas perdidas).
+  const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
   const monthOptions = generateMonthOptions();
   const creditCardAccounts = accounts.filter((a) => a.type === 'cartao');
 
@@ -142,6 +113,52 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
   // Member options: only from titular mappings (registered members)
   const memberOptions = titularNames.length > 0 ? titularNames : allTitulars;
+
+  // Cartão-alvo do lote (para o dia de vencimento padrão): com um único cartão,
+  // é ele; com vários, o cartão (type cartao) mais frequente entre as linhas.
+  const billingCardAccount = (() => {
+    if (creditCardAccounts.length === 1) return creditCardAccounts[0];
+    const counts = new Map<string, number>();
+    for (const it of items) {
+      if (it.account) counts.set(it.account, (counts.get(it.account) || 0) + 1);
+    }
+    let best: string | null = null;
+    let bestN = 0;
+    for (const [name, n] of counts) if (n > bestN) { bestN = n; best = name; }
+    return creditCardAccounts.find((a) => a.name === best) || null;
+  })();
+
+  // Dia de vencimento efetivo: override digitado no import > dia cadastrado no
+  // cartão. É o DIA da data de caixa; o MÊS vem do seletor de pagamento.
+  const effectiveDueDay: number | null = (() => {
+    const override = parseInt(billingDueDay, 10);
+    if (billingDueDay.trim() !== '' && Number.isFinite(override)) return override;
+    return billingCardAccount?.dueDay ?? null;
+  })();
+
+  // Data de caixa que TODOS os lançamentos da fatura receberão (dia de
+  // vencimento do mês de pagamento escolhido). Espelha exatamente o cálculo do
+  // handleImport, para o texto de confirmação bater com o que será gravado.
+  const resolvedInvoiceDate = isCreditCard ? invoiceDateFor(billingMonth, effectiveDueDay) : null;
+
+  // Pré-preenche "Vence dia:" com o dueDay do cartão RESOLVIDO da importação
+  // (billingCardAccount) assim que ele fica disponível — não só no caso de um
+  // único cartão cadastrado. billingCardAccount só se resolve corretamente com
+  // vários cartões depois que as linhas têm `account` = o cartão certo (auto
+  // no caso de 1 cartão; via "Aplicar em lote" no caso de vários) — o efeito
+  // reage a essa mudança. Só toca o campo enquanto o usuário não digitou nada,
+  // para nunca sobrescrever um override manual.
+  useEffect(() => {
+    if (billingDueDay.trim() !== '') return;
+    if (billingCardAccount?.dueDay) setBillingDueDay(String(billingCardAccount.dueDay));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [billingCardAccount?.dueDay]);
+
+  // Rótulos do placar: cartão fala em Compras/Estornos; conta corrente (OFX, em
+  // breve) fala em Saídas/Entradas — positivos ali são receitas, não estornos.
+  const scoreLabels = isCreditCard
+    ? { neg: 'Compras', pos: 'Estornos/créditos', net: 'Líquido do mês' }
+    : { neg: 'Saídas', pos: 'Entradas', net: 'Líquido' };
 
   // ─── Text extraction ────────────────────────────────────────────────────────
 
@@ -281,6 +298,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   async function handleParse(file: File) {
     setError('');
     setFileName(file.name);
+    setDeclaredTotal(null);
     setAiParsing(true);
 
     try {
@@ -318,10 +336,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           installmentNumber: number | null; totalInstallments: number | null; cardNumber: string | null;
         }>;
         isCreditCard?: boolean;
+        declaredTotal?: number | null;
         usage: { input_tokens: number; output_tokens: number };
       };
 
       setAiUsage(data.usage);
+      setDeclaredTotal(data.declaredTotal ?? null);
 
       // Detect credit card: AI flag or heuristic (most transactions have cardNumber)
       const hasCardNumbers = data.transactions.filter((t) => t.cardNumber).length > data.transactions.length / 2;
@@ -437,17 +457,24 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         }
       }
 
-      // Auto-detect billing month from most common month in transaction dates
+      // Auto-detect billing month from the MOST RECENT transaction date — o mês
+      // de pagamento nunca pode ficar anterior à última compra da fatura. (Antes
+      // usava o mês mais FREQUENTE, o que sugeria um mês passado quando a
+      // maioria das compras caía no mês anterior ao fechamento.)
       if (detectedCreditCard && parsed.length > 0) {
-        const monthCounts = new Map<string, number>();
-        for (const p of parsed) {
-          const my = getMonthYear(p.date);
-          monthCounts.set(my, (monthCounts.get(my) || 0) + 1);
+        // Ignora datas inválidas (Invalid Date) — senão getMonthYear devolveria
+        // "NaN-NaN" e envenenaria o seletor de mês de pagamento.
+        const validDates = parsed
+          .map((p) => p.date)
+          .filter((d): d is Date => d instanceof Date && !isNaN(d.getTime()));
+        if (validDates.length > 0) {
+          const latestDate = validDates.reduce((latest, d) => (d > latest ? d : latest), validDates[0]);
+          setBillingMonth(getMonthYear(latestDate));
         }
-        const detectedMonth = [...monthCounts.entries()].sort((a, b) => b[1] - a[1])[0][0];
-        setBillingMonth(detectedMonth);
 
-        // Auto-select credit card account if only one exists
+        // Auto-select credit card account if only one exists. O pré-preenchimento
+        // de "Vence dia:" acontece no efeito acima (reage a billingCardAccount),
+        // não aqui — cobre igualmente o caso de vários cartões.
         if (creditCardAccounts.length === 1) {
           const ccName = creditCardAccounts[0].name;
           parsed.forEach((p) => { p.account = ccName; });
@@ -472,7 +499,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         ...item,
         ...(batchAccount ? { account: batchAccount } : {}),
         ...(batchCategory ? { categoryId: batchCategory } : {}),
-        ...(batchMember ? { familyMember: batchMember } : {}),
+        // Aplicar membro em lote também sincroniza o titular canônico.
+        ...(batchMember ? { familyMember: batchMember, titular: batchMember } : {}),
         ...(batchProject ? { projectId: batchProject } : {}),
       };
     }));
@@ -483,7 +511,17 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     // Keep string fields as empty string, only use null for ID fields like categoryId
     const nullableFields: (keyof ImportItem)[] = ['categoryId', 'projectId'];
     const finalValue = nullableFields.includes(field) ? (value || null) : value;
-    setItems((prev) => prev.map((item, i) => i === index ? { ...item, [field]: finalValue } : item));
+    setItems((prev) => prev.map((item, i) => {
+      if (i !== index) return item;
+      // Ao escolher o membro, mantemos o `titular` em sincronia com o membro
+      // canônico (ou vazio p/ "sem membro"). Sem isso, a string crua do extrato
+      // continuaria gravada no titular mesmo com o membro corrigido — a raiz das
+      // duplicatas de titular.
+      if (field === 'familyMember') {
+        return { ...item, familyMember: value, titular: value };
+      }
+      return { ...item, [field]: finalValue };
+    }));
   }
 
   function updateInstallmentConfig(index: number, updates: Partial<ImportRow>) {
@@ -510,24 +548,48 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   }
 
   async function handleImport() {
+    // Trava dura: nenhum lançamento entra com titular cru não-vinculado. Se
+    // sobrou algum não-resolvido entre os selecionados, aborta e sinaliza (o
+    // botão já fica desabilitado; isto é a rede de segurança).
+    if (hasUnresolved) {
+      setError('Há lançamentos com titular não reconhecido. Escolha um membro cadastrado ou marque "Sem membro" antes de importar.');
+      return;
+    }
+    setError('');
     setImporting(true);
     const toImport: ImportItem[] = [];
 
-    // Billing month date (for credit card invoice assignment)
+    // Data de caixa da fatura: DIA = vencimento (cadastro do cartão ou override
+    // no import); MÊS = o mês de pagamento escolhido no seletor. Sob regime de
+    // caixa, essa `date` GOVERNA o mês do lançamento (quando o dinheiro sai),
+    // inclusive quando a fatura fecha num mês e vence no seguinte. Sem dia de
+    // vencimento, cai no dia 1º (retrocompatível). invoiceDateFor trava o dia
+    // dentro do mês, então o mês do lançamento é sempre o do seletor.
     let billingDate: Date | null = null;
     if (isCreditCard && billingMonth) {
-      const [year, month] = billingMonth.split('-').map(Number);
-      billingDate = new Date(year, month - 1, 1, 12, 0, 0);
+      billingDate = invoiceDateFor(billingMonth, effectiveDueDay);
     }
 
     for (const [i, row] of items.entries()) {
       if (!selected.has(i)) continue;
       const { isDuplicate: _, installmentType, periodicity, installmentAmount, aiSuggested: _ai, ...rest } = row;
 
-      // Original date is purchase date; billing date is for invoice assignment
+      // `purchaseDate` = competência (data da compra original, também de cada
+      // parcela) — referência secundária, NÃO governa o mês. `invoiceDate` = a
+      // data de caixa (pagamento/vencimento) que vira o `date` e governa o mês.
+      // Numa fatura de cartão as parcelas são gravadas como 'unica' e recebem o
+      // vencimento desta fatura — ou seja, cada parcela cai no mês em que é PAGA,
+      // não no mês da compra. Cada fatura mensal é importada com seu vencimento.
       const purchaseDate = rest.purchaseDate || rest.date;
       const invoiceDate = billingDate || rest.date;
 
+      // Vínculo ciclo↔transação (T1/T3): gravado só no fluxo de cartão
+      // (billingDate não-nulo). `billingMonth` é o mês da fatura a que a linha
+      // pertence — para a parcela corrente é o mês selecionado; para parcelas
+      // futuras é o mês projetado de cada uma. `provisionalDate` é a data de
+      // caixa no momento da importação (a "provisória"), preservada intacta
+      // quando a baixa da fatura sobrescrever `date` — é o que o reopen (T3)
+      // usa para restaurar. Fora do fluxo de cartão os dois ficam ausentes.
       if (installmentType === 'parcelada' && rest.totalInstallments && rest.totalInstallments > 1) {
         const amount = installmentAmount ?? rest.amount;
         const currentInst = rest.installmentNumber || 1;
@@ -541,6 +603,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           amount,
           installmentNumber: currentInst,
           totalInstallments: rest.totalInstallments,
+          billingMonth: billingDate ? billingMonth : rest.billingMonth,
+          provisionalDate: billingDate ? invoiceDate : rest.provisionalDate,
         });
 
         // Future installments
@@ -554,10 +618,18 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
             amount,
             installmentNumber: currentInst + offset,
             totalInstallments: rest.totalInstallments,
+            billingMonth: billingDate ? getMonthYear(futureDate) : rest.billingMonth,
+            provisionalDate: billingDate ? futureDate : rest.provisionalDate,
           });
         }
       } else {
-        toImport.push({ ...rest, date: invoiceDate, purchaseDate });
+        toImport.push({
+          ...rest,
+          date: invoiceDate,
+          purchaseDate,
+          billingMonth: billingDate ? billingMonth : rest.billingMonth,
+          provisionalDate: billingDate ? invoiceDate : rest.provisionalDate,
+        });
       }
     }
 
@@ -578,6 +650,42 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   }
 
   const duplicateCount = items.filter((i) => i.isDuplicate).length;
+
+  // Placar do lote: soma das linhas SELECIONADAS (as que serão gravadas, já que
+  // as duplicatas entram desmarcadas). Compras = Σ negativos; Estornos/créditos
+  // = Σ positivos; Líquido = o que sai no fluxo de caixa do mês. Um total de
+  // estornos alto (ex.: pagamento da fatura anterior lido por engano) fica
+  // visível ANTES de importar.
+  const totals = useMemo(() => {
+    let compras = 0;
+    let estornos = 0;
+    items.forEach((it, i) => {
+      if (!selected.has(i)) return;
+      if (it.amount < 0) compras += it.amount;
+      else estornos += it.amount;
+    });
+    return { compras, estornos, liquido: compras + estornos };
+  }, [items, selected]);
+
+  // Blindagem anti-titular-cru: uma linha SELECIONADA está "não resolvida"
+  // quando carrega um titular vindo do extrato (string bruta) que NÃO é um
+  // membro cadastrado. fuzzyMatchMember já normaliza os que reconhece (titular =
+  // nome canônico ∈ memberOptions); o que sobra é justamente o que criaria
+  // titulares duplicados. Só vale quando existe lista de membros p/ escolher —
+  // sem membros cadastrados não há o que deduplicar e o gate ficaria impossível.
+  const memberSet = useMemo(() => new Set(memberOptions), [memberOptions]);
+  const unresolvedIndices = useMemo(() => {
+    if (memberOptions.length === 0) return [] as number[];
+    const out: number[] = [];
+    items.forEach((it, i) => {
+      if (!selected.has(i)) return;
+      const t = (it.titular || '').trim();
+      if (t && !memberSet.has(t)) out.push(i);
+    });
+    return out;
+  }, [items, selected, memberSet, memberOptions.length]);
+  const hasUnresolved = unresolvedIndices.length > 0;
+  const unresolvedSet = useMemo(() => new Set(unresolvedIndices), [unresolvedIndices]);
 
   // Category helper for select options
   const rootCats = categories.filter((c) => !c.parentId);
@@ -643,7 +751,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   <span className="text-xs text-text-primary font-bold">{fileName}</span>
                   <span className="text-xs text-text-secondary">— {items.length} transacoes encontradas</span>
                   {duplicateCount > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-amber-400">
+                    <span className="flex items-center gap-1 text-xs text-status-warn">
                       <AlertTriangle size={12} /> {duplicateCount} possiveis duplicatas
                     </span>
                   )}
@@ -655,7 +763,45 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 )}
               </div>
 
-              {/* Credit card billing month */}
+              {/* Placar do lote — confere antes de gravar (soma das selecionadas).
+                  role=status + aria-live: o leitor de tela anuncia a mudança
+                  quando linhas são (des)marcadas (WCAG 4.1.3). */}
+              <div className="flex items-center gap-2 flex-wrap text-xs" role="status" aria-live="polite" aria-atomic="true">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border rounded">
+                  <span className="text-text-secondary">{scoreLabels.neg}</span>
+                  <span className="font-bold text-accent-red tnum">{formatBRL(totals.compras)}</span>
+                </div>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border ${totals.estornos > 0 ? 'bg-accent-green/10 border-accent-green/40' : 'bg-bg-secondary border-border'}`}>
+                  {totals.estornos > 0 && <AlertTriangle size={12} className="text-accent-green shrink-0" />}
+                  <span className="text-text-secondary">{scoreLabels.pos}</span>
+                  <span className="font-bold text-accent-green tnum">{formatBRL(totals.estornos)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-accent/40 rounded">
+                  <span className="text-text-secondary">{scoreLabels.net}</span>
+                  <span className={`font-bold tnum ${totals.liquido < 0 ? 'text-accent-red' : 'text-accent-green'}`}>{formatBRL(totals.liquido)}</span>
+                </div>
+                {/* Validação de total: confronta o líquido lido com o total-a-pagar
+                    declarado na fatura. Divergência > R$1 acende alerta (pega
+                    pagamento fantasma, linhas perdidas, duplicata desmarcada). */}
+                {declaredTotal != null && (() => {
+                  const declared = Math.abs(declaredTotal);
+                  const diff = Math.abs(declared - Math.abs(totals.liquido));
+                  const mismatch = diff > 1;
+                  return (
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border ${mismatch ? 'bg-accent-red/10 border-accent-red/50' : 'bg-accent-green/10 border-accent-green/40'}`}>
+                      {mismatch ? <AlertTriangle size={12} className="text-accent-red shrink-0" /> : <Check size={12} className="text-accent-green shrink-0" />}
+                      <span className="text-text-secondary">Declarado</span>
+                      <span className={`font-bold tnum ${mismatch ? 'text-accent-red' : 'text-accent-green'}`}>{formatBRL(declared)}</span>
+                      {mismatch && <span className="text-[10px] text-accent-red whitespace-nowrap">dif. {formatBRL(diff)}</span>}
+                    </div>
+                  );
+                })()}
+                <span className="text-[10px] text-text-secondary">
+                  {selected.size} de {items.length} selecionada{items.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+
+              {/* Credit card billing month = mês de PAGAMENTO/vencimento (caixa) */}
               {isCreditCard && (
                 <div className="bg-accent/5 border border-accent/30 rounded-lg p-3 flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
@@ -663,16 +809,59 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     <span className="text-xs font-bold text-text-primary">Fatura de cartao detectada</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <label className="text-xs text-text-secondary whitespace-nowrap">Lancar na fatura de:</label>
+                    <label htmlFor="billing-month" className="text-xs text-text-secondary whitespace-nowrap">Mês de pagamento:</label>
                     <select
+                      id="billing-month"
                       value={billingMonth}
                       onChange={(e) => setBillingMonth(e.target.value)}
-                      className={inputClass + ' !w-auto'}
+                      className={inputClass + ' !w-auto font-bold !text-text-primary'}
                     >
                       {monthOptions.map((m) => (
                         <option key={m} value={m}>{getMonthLabel(m)}</option>
                       ))}
                     </select>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label htmlFor="billing-dueday" className="text-xs text-text-secondary whitespace-nowrap">Vence dia:</label>
+                    <input
+                      id="billing-dueday"
+                      type="number"
+                      min={1}
+                      max={31}
+                      value={billingDueDay}
+                      onChange={(e) => setBillingDueDay(e.target.value)}
+                      placeholder={billingCardAccount?.dueDay ? String(billingCardAccount.dueDay) : '1'}
+                      className={inputClass + ' !w-16'}
+                    />
+                  </div>
+                  {/* Confirmação explícita da data de caixa que TODAS as linhas
+                      recebem — evita o tropeço de achar que forçou um mês e não
+                      forçou (A1), e deixa claro que o mês = pagamento (caixa). */}
+                  {resolvedInvoiceDate && (
+                    <p aria-live="polite" className="w-full text-[11px] text-text-secondary flex items-start gap-1.5 pt-1 border-t border-accent/15">
+                      <CalendarClock size={13} className="text-accent shrink-0 mt-0.5" />
+                      <span>
+                        As {selected.size} transações selecionadas entram no fluxo de caixa em{' '}
+                        <b className="text-text-primary">{formatDate(resolvedInvoiceDate)}</b>{' '}
+                        (pagamento da fatura de <b className="text-text-primary">{getMonthLabel(billingMonth)}</b>) — é o mês em que esses gastos contam.
+                      </span>
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Fim do fallback silencioso pro dia 1º: quando não há dia de
+                  vencimento resolvido (nem cadastrado no cartão, nem digitado
+                  acima), avisa em destaque em vez de só um texto cinza discreto. */}
+              {isCreditCard && billingMonth && !effectiveDueDay && (
+                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-lg p-3 flex items-start gap-2.5">
+                  <AlertTriangle size={16} className="text-status-warn shrink-0 mt-0.5" />
+                  <div className="text-xs text-text-primary leading-relaxed">
+                    <p className="font-bold text-status-warn">Sem dia de vencimento — as transações cairão no dia 1º</p>
+                    <p className="text-text-secondary mt-0.5">
+                      Cadastre o vencimento deste cartão em <b className="text-text-primary">Configurações</b>, ou
+                      informe o dia acima em <b className="text-text-primary">"Vence dia:"</b>, antes de importar.
+                    </p>
                   </div>
                 </div>
               )}
@@ -735,6 +924,24 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 </div>
               </div>
 
+              {/* Blindagem de titular: aviso quando há lançamentos com titular
+                  cru não vinculado a um membro cadastrado. */}
+              {hasUnresolved && (
+                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-lg p-3 flex items-start gap-2.5">
+                  <UserX size={16} className="text-status-warn shrink-0 mt-0.5" />
+                  <div className="text-xs text-text-primary leading-relaxed">
+                    <p className="font-bold text-status-warn">
+                      {unresolvedIndices.length} lançamento{unresolvedIndices.length > 1 ? 's' : ''} com titular não reconhecido
+                    </p>
+                    <p className="text-text-secondary mt-0.5">
+                      Na coluna <b className="text-text-primary">Membro</b> (destacada), escolha um membro cadastrado
+                      ou marque <b className="text-text-primary">“Sem membro”</b>. Isso evita criar titulares duplicados —
+                      a importação só conclui quando todos estiverem resolvidos.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Preview table */}
               <div className="overflow-auto max-h-[45vh] border border-border rounded">
                 <table className="w-full text-xs">
@@ -759,7 +966,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     {items.map((item, i) => (
                       <tr
                         key={i}
-                        className={`border-b border-border/40 ${item.isDuplicate ? 'bg-amber-500/5' : ''} ${selected.has(i) ? '' : 'opacity-40'}`}
+                        className={`border-b border-border/40 ${item.isDuplicate ? 'bg-status-warn/5' : ''} ${selected.has(i) ? '' : 'opacity-40'}`}
                       >
                         <td className="p-2">
                           <input type="checkbox" checked={selected.has(i)} onChange={() => toggleItem(i)} className="accent-accent" />
@@ -817,6 +1024,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         <td className="p-1">
                           {accountNames.length > 0 ? (
                             <select
+                              aria-label="Conta"
                               value={item.account}
                               onChange={(e) => updateRow(i, 'account', e.target.value)}
                               className={inputClass}
@@ -838,6 +1046,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             )}
                             {categories.length > 0 ? (
                               <select
+                                aria-label="Categoria"
                                 value={item.categoryId ?? ''}
                                 onChange={(e) => updateRow(i, 'categoryId', e.target.value)}
                                 className={inputClass + (item.aiSuggested ? ' border-purple-400/30' : '')}
@@ -882,14 +1091,37 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         {/* Editable: family member */}
                         <td className="p-1">
                           {memberOptions.length > 0 ? (
-                            <select
-                              value={item.familyMember}
-                              onChange={(e) => updateRow(i, 'familyMember', e.target.value)}
-                              className={inputClass}
-                            >
-                              <option value="">—</option>
-                              {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
-                            </select>
+                            (() => {
+                              const unresolved = unresolvedSet.has(i);
+                              // value: membro casado → nome; "sem membro" explícito
+                              // (titular vazio) → sentinela __none__; não resolvido
+                              // → placeholder desabilitado "Escolher…".
+                              const selVal = memberSet.has(item.familyMember)
+                                ? item.familyMember
+                                : (unresolved ? '' : '__none__');
+                              return (
+                                <div className="flex flex-col gap-0.5">
+                                  <select
+                                    aria-label="Membro"
+                                    value={selVal}
+                                    onChange={(e) => {
+                                      const v = e.target.value === '__none__' ? '' : e.target.value;
+                                      updateRow(i, 'familyMember', v);
+                                    }}
+                                    className={inputClass + (unresolved ? ' !border-status-warn border-2 ring-1 ring-status-warn/40' : '')}
+                                  >
+                                    <option value="" disabled>Escolher…</option>
+                                    {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
+                                    <option value="__none__">Sem membro</option>
+                                  </select>
+                                  {unresolved && (
+                                    <span className="text-[10px] text-status-warn/90 truncate" title={item.titular}>
+                                      extrato: “{item.titular}”
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })()
                           ) : (
                             <span className="text-text-secondary">{item.familyMember || '—'}</span>
                           )}
@@ -897,6 +1129,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         {projects.length > 0 && (
                           <td className="p-1">
                             <select
+                              aria-label="Projeto"
                               value={item.projectId ?? ''}
                               onChange={(e) => updateRow(i, 'projectId', e.target.value)}
                               className={inputClass}
@@ -917,7 +1150,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         <td className="p-2 text-center">
                           {item.isDuplicate && (
                             <span title="Possivel duplicata — ja existe transacao com mesma data, valor e descricao">
-                              <AlertTriangle size={13} className="text-amber-400" />
+                              <AlertTriangle size={13} className="text-status-warn" />
                             </span>
                           )}
                         </td>
@@ -1075,18 +1308,27 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
         {/* Footer */}
         {step === 'preview' && (
-          <div className="p-4 border-t border-border flex items-center justify-between">
-            <span className="text-xs text-text-secondary">{selected.size} de {items.length} selecionadas</span>
+          <div className="p-4 border-t border-border flex items-center justify-between gap-3">
+            <span className="text-xs text-text-secondary">
+              {hasUnresolved ? (
+                <span className="flex items-center gap-1.5 text-status-warn">
+                  <UserX size={13} /> {unresolvedIndices.length} titular{unresolvedIndices.length > 1 ? 'es' : ''} a resolver
+                </span>
+              ) : (
+                `${selected.size} de ${items.length} selecionadas`
+              )}
+            </span>
             <div className="flex gap-2">
               <button
-                onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); }}
+                onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); setDeclaredTotal(null); }}
                 className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
               >
                 Voltar
               </button>
               <button
                 onClick={handleImport}
-                disabled={selected.size === 0 || importing}
+                disabled={selected.size === 0 || importing || hasUnresolved}
+                title={hasUnresolved ? 'Resolva os titulares não reconhecidos antes de importar' : undefined}
                 className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
               >
                 {importing ? 'Importando...' : `Importar ${selected.size} transacoes`}

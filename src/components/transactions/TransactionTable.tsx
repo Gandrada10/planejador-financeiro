@@ -5,6 +5,7 @@ import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } f
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 import { BatchEditModal } from '../shared/BatchEditModal';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 
 interface Props {
   transactions: Transaction[];
@@ -30,6 +31,31 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   const [sortField, setSortField] = useState<'date' | 'purchaseDate'>('date');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [showBatchEdit, setShowBatchEdit] = useState(false);
+  // Exclusão exige confirmação (ação irreversível). Guarda o alvo pendente:
+  // um id (linha) ou 'batch' (seleção múltipla).
+  const [pendingDelete, setPendingDelete] = useState<string | 'batch' | null>(null);
+  // Confirmação acessível reaproveitável (substitui window.confirm nativo nos
+  // fluxos que precisam de um booleano de volta): guarda a config do diálogo +
+  // o resolver da Promise. askConfirm resolve quando o usuário decide.
+  const [confirmState, setConfirmState] = useState<
+    | {
+        title: string;
+        message?: string;
+        confirmLabel?: string;
+        destructive?: boolean;
+        resolve: (ok: boolean) => void;
+      }
+    | null
+  >(null);
+
+  function askConfirm(opts: {
+    title: string;
+    message?: string;
+    confirmLabel?: string;
+    destructive?: boolean;
+  }): Promise<boolean> {
+    return new Promise((resolve) => setConfirmState({ ...opts, resolve }));
+  }
 
   function toggleSort(field: 'date' | 'purchaseDate') {
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
@@ -56,9 +82,11 @@ export function TransactionTable({ transactions, categories, projects = [], acco
     if (!checkClosedCycle || !reopenCycle) return true;
     const closed = checkClosedCycle(t);
     if (!closed) return true;
-    const ok = window.confirm(
-      `A fatura "${closed.label}" esta encerrada.\n\nDeseja reabri-la para editar esta transacao?`
-    );
+    const ok = await askConfirm({
+      title: 'Fatura encerrada',
+      message: `A fatura "${closed.label}" está encerrada. Deseja reabri-la para editar esta transação?`,
+      confirmLabel: 'Reabrir',
+    });
     if (!ok) return false;
     await reopenCycle(closed.cycleId);
     return true;
@@ -146,9 +174,18 @@ export function TransactionTable({ transactions, categories, projects = [], acco
     }
   }
 
-  function deleteSelected() {
+  function performDeleteSelected() {
     selectedIds.forEach((id) => onDelete(id));
     setSelectedIds(new Set());
+  }
+
+  async function performDeleteRow(id: string) {
+    const t = sorted.find((x) => x.id === id);
+    if (t) {
+      const ok = await guardClosedCycle(t);
+      if (!ok) return;
+    }
+    onDelete(id);
   }
 
   function reconcileSelected(reconcile: boolean) {
@@ -191,7 +228,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
               <Pencil size={12} /> Edicao em lote
             </button>
           )}
-          <button onClick={deleteSelected} className="text-accent-red hover:underline flex items-center gap-1">
+          <button onClick={() => setPendingDelete('batch')} className="text-accent-red hover:underline flex items-center gap-1">
             <Trash2 size={12} /> Excluir
           </button>
         </div>
@@ -215,10 +252,12 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 if (closed) closedMap.set(closed.cycleId, closed.label);
               }
               if (closedMap.size > 0) {
-                const labels = [...closedMap.values()].join('\n');
-                const ok = window.confirm(
-                  `As seguintes faturas estao encerradas:\n${labels}\n\nDeseja reabri-las para editar?`
-                );
+                const labels = [...closedMap.values()].join(', ');
+                const ok = await askConfirm({
+                  title: 'Faturas encerradas',
+                  message: `As seguintes faturas estão encerradas: ${labels}. Deseja reabri-las para editar?`,
+                  confirmLabel: 'Reabrir',
+                });
                 if (!ok) return;
                 for (const cycleId of closedMap.keys()) await reopenCycle(cycleId);
               }
@@ -256,11 +295,21 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                   title={allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
                 />
               </th>
-              <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('date')}>
-                Data <SortIcon field="date" />
+              <th
+                className="p-2 text-left cursor-pointer select-none hover:text-text-primary"
+                onClick={() => toggleSort('date')}
+                title="Data de pagamento/vencimento — define o mês do lançamento no fluxo de caixa (quando o dinheiro sai)"
+              >
+                <span className="flex items-center gap-1">Data <SortIcon field="date" /></span>
+                <span className="block text-[10px] font-normal normal-case text-text-secondary">pagamento / vencimento</span>
               </th>
-              <th className="p-2 text-left cursor-pointer select-none hover:text-text-primary" onClick={() => toggleSort('purchaseDate')}>
-                Competencia <SortIcon field="purchaseDate" />
+              <th
+                className="p-2 text-left cursor-pointer select-none hover:text-text-primary"
+                onClick={() => toggleSort('purchaseDate')}
+                title="Data em que a compra foi efetivamente feita (competência). Referência — não define o mês."
+              >
+                <span className="flex items-center gap-1">Competência <SortIcon field="purchaseDate" /></span>
+                <span className="block text-[10px] font-normal normal-case text-text-secondary">data da compra</span>
               </th>
               <th className="p-2 text-left">Descricao</th>
               <th className="p-2 text-left">Categoria</th>
@@ -380,10 +429,13 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         if (!ok) return;
                         const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
                         if (existingRule && onDeleteRule && val !== t.categoryId) {
-                          const confirm = window.confirm(
-                            `Existe uma regra de categorização para "${t.description}".\n\nAo mudar a categoria, a regra será removida. Deseja continuar?`
-                          );
-                          if (!confirm) return;
+                          const ok = await askConfirm({
+                            title: 'Remover regra de categorização?',
+                            message: `Existe uma regra de categorização para "${t.description}". Ao mudar a categoria, a regra será removida.`,
+                            confirmLabel: 'Continuar',
+                            destructive: true,
+                          });
+                          if (!ok) return;
                           await onDeleteRule(existingRule.id);
                         }
                         onUpdate(t.id, { categoryId: val });
@@ -449,7 +501,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-center focus:outline-none"
                     />
                   ) : t.totalInstallments ? (
-                    <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] font-mono">
+                    <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] tnum">
                       {t.installmentNumber ?? '?'}/{t.totalInstallments}
                     </span>
                   ) : '—'}
@@ -541,11 +593,13 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 </td>
 
                 <td className="p-2">
-                  <button tabIndex={-1} onClick={async () => {
-                    const ok = await guardClosedCycle(t);
-                    if (!ok) return;
-                    onDelete(t.id);
-                  }} className="text-text-secondary hover:text-accent-red">
+                  <button
+                    tabIndex={-1}
+                    aria-label="Excluir transação"
+                    title="Excluir transação"
+                    onClick={() => setPendingDelete(t.id)}
+                    className="text-text-secondary hover:text-accent-red"
+                  >
                     <Trash2 size={14} />
                   </button>
                 </td>
@@ -554,6 +608,44 @@ export function TransactionTable({ transactions, categories, projects = [], acco
           </tbody>
         </table>
       </div>
+
+      {pendingDelete && (
+        <ConfirmDialog
+          destructive
+          title={
+            pendingDelete === 'batch'
+              ? `Excluir ${selectedIds.size} transaç${selectedIds.size === 1 ? 'ão' : 'ões'}?`
+              : 'Excluir transação?'
+          }
+          message="Esta ação não pode ser desfeita."
+          confirmLabel="Excluir"
+          cancelLabel="Cancelar"
+          onCancel={() => setPendingDelete(null)}
+          onConfirm={() => {
+            const target = pendingDelete;
+            setPendingDelete(null);
+            if (target === 'batch') performDeleteSelected();
+            else if (target) performDeleteRow(target);
+          }}
+        />
+      )}
+
+      {confirmState && (
+        <ConfirmDialog
+          title={confirmState.title}
+          message={confirmState.message}
+          confirmLabel={confirmState.confirmLabel}
+          destructive={confirmState.destructive}
+          onConfirm={() => {
+            confirmState.resolve(true);
+            setConfirmState(null);
+          }}
+          onCancel={() => {
+            confirmState.resolve(false);
+            setConfirmState(null);
+          }}
+        />
+      )}
     </div>
   );
 }

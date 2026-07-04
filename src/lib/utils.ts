@@ -29,6 +29,72 @@ export function cn(...classes: (string | boolean | undefined | null)[]): string 
   return classes.filter(Boolean).join(' ');
 }
 
+/**
+ * Data de caixa de uma fatura de cartão (regime de CAIXA): o lançamento entra
+ * no fluxo de caixa no DIA de vencimento/pagamento do MÊS de pagamento
+ * escolhido. O mês vem do parâmetro e é a autoridade — governa o mês do
+ * lançamento (inclusive quando a fatura fecha num mês e vence no seguinte).
+ * O dia é travado dentro do mês (último dia como teto) para nunca vazar pro
+ * mês seguinte por overflow. Sem dia de vencimento configurado, cai no dia 1º
+ * (fallback retrocompatível — ver aviso explícito no ImportModal quando isso
+ * acontece silenciosamente).
+ *
+ * SSOT compartilhado por ImportModal (importação) e CreditCardPage (reabrir
+ * fatura, que recalcula a provisória para transações legadas sem
+ * `provisionalDate` gravado).
+ */
+export function invoiceDateFor(monthYear: string, dueDay: number | null | undefined): Date | null {
+  if (!monthYear) return null;
+  const [year, month] = monthYear.split('-').map(Number);
+  if (!year || !month) return null;
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const raw = dueDay && dueDay > 0 ? dueDay : 1;
+  const day = Math.min(Math.max(raw, 1), daysInMonth);
+  return new Date(year, month - 1, day, 12, 0, 0);
+}
+
+/**
+ * Fuzzy-match a raw statement/import name to a registered member name.
+ * Single source of truth shared by the AI import flow (ImportModal) and the
+ * "Normalizar titulares" maintenance tool. Returns the canonical member name,
+ * or '' when nothing matches with confidence.
+ */
+export function fuzzyMatchMember(statementName: string, memberNames: string[]): string {
+  if (!statementName || memberNames.length === 0) return '';
+  const normalized = statementName.toLowerCase().trim();
+
+  // Exact match
+  const exact = memberNames.find((n) => n.toLowerCase() === normalized);
+  if (exact) return exact;
+
+  // Statement name contains member name or vice versa
+  for (const name of memberNames) {
+    const nameLower = name.toLowerCase();
+    if (normalized.includes(nameLower) || nameLower.includes(normalized)) return name;
+  }
+
+  // All parts of member name appear in statement name (handles abbreviations like "K" matching "Kuhn")
+  for (const name of memberNames) {
+    const parts = name.toLowerCase().split(/\s+/);
+    const statementParts = normalized.split(/\s+/);
+    const allMatch = parts.every((part) =>
+      part.length === 1
+        ? statementParts.some((w) => w.startsWith(part))
+        : statementParts.some((w) => w.startsWith(part) || part.startsWith(w))
+    );
+    if (allMatch) return name;
+  }
+
+  // First name match (min 3 chars)
+  for (const name of memberNames) {
+    const firstName = name.toLowerCase().split(/\s+/)[0];
+    const statementFirst = normalized.split(/\s+/)[0];
+    if (firstName.length >= 3 && firstName === statementFirst) return name;
+  }
+
+  return '';
+}
+
 /** Normalize titular name to Title Case so "JULIANA KUHN" and "juliana kuhn" are treated as the same person */
 export function normalizeTitular(name: string): string {
   if (!name) return '';

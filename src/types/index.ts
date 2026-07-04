@@ -48,6 +48,24 @@ export interface Transaction {
   reconciled: boolean;
   reconciledAt: Date | null;
   createdAt: Date;
+  /**
+   * Vínculo estável com a fatura/ciclo do cartão ("YYYY-MM" do mês de
+   * pagamento no momento da importação). Sobrevive a mudanças de `date`
+   * causadas pela baixa da fatura (pagamento em mês diferente do vencimento)
+   * — é o que permite reabrir a fatura depois e achar de volta as transações
+   * dela. `null`/ausente para transações não-cartão ou importadas antes deste
+   * campo existir (sem migração retroativa).
+   */
+  billingMonth?: string | null;
+  /**
+   * Data de caixa provisória (vencimento previsto do cartão no mês da
+   * fatura), gravada no momento da importação. Preservada intacta quando a
+   * baixa sobrescreve `date` com a data real do pagamento; usada para
+   * restaurar `date` ao reabrir a fatura. `null`/ausente fora do fluxo de
+   * cartão ou em transações legadas — nesse caso o reopen recalcula a
+   * provisória a partir do `dueDay` atual do cartão.
+   */
+  provisionalDate?: Date | null;
 }
 
 export interface Account {
@@ -85,6 +103,8 @@ export interface CategorizationSession {
   appliedAt: Date | null;
   appliedCount: number;
   lastActivityAt: Date | null;
+  /** Ids das categorias mais usadas (histórico), para a grade de acesso rápido. */
+  topCategoryIds: string[];
 }
 
 export interface CategorizationTransaction {
@@ -97,6 +117,16 @@ export interface CategorizationTransaction {
   totalInstallments: number | null;
   categoryId: string | null;
   notes: string;
+  /** Categoria provável, pré-calculada na criação da sessão (regras + histórico). */
+  suggestedCategoryId: string | null;
+  /** Motivo legível da sugestão, ex.: "Você já categorizou assim". */
+  suggestionReason: string | null;
+  /**
+   * Conta/cartão de origem (ex.: "Nubank •••• 4535"), copiada da transação
+   * real na criação da sessão. `null` em sessões antigas (campo ausente na
+   * subcoleção) — a UI degrada graciosamente e não mostra o chip.
+   */
+  account: string | null;
 }
 
 export interface Project {
