@@ -22,7 +22,12 @@ export const TRANSFER_CATEGORY_NAME = 'Transferência';
 // então é idempotente por construção — múltiplas instâncias do hook
 // (ReportsPage + ExportFullReportModal em paralelo) convergem no MESMO doc em
 // vez de criarem duplicatas via addDoc.
-const TRANSFER_CATEGORY_ID = '__transfer__';
+// NÃO usar IDs no padrão `__.*__` (ex.: `__transfer__`): o Firestore RESERVA
+// nomes de documento que casam com /^__.*__$/ e REJEITA a escrita NO SERVIDOR
+// (o SDK cliente só valida esse padrão em NOMES DE CAMPO, não em doc IDs, então
+// `doc()`/`setDoc()` não estouram localmente — a promise só rejeita depois, e
+// sem `.catch` a falha é silenciosa e a categoria nunca é criada).
+const TRANSFER_CATEGORY_ID = 'transfer-reserved';
 const TRANSFER_CATEGORY_SEED = {
   name: TRANSFER_CATEGORY_NAME,
   icon: 'refresh-cw',
@@ -101,7 +106,7 @@ export function useCategories() {
   // usuários que já existiam antes desta feature — create-if-missing idempotente.
   // Detecta pela FLAG, não pelo nome: se o usuário renomear a categoria, ainda
   // é encontrada e não recriamos. Usa setDoc({merge:true}) num ID determinístico
-  // (`__transfer__`) em vez de addDoc — assim múltiplas instâncias do hook
+  // (`transfer-reserved`) em vez de addDoc — assim múltiplas instâncias do hook
   // rodando em paralelo (ReportsPage + ExportFullReportModal) convergem no mesmo
   // doc e nunca geram duplicata, mesmo lendo `hasTransfer===false` do mesmo
   // snapshot. Não migra nenhuma transação (fora de escopo).
@@ -115,11 +120,20 @@ export function useCategories() {
     ensuredTransfer.current = true;
     // merge:true não sobrescreve edições do usuário (nome/ícone/cor) se o doc
     // já existir; só preenche o que faltar. createdAt idem via merge.
+    // NÃO engole erro: se a escrita rejeitar (rede, regra, etc.), loga e
+    // re-arma a flag para nova tentativa no próximo ciclo de snapshot — como o
+    // ID é fixo e a escrita é merge, o retry é idempotente (nunca duplica).
     setDoc(
       doc(db, 'users', uid, 'categories', TRANSFER_CATEGORY_ID),
       { ...TRANSFER_CATEGORY_SEED, createdAt: Timestamp.now() },
       { merge: true }
-    );
+    ).catch((err) => {
+      ensuredTransfer.current = false;
+      console.error(
+        '[useCategories] Falha ao criar a categoria reservada "Transferência":',
+        err
+      );
+    });
   }, [loading, categories]);
 
   async function addCategory(data: Omit<Category, 'id' | 'createdAt'>): Promise<string> {
