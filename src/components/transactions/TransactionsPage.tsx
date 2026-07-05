@@ -15,7 +15,7 @@ import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
-import { getMonthYear, getMonthLabel, cn, countsInTotals } from '../../lib/utils';
+import { getMonthYear, getMonthLabel, cn, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
@@ -239,9 +239,16 @@ export function TransactionsPage() {
       categorized.filter((i) => !i.categoryId).map((i) => i.description)
     )];
     const apiKey = localStorage.getItem('anthropic_api_key') || '';
-    if (uncategorizedDescs.length > 0 && apiKey && categories.length > 0) {
+    // Categorias fora-dos-totais ("Transferência") NUNCA entram em sugestão
+    // automática: memos de extrato ("PIX TRANSF...") casam com o NOME e a IA
+    // marcava ~90% do extrato como Transferência — sumindo dos totais em
+    // silêncio. Transferência só por escolha explícita (manual ou regra criada
+    // pelo usuário). Filtramos o que a IA VÊ e validamos o que ela DEVOLVE.
+    const excludedIds = getExcludedFromTotalsIds(categories);
+    const suggestibleCategories = categories.filter((c) => !c.excludeFromTotals);
+    if (uncategorizedDescs.length > 0 && apiKey && suggestibleCategories.length > 0) {
       try {
-        const categoryInfos = categories.map((c) => ({
+        const categoryInfos = suggestibleCategories.map((c) => ({
           id: c.id,
           name: c.name,
           parentName: c.parentId ? categories.find((p) => p.id === c.parentId)?.name || null : null,
@@ -259,7 +266,11 @@ export function TransactionsPage() {
           for (const item of categorized) {
             if (!item.categoryId) {
               const suggestion = data.suggestions?.[item.description];
-              if (suggestion?.categoryId && suggestion.confidence >= 0.7) {
+              if (
+                suggestion?.categoryId &&
+                suggestion.confidence >= 0.7 &&
+                !excludedIds.has(suggestion.categoryId)
+              ) {
                 item.categoryId = suggestion.categoryId;
               }
             }

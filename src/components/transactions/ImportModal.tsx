@@ -17,6 +17,7 @@ import {
   normalizeDescriptionForDedup,
   fuzzyMatchMember,
   invoiceDateFor,
+  getExcludedFromTotalsIds,
 } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -599,9 +600,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       const uncategorizedDescs = [...new Set(
         parsed.filter((p) => !p.categoryId).map((p) => p.description)
       )];
-      if (uncategorizedDescs.length > 0 && categories.length > 0) {
+      // Fora-dos-totais ("Transferência") nunca entra em sugestão automática —
+      // memos "PIX TRANSF..." casam com o nome e a IA esvaziava os totais em
+      // silêncio. Só escolha explícita do usuário. Filtra o que a IA vê e
+      // valida o que ela devolve (mesma regra do handleImport da página).
+      const excludedIds = getExcludedFromTotalsIds(categories);
+      const suggestibleCategories = categories.filter((c) => !c.excludeFromTotals);
+      if (uncategorizedDescs.length > 0 && suggestibleCategories.length > 0) {
         try {
-          const categoryInfos = categories.map((c) => ({
+          const categoryInfos = suggestibleCategories.map((c) => ({
             id: c.id,
             name: c.name,
             parentName: c.parentId ? categories.find((p) => p.id === c.parentId)?.name || null : null,
@@ -625,7 +632,11 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
             for (const p of parsed) {
               if (!p.categoryId) {
                 const suggestion = aiData.suggestions?.[p.description];
-                if (suggestion?.categoryId && suggestion.confidence >= 0.7) {
+                if (
+                  suggestion?.categoryId &&
+                  suggestion.confidence >= 0.7 &&
+                  !excludedIds.has(suggestion.categoryId)
+                ) {
                   p.categoryId = suggestion.categoryId;
                   p.aiSuggested = true;
                   aiMap.set(p.description, suggestion.categoryId);
