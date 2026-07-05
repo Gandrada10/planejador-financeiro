@@ -1,5 +1,5 @@
 import type { Category, Transaction } from '../../types';
-import { getMonthLabel, getMonthYear, getMonthYearOffset } from '../utils';
+import { getMonthLabel, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds } from '../utils';
 import type {
   BudgetProgress,
   CashFlowByAccount,
@@ -635,23 +635,33 @@ export function computeReportData(
   period: ReportPeriod
 ): ReportData {
   const resolved = resolvePeriod(period);
-  const kpis = computeKpis(deps.transactions, resolved);
+
+  // Exclusão-de-total centralizada para TODO o PDF: filtra "Transferência" uma
+  // única vez aqui e propaga o conjunto já limpo para todas as funções de
+  // agregação (KPIs, fluxo, breakdown, evolução, projetos, orçamento). Assim o
+  // relatório enviado à Juliana nunca double-conta pagamento de fatura/PIX
+  // interno. As funções internas seguem puras — só recebem menos transações.
+  const excludedIds = getExcludedFromTotalsIds(deps.categories);
+  const countedTransactions = deps.transactions.filter((t) => countsInTotals(t, excludedIds));
+  const countedDeps: ReportDeps = { ...deps, transactions: countedTransactions };
+
+  const kpis = computeKpis(countedTransactions, resolved);
   const dashboardCashFlow = computeDashboardCashFlow(
-    deps.transactions,
+    countedTransactions,
     deps.accounts,
     resolved
   );
   const expensesByCategory = computeExpensesByCategory(
-    deps.transactions,
+    countedTransactions,
     deps.categories,
     resolved,
     kpis.totalExits
   );
-  const { budgets, totalLimit, totalActual } = computeBudgetProgress(deps, resolved);
-  const projects = computeProjects(deps, resolved);
-  const byCategory = computeByCategory(deps, resolved);
-  const cashFlow = computeCashFlow(deps.transactions, resolved);
-  const evolution = computeEvolution(deps, resolved);
+  const { budgets, totalLimit, totalActual } = computeBudgetProgress(countedDeps, resolved);
+  const projects = computeProjects(countedDeps, resolved);
+  const byCategory = computeByCategory(countedDeps, resolved);
+  const cashFlow = computeCashFlow(countedTransactions, resolved);
+  const evolution = computeEvolution(countedDeps, resolved);
 
   const partial: Omit<ReportData, 'insights'> = {
     period: resolved,

@@ -8,11 +8,36 @@ import {
   updateDoc,
   deleteDoc,
   doc,
+  setDoc,
   Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { Category, CategoryRule } from '../types';
 import { ICON_MAP, suggestIconForCategory, SEED_CATEGORIES } from '../components/shared/CategoryIcon';
+
+// Categoria reservada de exclusão-de-total. `excludeFromTotals` é a chave
+// canônica (rename-safe); o nome/ícone abaixo são só o padrão de criação.
+export const TRANSFER_CATEGORY_NAME = 'Transferência';
+// ID determinístico: o create-if-missing usa setDoc({merge:true}) neste doc,
+// então é idempotente por construção — múltiplas instâncias do hook
+// (ReportsPage + ExportFullReportModal em paralelo) convergem no MESMO doc em
+// vez de criarem duplicatas via addDoc.
+// NÃO usar IDs no padrão `__.*__` (ex.: `__transfer__`): o Firestore RESERVA
+// nomes de documento que casam com /^__.*__$/ e REJEITA a escrita NO SERVIDOR
+// (o SDK cliente só valida esse padrão em NOMES DE CAMPO, não em doc IDs, então
+// `doc()`/`setDoc()` não estouram localmente — a promise só rejeita depois, e
+// sem `.catch` a falha é silenciosa e a categoria nunca é criada).
+const TRANSFER_CATEGORY_ID = 'transfer-reserved';
+const TRANSFER_CATEGORY_SEED = {
+  name: TRANSFER_CATEGORY_NAME,
+  icon: 'refresh-cw',
+  // Slate claro: passa WCAG AA (≥4,5:1) como texto ~12px nos fundos do
+  // CategoryCombobox, que renderiza a cor da categoria como texto.
+  color: '#94a3b8',
+  type: 'ambos' as const,
+  parentId: null,
+  excludeFromTotals: true,
+};
 
 function docToCategory(id: string, data: Record<string, unknown>): Category {
   return {
@@ -23,6 +48,7 @@ function docToCategory(id: string, data: Record<string, unknown>): Category {
     type: (data.type as Category['type']) || 'despesa',
     parentId: (data.parentId as string | null) ?? null,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
+    excludeFromTotals: data.excludeFromTotals === true,
   };
 }
 
@@ -74,6 +100,40 @@ export function useCategories() {
       const suggested = suggestIconForCategory(cat.name);
       updateDoc(doc(db, 'users', uid, 'categories', cat.id), { icon: suggested });
     }
+  }, [loading, categories]);
+
+  // Garante a categoria reservada "Transferência" (excludeFromTotals) para
+  // usuários que já existiam antes desta feature — create-if-missing idempotente.
+  // Detecta pela FLAG, não pelo nome: se o usuário renomear a categoria, ainda
+  // é encontrada e não recriamos. Usa setDoc({merge:true}) num ID determinístico
+  // (`transfer-reserved`) em vez de addDoc — assim múltiplas instâncias do hook
+  // rodando em paralelo (ReportsPage + ExportFullReportModal) convergem no mesmo
+  // doc e nunca geram duplicata, mesmo lendo `hasTransfer===false` do mesmo
+  // snapshot. Não migra nenhuma transação (fora de escopo).
+  const ensuredTransfer = useRef(false);
+  useEffect(() => {
+    if (ensuredTransfer.current || loading) return;
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    const hasTransfer = categories.some((c) => c.excludeFromTotals);
+    if (hasTransfer) { ensuredTransfer.current = true; return; }
+    ensuredTransfer.current = true;
+    // merge:true não sobrescreve edições do usuário (nome/ícone/cor) se o doc
+    // já existir; só preenche o que faltar. createdAt idem via merge.
+    // NÃO engole erro: se a escrita rejeitar (rede, regra, etc.), loga e
+    // re-arma a flag para nova tentativa no próximo ciclo de snapshot — como o
+    // ID é fixo e a escrita é merge, o retry é idempotente (nunca duplica).
+    setDoc(
+      doc(db, 'users', uid, 'categories', TRANSFER_CATEGORY_ID),
+      { ...TRANSFER_CATEGORY_SEED, createdAt: Timestamp.now() },
+      { merge: true }
+    ).catch((err) => {
+      ensuredTransfer.current = false;
+      console.error(
+        '[useCategories] Falha ao criar a categoria reservada "Transferência":',
+        err
+      );
+    });
   }, [loading, categories]);
 
   async function addCategory(data: Omit<Category, 'id' | 'createdAt'>): Promise<string> {

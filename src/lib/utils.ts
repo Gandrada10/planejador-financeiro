@@ -184,6 +184,41 @@ export function filterCategoriesByAmount<T extends { type: string }>(categories:
 }
 
 /**
+ * Conjunto de ids de categorias marcadas como fora-dos-totais (`excludeFromTotals`,
+ * ex.: "Transferência"). Pré-compute uma vez e reutilize em loops grandes
+ * (relatórios, PDF) para não pagar um `find` por transação.
+ */
+export function getExcludedFromTotalsIds(
+  categories: { id: string; excludeFromTotals?: boolean }[]
+): Set<string> {
+  return new Set(categories.filter((c) => c.excludeFromTotals).map((c) => c.id));
+}
+
+/**
+ * REGRA CENTRAL de exclusão-de-total. Retorna `false` só quando a transação
+ * pertence a uma categoria `excludeFromTotals` (ex.: "Transferência") — nesse
+ * caso ela é dinheiro trocando de bolso (pagamento de fatura, PIX interno) e
+ * NÃO entra em nenhum total de receita/despesa nem no breakdown por categoria.
+ * Transação sem categoria sempre conta.
+ *
+ * Aplique como PRIMEIRO `.filter()` de qualquer pipeline de agregação. Aceita
+ * tanto o array de categorias (ergonomia) quanto um Set pré-computado por
+ * `getExcludedFromTotalsIds` (performance em loops). É o único ponto onde a
+ * regra vive — nunca reimplemente a checagem inline.
+ */
+export function countsInTotals(
+  t: { categoryId?: string | null },
+  categoriesOrExcludedIds: { id: string; excludeFromTotals?: boolean }[] | Set<string>
+): boolean {
+  if (!t.categoryId) return true;
+  const excluded =
+    categoriesOrExcludedIds instanceof Set
+      ? categoriesOrExcludedIds
+      : getExcludedFromTotalsIds(categoriesOrExcludedIds);
+  return !excluded.has(t.categoryId);
+}
+
+/**
  * Apply Brazilian money mask as user types.
  * Transforms raw keypresses into formatted currency: "12345" → "123,45"
  * Supports negative values for expenses.

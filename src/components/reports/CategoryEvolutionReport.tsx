@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, FileSpreadsheet, Download } from 'lucide-rea
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL, getMonthYear, getMonthYearOffset } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 import type { Category } from '../../types';
 
 type Interval = 'mensal' | 'anual';
@@ -196,7 +196,9 @@ function maxCountForInterval(interval: Interval): number {
 
 export function CategoryEvolutionReport() {
   const { transactions, loading } = useTransactions();
-  const { rootCategories, subCategories } = useCategories();
+  const { categories, rootCategories, subCategories } = useCategories();
+  // Transferências ficam fora da evolução (linhas de categoria e totais de seção).
+  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
   const [interval, setInterval] = useState<Interval>('mensal');
   const [startPeriod, setStartPeriod] = useState(() => defaultStartForInterval('mensal'));
@@ -233,6 +235,7 @@ export function CategoryEvolutionReport() {
     const result: Record<string, Record<string, number>> = {};
     const periodSet = new Set(periods);
     for (const t of transactions) {
+      if (!countsInTotals(t, excludedIds)) continue;
       const key = txPeriodKey(t.date);
       if (!periodSet.has(key)) continue;
       const catId = t.categoryId || '__none';
@@ -241,7 +244,7 @@ export function CategoryEvolutionReport() {
     }
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, periods, interval]);
+  }, [transactions, periods, interval, excludedIds]);
 
   function sumForIds(ids: string[]): Record<string, number> {
     const result: Record<string, number> = {};
@@ -258,6 +261,7 @@ export function CategoryEvolutionReport() {
       despesas[p] = 0;
     }
     for (const t of transactions) {
+      if (!countsInTotals(t, excludedIds)) continue;
       const key = txPeriodKey(t.date);
       if (!periodSet.has(key)) continue;
       if (t.amount > 0) receitas[key] += t.amount;
@@ -265,7 +269,7 @@ export function CategoryEvolutionReport() {
     }
     return { receitas, despesas };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, periods, interval]);
+  }, [transactions, periods, interval, excludedIds]);
 
   const { incomeCats, expenseCats } = useMemo(() => {
     const incomeCats: Category[] = [];
@@ -273,6 +277,11 @@ export function CategoryEvolutionReport() {
     const ambosIncome: Category[] = [];
     const ambosExpense: Category[] = [];
     for (const cat of rootCategories) {
+      // "Transferência" (excludeFromTotals) não é receita nem despesa: suas
+      // transações já foram excluídas, então ela ficaria como linha permanente
+      // R$0 sob Receitas. Pulamos no bucketing — espelha o guard de total-zero
+      // do PDF (computeReportData.ts) para consistência tela↔PDF.
+      if (cat.excludeFromTotals) continue;
       if (cat.type === 'receita') incomeCats.push(cat);
       else if (cat.type === 'despesa') expenseCats.push(cat);
       else {

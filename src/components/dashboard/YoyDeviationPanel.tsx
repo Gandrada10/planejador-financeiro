@@ -8,7 +8,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL } from '../../lib/utils';
+import { formatBRL, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 interface Props {
@@ -67,6 +67,8 @@ export function YoyDeviationPanel({
   const [activeGroup, setActiveGroup] = useState<'expenses' | 'income' | 'resultado' | null>(null);
 
   const data = useMemo(() => {
+    // Transferências ficam fora da comparação ano-a-ano (totais e por categoria).
+    const excludedIds = getExcludedFromTotalsIds(categories);
     const [y, m] = monthYear.split('-').map(Number);
     const prevYear = y - 1;
 
@@ -86,6 +88,7 @@ export function YoyDeviationPanel({
     let hasPrev = false;
 
     for (const t of transactions) {
+      if (!countsInTotals(t, excludedIds)) continue;
       const ty = t.date.getFullYear();
       const tm = t.date.getMonth() + 1;
       if (tm > m) continue;

@@ -3,6 +3,7 @@ import { Plus, Trash2, Zap, X, ChevronRight, RefreshCw, Pencil } from 'lucide-re
 import { useCategories } from '../../hooks/useCategories';
 import type { Category, CategoryRule } from '../../types';
 import { CategoryIcon, ICON_KEYS } from '../shared/CategoryIcon';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
 
 const PRESET_COLORS = ['#f59e0b', '#22c55e', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
 
@@ -14,6 +15,8 @@ export function CategoriesPage() {
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'despesa' | 'receita'>('despesa');
+  // Aviso informativo (um botão) ao tentar excluir a categoria de Transferência.
+  const [blockedDeleteMsg, setBlockedDeleteMsg] = useState<string | null>(null);
 
   // Category form
   const [name, setName] = useState('');
@@ -82,6 +85,19 @@ export function CategoriesPage() {
     setKeywordInput('');
     setEditingRuleId(rule.id);
     setShowRuleForm(true);
+  }
+
+  // Bloqueia excluir a categoria reservada de exclusão-de-total
+  // ("Transferência"): apagá-la faria as transferências voltarem a contar nos
+  // totais (double-count). Detecta pela flag, não pelo nome (rename-safe).
+  function handleDeleteCategory(cat: Category) {
+    if (cat.excludeFromTotals) {
+      setBlockedDeleteMsg(
+        `A categoria "${cat.name}" não pode ser excluída porque é usada para tirar pagamentos de fatura e transferências dos totais.`
+      );
+      return;
+    }
+    deleteCategory(cat.id);
   }
 
   function addKeyword() {
@@ -187,7 +203,7 @@ export function CategoriesPage() {
                         <Plus size={14} />
                       </button>
                       <button
-                        onClick={(e) => { e.stopPropagation(); deleteCategory(cat.id); }}
+                        onClick={(e) => { e.stopPropagation(); handleDeleteCategory(cat); }}
                         className="text-text-secondary hover:text-accent-red p-1"
                       >
                         <Trash2 size={14} />
@@ -205,7 +221,7 @@ export function CategoriesPage() {
                         <CategoryIcon icon={sub.icon} size={14} className="flex-shrink-0" style={{ color: sub.color }} />
                         <span className="flex-1 text-xs text-text-primary truncate min-w-0">{sub.name}</span>
                         <button
-                          onClick={(e) => { e.stopPropagation(); deleteCategory(sub.id); }}
+                          onClick={(e) => { e.stopPropagation(); handleDeleteCategory(sub); }}
                           className="text-text-secondary hover:text-accent-red p-1"
                         >
                           <Trash2 size={12} />
@@ -425,6 +441,18 @@ export function CategoriesPage() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* Aviso: categoria de Transferência não pode ser excluída */}
+      {blockedDeleteMsg && (
+        <ConfirmDialog
+          informative
+          title="Categoria protegida"
+          message={blockedDeleteMsg}
+          confirmLabel="Entendi"
+          onConfirm={() => setBlockedDeleteMsg(null)}
+          onCancel={() => setBlockedDeleteMsg(null)}
+        />
       )}
     </div>
   );
