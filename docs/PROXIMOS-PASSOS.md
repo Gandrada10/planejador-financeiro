@@ -1,13 +1,42 @@
 # Planejador financeiro — próximos passos (mapa vivo)
 
-Atualizado 2026-07-03 por Larry (time myPKA). Fonte de verdade da sequência.
-Branch de trabalho: `claude/financial-planner-audit-fnd1tv` (PR #25, não mergeado).
+Atualizado 2026-07-05 por Larry (time myPKA). Fonte de verdade da sequência.
+Branch de trabalho: `master` (PR #25 auditoria e PR #26 import OFX já mergeados).
 
 ## Estado atual
-Etapa B + rounds 2–6 concluídos e commitados na branch (regras GREEN+testes,
-robustez da sessão, a11y/tipografia, normalização de titulares, offline durável,
-auto-update do SW, navegação voltar/avançar, layout do card). Todos com gate
+PR #25 (auditoria + Fases 0/1 + visual) e PR #26 (parser OFX determinístico,
+categoria Transferência excluída dos totais) mergeados no master. Etapa B +
+rounds 2–7 concluídos (regras GREEN+testes, robustez da sessão, a11y/tipografia,
+normalização de titulares, offline durável, auto-update do SW, navegação
+voltar/avançar, layout do card, backlog de polimento). Todos com gate
 Vera PASS / Vex GREEN. Validado pelo Guilherme em aparelho real a cada round.
+
+## NOVO workstream — Módulo Finanças no cockpit (aprovado pelo Guilherme, 05/07)
+Cockpit = palco da reunião mensal do casal. Decisões: relatórios mensal (pauta
+de reunião), semestral e anual; chat via hand-off pro terminal; sync por botão
+via Admin SDK; fechamentos arquivados como notas no vault (loop de correção de
+rota). Design completo na conversa de 05/07; convenções em
+`tools/mypka/README.md`.
+- **Fase 1 (fundação) — FEITA (05/07):** `tools/mypka/sync_cockpit.py` com dois
+  modos: `--backup <json>` (sem credenciais) e Firestore/Admin SDK (`--uid`).
+  Espelho real gerado do backup de 04/07 (3.524 transações).
+- **Fase 2 (view) — FEITA (05/07):** módulo "Finanças" no cockpit
+  (`server/financeApi.js` + `web/src/views/FinanceView.tsx`, slug `financas`).
+  Reiniciar o cockpit para carregar. Dados: exportar backup FRESCO do app
+  (o de 04/07 é anterior à categoria Transferência do PR #26 — totais inflam
+  com pagamento de fatura) e rodar o sync de novo.
+- **Fase 3 (loop de rota) — FEITA (05/07):** "Fechar o mês" gera ata em
+  `PKM/Fleeting Notes` (slug `fechamento-financeiro-YYYY-MM`); seção "Rota
+  combinada" cobra as decisões da ata anterior contra os números (tags
+  `fin:{categoryId,teto}`); card "Pulso Financeiro" no Hub (toggle em Settings).
+  Também: botão Sincronizar (backup mais novo de ~/Downloads), MonthBar, fixes
+  de KPI/poupança/tooltip.
+- **Fase 4 (zoom) — FEITA (05/07):** abas Mensal|Semestral|Anual na view
+  (endpoints /finance/semester/:sem e /finance/year/:year); semestral =
+  comparações, poupança/mês, fixas×variáveis, heatmap com tendência, top
+  movers; anual = YoY, sazonalidade, assinaturas, custo fixo, maiores gastos,
+  placar das decisões; botão "Discutir com a IA" (hand-off launch-terminal).
+  **Módulo completo.** Pendente do Guilherme: backup fresco + testar o ciclo.
 
 ## NOVO workstream — Qualidade da importação (levantado pelo Guilherme, 03/07)
 **Contexto:** a leitura de faturas (PDF/Excel) via IA nunca foi testada nesta
@@ -38,7 +67,7 @@ removido de propósito). Como a rotação da chave ainda está pendente:
 ## Sequência acordada
 1. **Guilherme:** testar importação (importar → ver erros → me trazer a lista).
 2. **Time:** limpeza única do backlog acumulado (Lows/Mediums — ver abaixo).
-3. **Merge do PR #25.**
+3. ~~Merge do PR #25.~~ ✅ Feito (e PR #26 OFX também).
 4. **Etapa C (produção):** instalar JDK 11+ (`winget install EclipseAdoptium.Temurin.21.JDK`)
    → rodar os 35 testes das regras no emulador → backup → deploy das regras
    GREEN (fora de sessão ativa da esposa) → smoke test → sign-up já OFF →
