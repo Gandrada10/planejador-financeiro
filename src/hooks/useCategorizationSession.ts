@@ -250,7 +250,7 @@ export function useCategorizationSessions() {
       let bestN = 0;
       for (const [cid, n] of m) {
         const c = catById.get(cid);
-        if (c && c.parentId === chosenId && allowedForAmount(c, amount) && n > bestN) {
+        if (c && !c.excludeFromTotals && c.parentId === chosenId && allowedForAmount(c, amount) && n > bestN) {
           bestChild = cid;
           bestN = n;
         }
@@ -266,12 +266,18 @@ export function useCategorizationSessions() {
       if (byRule && allowedForAmount(catById.get(byRule), amount)) {
         return { id: refineToSub(byRule, m, amount), reason: 'Regra automática' };
       }
-      // 2) Histórico: categoria mais frequente para a mesma descrição
+      // 2) Histórico: categoria mais frequente para a mesma descrição.
+      // Fora-dos-totais ("Transferência") NUNCA é sugerida automaticamente —
+      // só entra por escolha explícita (toque manual ou regra criada pelo
+      // dono, coberta pelo passo 1). Sem este guard, o histórico contaminado
+      // por auto-categorizações erradas re-sugeriria Transferência para todo
+      // memo "PIX TRANSF..." e o gasto sumiria dos totais em silêncio.
       if (m) {
         let best: string | null = null;
         let bestN = 0;
         for (const [cid, n] of m) {
-          if (n > bestN && allowedForAmount(catById.get(cid), amount)) {
+          const c = catById.get(cid);
+          if (n > bestN && c && !c.excludeFromTotals && allowedForAmount(c, amount)) {
             best = cid;
             bestN = n;
           }
