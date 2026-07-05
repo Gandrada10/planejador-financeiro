@@ -10,7 +10,7 @@ import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
-import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel, invoiceDateFor } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel, invoiceDateFor, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 
 export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
@@ -42,6 +42,11 @@ export function CreditCardPage() {
     });
   }, [transactions, activeCard, monthYear]);
 
+  // Ids fora-dos-totais ("Transferência"): uma linha de cartão marcada assim é
+  // rara, mas a regra vale aqui também — ela CONTINUA visível na lista da
+  // fatura, só não entra nos totais de despesa/crédito.
+  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
+
   // Group by titular (fall back to familyMember for transactions edited
   // via the Transactions tab where only familyMember is updated)
   const titularGroups = useMemo(() => {
@@ -54,15 +59,16 @@ export function CreditCardPage() {
     return Array.from(map.entries())
       .map(([titular, txs]) => ({
         titular,
-        total: txs.reduce((s, t) => s + t.amount, 0),
+        // Total exclui transferência; lista (transactions) segue completa.
+        total: txs.filter((t) => countsInTotals(t, excludedIds)).reduce((s, t) => s + t.amount, 0),
         transactions: txs.sort((a, b) => a.date.getTime() - b.date.getTime()),
       }))
       .sort((a, b) => a.total - b.total);
-  }, [invoiceTransactions]);
+  }, [invoiceTransactions, excludedIds]);
 
   // Totals
-  const totalExpenses = invoiceTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
-  const totalCredits = invoiceTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const totalExpenses = invoiceTransactions.filter((t) => countsInTotals(t, excludedIds) && t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  const totalCredits = invoiceTransactions.filter((t) => countsInTotals(t, excludedIds) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const totalInvoice = totalExpenses + totalCredits;
 
   // Previous balance (from previous month cycle)

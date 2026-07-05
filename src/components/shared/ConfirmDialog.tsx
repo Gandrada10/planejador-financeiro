@@ -8,6 +8,12 @@ interface ConfirmDialogProps {
   cancelLabel?: string;
   /** Estilo destrutivo (vermelho + ícone de alerta) para ações irreversíveis. */
   destructive?: boolean;
+  /**
+   * Modo informativo: apenas um botão (o de confirmar, ex.: "Entendi"), sem
+   * ação destrutiva nem "Cancelar". Para avisos que só precisam de ciência do
+   * usuário (substitui `alert()` nativo). `onConfirm` = `onCancel` = fechar.
+   */
+  informative?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -23,15 +29,19 @@ export function ConfirmDialog({
   confirmLabel = 'Confirmar',
   cancelLabel = 'Cancelar',
   destructive = false,
+  informative = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
   const cancelRef = useRef<HTMLButtonElement>(null);
+  const confirmRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    cancelRef.current?.focus();
-  }, []);
+    // Modo informativo não tem botão Cancelar: foca o único botão presente.
+    if (informative) confirmRef.current?.focus();
+    else cancelRef.current?.focus();
+  }, [informative]);
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
@@ -94,14 +104,17 @@ export function ConfirmDialog({
           </div>
         </div>
         <div className="flex gap-2 justify-end">
+          {!informative && (
+            <button
+              ref={cancelRef}
+              onClick={onCancel}
+              className="min-h-[44px] px-4 rounded-control border border-border text-body font-semibold text-text-primary hover:bg-bg-secondary transition-colors"
+            >
+              {cancelLabel}
+            </button>
+          )}
           <button
-            ref={cancelRef}
-            onClick={onCancel}
-            className="min-h-[44px] px-4 rounded-control border border-border text-body font-semibold text-text-primary hover:bg-bg-secondary transition-colors"
-          >
-            {cancelLabel}
-          </button>
-          <button
+            ref={confirmRef}
             onClick={onConfirm}
             className={`min-h-[44px] px-4 rounded-control text-body font-bold transition-colors ${
               destructive

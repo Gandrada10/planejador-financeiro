@@ -7,6 +7,8 @@ import {
   getMonthYear,
   getMonthYearOffset,
   getMonthLabel,
+  countsInTotals,
+  getExcludedFromTotalsIds,
 } from '../../lib/utils';
 
 interface EvolutionRow {
@@ -48,6 +50,9 @@ export function GoalsEvolutionTab() {
     return `${months[Number(m) - 1]}/${y.slice(2)}`;
   }
 
+  // Transferências ficam fora do realizado das metas.
+  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
+
   // Build all evolution rows
   const rows = useMemo(() => {
     if (!loaded) return [];
@@ -58,7 +63,7 @@ export function GoalsEvolutionTab() {
     const monthData = months.map((my) => {
       const monthBudgets = getBudgetsForMonth(my);
       const monthTx = transactions.filter(
-        (t) => getMonthYear(t.date) === my && t.amount < 0
+        (t) => getMonthYear(t.date) === my && t.amount < 0 && countsInTotals(t, excludedIds)
       );
 
       // Total budget for month
@@ -198,7 +203,7 @@ export function GoalsEvolutionTab() {
     });
 
     return result;
-  }, [loaded, months, transactions, categories, subCategories, getBudgetsForMonth, budgets]);
+  }, [loaded, months, transactions, categories, subCategories, getBudgetsForMonth, budgets, excludedIds]);
 
   function handleLoad() {
     setLoaded(true);

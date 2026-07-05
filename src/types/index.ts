@@ -6,6 +6,16 @@ export interface Category {
   type: 'receita' | 'despesa' | 'ambos';
   parentId: string | null;
   createdAt: Date;
+  /**
+   * Categoria de EXCLUSÃO-DE-TOTAL (ex.: "Transferência"). Quando `true`, as
+   * transações dessa categoria NÃO entram em nenhum total de receita/despesa
+   * nem no breakdown por categoria — são dinheiro trocando de bolso (pagamento
+   * de fatura de cartão, PIX entre contas próprias), não gasto/ganho. A regra
+   * é centralizada em `countsInTotals` (ver `lib/utils.ts`). É um campo
+   * dedicado — NUNCA inferido pelo `name` — para que renomear a categoria não
+   * quebre a exclusão. `undefined`/ausente = conta normalmente.
+   */
+  excludeFromTotals?: boolean;
 }
 
 export interface BillingCycle {

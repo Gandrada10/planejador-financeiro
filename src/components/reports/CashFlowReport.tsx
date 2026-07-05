@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { FileSpreadsheet, Download } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
-import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset } from '../../lib/utils';
+import { useCategories } from '../../hooks/useCategories';
+import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 
 type Interval = 'mensal' | 'anual';
 
@@ -22,6 +23,9 @@ function maxCountForInterval(interval: Interval): number {
 
 export function CashFlowReport() {
   const { transactions, loading } = useTransactions();
+  const { categories } = useCategories();
+  // Transferências ficam fora do fluxo de caixa (entradas/saídas e saldo).
+  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
   const [interval, setInterval] = useState<Interval>('mensal');
   const [startPeriod, setStartPeriod] = useState(() => defaultStartForInterval('mensal'));
@@ -56,12 +60,12 @@ export function CashFlowReport() {
   const { rows, saldoAnterior, totalEntradas, totalSaidas } = useMemo(() => {
     const firstPeriod = periods[0] ?? startPeriod;
     const saldoAnterior = transactions
-      .filter((t) => txPeriodKey(t.date) < firstPeriod)
+      .filter((t) => countsInTotals(t, excludedIds) && txPeriodKey(t.date) < firstPeriod)
       .reduce((s, t) => s + t.amount, 0);
 
     let runningSaldo = saldoAnterior;
     const rows = periods.map((periodKey) => {
-      const periodTxs = transactions.filter((t) => txPeriodKey(t.date) === periodKey);
+      const periodTxs = transactions.filter((t) => countsInTotals(t, excludedIds) && txPeriodKey(t.date) === periodKey);
       const entradas = periodTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
       const saidas = periodTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
       const resultado = entradas + saidas;
@@ -76,7 +80,7 @@ export function CashFlowReport() {
       totalSaidas: rows.reduce((s, r) => s + r.saidas, 0),
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, periods, interval, startPeriod]);
+  }, [transactions, periods, interval, startPeriod, excludedIds]);
 
   const fileSuffix = `${startPeriod}_${numPeriods}${interval === 'mensal' ? 'm' : 'a'}`;
 

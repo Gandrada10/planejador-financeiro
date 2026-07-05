@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { X, Send, Sparkles, Loader2 } from 'lucide-react';
 import type { Transaction, Category, Budget } from '../../types';
-import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -25,12 +25,18 @@ function resolveCatName(id: string | null, categories: Category[]): string {
 function buildContext(transactions: Transaction[], categories: Category[], budgets: Budget[]): string {
   if (transactions.length === 0) return 'Nenhum lancamento importado ainda.';
 
+  // Todos os agregados de dinheiro (receita/despesa/breakdown/ranking) usam
+  // `counted`, que já exclui "Transferência" — senão o contexto do assistente
+  // de IA double-contaria pagamento de fatura e PIX interno como gasto/ganho.
+  const excludedIds = getExcludedFromTotalsIds(categories);
+  const counted = transactions.filter((t) => countsInTotals(t, excludedIds));
+
   const now = new Date();
   const currentMonth = getMonthYear(now);
   const fiveYearsAgo = getMonthYearOffset(currentMonth, -60);
 
   // All months with data within 5 years, sorted ascending
-  const allMonths = [...new Set(transactions.map((t) => getMonthYear(t.date)))]
+  const allMonths = [...new Set(counted.map((t) => getMonthYear(t.date)))]
     .filter((m) => m >= fiveYearsAgo)
     .sort();
 
@@ -38,7 +44,7 @@ function buildContext(transactions: Transaction[], categories: Category[], budge
   type MonthAgg = { income: number; expenses: number; count: number };
   const monthAgg = new Map<string, MonthAgg>();
   for (const m of allMonths) {
-    const txs = transactions.filter((t) => getMonthYear(t.date) === m);
+    const txs = counted.filter((t) => getMonthYear(t.date) === m);
     monthAgg.set(m, {
       income: txs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0),
       expenses: txs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0),
@@ -55,12 +61,12 @@ function buildContext(transactions: Transaction[], categories: Category[], budge
   }
 
   // All-time totals
-  const allIncome = transactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-  const allExpenses = transactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+  const allIncome = counted.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const allExpenses = counted.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
 
   // All-time category totals (expenses)
   const catAllMap = new Map<string, number>();
-  for (const t of transactions) {
+  for (const t of counted) {
     if (t.amount < 0) {
       const k = t.categoryId || '__uncat';
       catAllMap.set(k, (catAllMap.get(k) || 0) + Math.abs(t.amount));
@@ -75,7 +81,7 @@ function buildContext(transactions: Transaction[], categories: Category[], budge
   for (const catId of topCatIds) {
     const name = resolveCatName(catId === '__uncat' ? null : catId, categories);
     const byYear = [...yearAgg.keys()].sort().map((yr) => {
-      const v = Math.abs(transactions
+      const v = Math.abs(counted
         .filter((t) => t.amount < 0 && getMonthYear(t.date).startsWith(yr) && (t.categoryId || '__uncat') === catId)
         .reduce((s, t) => s + t.amount, 0));
       return v > 0 ? `${yr}:${formatBRL(v)}` : null;
@@ -85,7 +91,7 @@ function buildContext(transactions: Transaction[], categories: Category[], budge
 
   // Per-member all-time totals
   const memberMap = new Map<string, number>();
-  for (const t of transactions) {
+  for (const t of counted) {
     if (t.amount < 0) {
       const k = t.titular || t.familyMember || 'Sem identificacao';
       memberMap.set(k, (memberMap.get(k) || 0) + Math.abs(t.amount));
@@ -95,7 +101,7 @@ function buildContext(transactions: Transaction[], categories: Category[], budge
     .map(([name, v]) => `  ${name}: ${formatBRL(v)}`);
 
   // Current month detail
-  const currentTxs = transactions.filter((t) => getMonthYear(t.date) === currentMonth);
+  const currentTxs = counted.filter((t) => getMonthYear(t.date) === currentMonth);
   const cur = monthAgg.get(currentMonth) || { income: 0, expenses: 0, count: 0 };
 
   const catCurMap = new Map<string, number>();

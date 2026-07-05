@@ -14,7 +14,7 @@ import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
 import { ExportFullReportModal } from './ExportFullReportModal';
 import { TransactionEditModal } from '../transactions/TransactionEditModal';
-import { formatBRL, formatDate, getMonthYear, getMonthLabel } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 type ReportTab = 'categorias' | 'fluxo' | 'evolucao';
@@ -58,22 +58,31 @@ export function ReportsPage() {
     return Array.from(set).sort().reverse();
   }, [transactions]);
 
+  // Ids de categorias fora-dos-totais ("Transferência"): removidas dos totais E
+  // do breakdown por categoria deste relatório (a aba Transações segue mostrando
+  // as transferências na lista bruta; aqui é relatório).
+  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
+
   const monthTransactions = useMemo(
     () => transactions.filter((t) => getMonthYear(t.date) === monthYear),
     [transactions, monthYear]
   );
 
+  // Base do relatório já sem transferências — alimenta totais, breakdown e contagem.
+  const filteredTransactions = useMemo(
+    () => monthTransactions.filter((t) => countsInTotals(t, excludedIds)),
+    [monthTransactions, excludedIds]
+  );
+
   const totalEntries = useMemo(
-    () => monthTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0),
-    [monthTransactions]
+    () => filteredTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0),
+    [filteredTransactions]
   );
   const totalExits = useMemo(
-    () => monthTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0),
-    [monthTransactions]
+    () => filteredTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0),
+    [filteredTransactions]
   );
   const totalBalance = totalEntries + totalExits;
-
-  const filteredTransactions = monthTransactions;
 
   const totalFiltered = useMemo(
     () => filteredTransactions.reduce((s, t) => s + Math.abs(t.amount), 0),

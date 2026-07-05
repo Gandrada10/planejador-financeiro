@@ -11,6 +11,8 @@ import {
   getMonthYearOffset,
   applyMoneyMask,
   parseMoneyInput,
+  countsInTotals,
+  getExcludedFromTotalsIds,
 } from '../../lib/utils';
 
 interface BudgetRow {
@@ -79,10 +81,13 @@ export function ExpenseGoalsTab() {
     return Array.from(set).sort().reverse();
   }, [transactions, budgets]);
 
+  // Transferências ficam fora do realizado das metas.
+  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
+
   // Month transactions (expenses only, absolute values)
   const monthExpenses = useMemo(
-    () => transactions.filter((t) => getMonthYear(t.date) === monthYear && t.amount < 0),
-    [transactions, monthYear]
+    () => transactions.filter((t) => getMonthYear(t.date) === monthYear && t.amount < 0 && countsInTotals(t, excludedIds)),
+    [transactions, monthYear, excludedIds]
   );
 
   // Actual spending per category (as positive number)
