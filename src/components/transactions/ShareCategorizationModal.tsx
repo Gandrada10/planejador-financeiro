@@ -71,13 +71,10 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
     setLoading(false);
   }
 
-  async function handleCopy() {
-    await navigator.clipboard.writeText(generatedLink);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  }
-
-  function handleWhatsApp() {
+  // Mensagem completa de compartilhamento (saudação + período + contas + link).
+  // Fix jul/2026: o "Copiar" copiava só o link — a mensagem com a conta só
+  // existia no botão WhatsApp. Agora TODO caminho compartilha o texto completo.
+  function buildShareMessage(): string {
     const lines = [`Oi! Categoriza ${uncategorizedCount} lançamento${uncategorizedCount === 1 ? '' : 's'} por favor 😊`];
     lines.push(`📅 ${periodLabel}`);
     if (accountsPreview.length > 0) {
@@ -85,8 +82,23 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
     }
     lines.push('');
     lines.push(generatedLink);
-    const text = encodeURIComponent(lines.join('\n'));
-    window.open(`https://wa.me/?text=${text}`, '_blank');
+    return lines.join('\n');
+  }
+
+  async function handleCopy() {
+    await navigator.clipboard.writeText(buildShareMessage());
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }
+
+  function handleWhatsApp() {
+    const text = encodeURIComponent(buildShareMessage());
+    const win = window.open(`https://wa.me/?text=${text}`, '_blank');
+    if (!win) {
+      // Popup bloqueado (PWA standalone / desktop): não falha em silêncio —
+      // cai para copiar a mensagem completa, pronta pra colar.
+      void handleCopy();
+    }
   }
 
   return (
@@ -148,7 +160,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
           ) : (
             <>
               <p className="text-xs text-text-secondary">
-                Link gerado! Envie para quem vai categorizar.
+                Link gerado! Copiar leva a mensagem pronta (período, contas e link) para colar no WhatsApp.
               </p>
 
               <div className="flex gap-2">
@@ -159,6 +171,8 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
                 />
                 <button
                   onClick={handleCopy}
+                  title="Copiar mensagem completa"
+                  aria-label="Copiar mensagem completa (período, contas e link)"
                   className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary hover:border-accent"
                 >
                   {copied ? <Check size={16} className="text-accent-green" /> : <Copy size={16} />}
