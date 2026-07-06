@@ -52,9 +52,9 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
   const [lastCategoryId, setLastCategoryId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
-  // P4: dimensões da área REALMENTE visível (VisualViewport) enquanto o
-  // bottom-sheet está aberto — usado para ancorar o sheet acima do teclado.
-  const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
+  // P4 v2: altura ocupada pelo teclado virtual (VisualViewport) enquanto o
+  // diálogo de busca está aberto — usada SÓ para acolchoar o rodapé da lista.
+  const [kbInset, setKbInset] = useState(0);
   const searchRef = useRef<HTMLInputElement>(null);
   const sheetRef = useRef<HTMLDivElement>(null);
   const sheetTriggerRef = useRef<HTMLButtonElement>(null);
@@ -168,22 +168,37 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
     }
   }, [sheetOpen]);
 
-  // P4 (iOS Safari real): ao focar a busca, o teclado virtual sobe e cobre a
-  // base do layout viewport — a lista de resultados ficava atrás dele. Seguimos
-  // o VisualViewport para ancorar o sheet à faixa visível (acima do teclado);
-  // a busca fica fixa no topo e os resultados rolam abaixo dela.
+  // P4 v2 (iOS real): a 1ª abordagem PERSEGUIA o teclado reposicionando o
+  // overlay fixed com top/height do VisualViewport — no aparelho isso entra em
+  // conflito com o auto-scroll que o Safari faz ao focar o input: o sheet sai
+  // da faixa visível (campo encoberto, lista clipada "sem resultados", toques
+  // caindo no backdrop). Agora o diálogo é TELA CHEIA no mobile, com o campo
+  // fixo no topo — imune ao teclado por construção. O VisualViewport ficou só
+  // para acolchoar o rodapé da lista (o último item rola acima do teclado).
   useEffect(() => {
     if (!sheetOpen) return;
     const vv = window.visualViewport;
     if (!vv) return;
-    const update = () => setViewport({ top: vv.offsetTop, height: vv.height });
+    const update = () =>
+      setKbInset(Math.max(0, window.innerHeight - vv.height - vv.offsetTop));
     update();
     vv.addEventListener('resize', update);
     vv.addEventListener('scroll', update);
     return () => {
       vv.removeEventListener('resize', update);
       vv.removeEventListener('scroll', update);
-      setViewport(null);
+      setKbInset(0);
+    };
+  }, [sheetOpen]);
+
+  // Trava o scroll da página atrás do diálogo — sem isso o iOS "pana" o layout
+  // viewport quando o teclado abre e o fundo desalinha junto.
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
     };
   }, [sheetOpen]);
 
@@ -387,8 +402,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
           Esc fecha, foco preso dentro, botão Fechar visível. */}
       {sheetOpen && (
         <div
-          className="fixed left-0 right-0 z-50 bg-black/50 flex items-end"
-          style={{ top: viewport ? viewport.top : 0, height: viewport ? viewport.height : '100%' }}
+          className="fixed inset-0 z-50 bg-black/50 flex sm:items-end"
           onClick={closeSheet}
         >
           <div
@@ -396,7 +410,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
             role="dialog"
             aria-modal="true"
             aria-labelledby="sheet-busca-titulo"
-            className="w-full max-h-[92%] bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-[max(2rem,env(safe-area-inset-bottom))] flex flex-col gap-3"
+            className="w-full h-full sm:h-auto sm:max-h-[80vh] bg-bg-secondary sm:border-t border-border sm:rounded-t-[24px] p-4 pt-[max(1rem,env(safe-area-inset-top))] sm:pt-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:pb-[max(2rem,env(safe-area-inset-bottom))] flex flex-col gap-3"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="shrink-0 flex items-center justify-between gap-2">
@@ -430,7 +444,10 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
                 </button>
               )}
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col">
+            <div
+              className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col"
+              style={{ paddingBottom: kbInset }}
+            >
               {searchResults.length === 0 ? (
                 <p className="text-body text-text-secondary text-center py-6">Nenhuma categoria encontrada</p>
               ) : (
