@@ -17,7 +17,6 @@ import {
   normalizeDescriptionForDedup,
   fuzzyMatchMember,
   invoiceDateFor,
-  getExcludedFromTotalsIds,
 } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -28,7 +27,6 @@ type ImportRow = ImportItem & {
   installmentType: 'unica' | 'parcelada';
   periodicity: number; // months between installments
   installmentAmount: number | null;
-  aiSuggested?: boolean;
 };
 
 function datesMatch(a: Date | null, b: Date | null): boolean {
@@ -129,7 +127,6 @@ interface Props {
   allTitulars?: string[];
   titularNames?: string[];
   matchCategory?: (description: string) => string | null;
-  addRule?: (data: Omit<CategoryRule, 'id' | 'createdAt'>) => Promise<void>;
   onCreateRule?: (description: string, categoryId: string) => void;
   rules?: CategoryRule[];
   projects?: Project[];
@@ -146,7 +143,7 @@ function generateMonthOptions(): string[] {
   return options;
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, addRule, onCreateRule, rules = [], projects = [] }: Props) {
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, onCreateRule, rules = [], projects = [] }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -155,9 +152,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [fileName, setFileName] = useState('');
   const [aiParsing, setAiParsing] = useState(false);
   const [aiUsage, setAiUsage] = useState<{ input_tokens: number; output_tokens: number } | null>(null);
-
-  // AI categorization
-  const [aiCategorizedDescriptions, setAiCategorizedDescriptions] = useState<Map<string, string>>(new Map());
 
   // Qual caminho de parse gerou as linhas atuais — governa quais painéis do
   // preview aparecem (fatura de cartão vs. extrato de conta corrente OFX).
@@ -596,59 +590,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         return;
       }
 
-      // AI categorization for uncategorized transactions
-      const uncategorizedDescs = [...new Set(
-        parsed.filter((p) => !p.categoryId).map((p) => p.description)
-      )];
-      // Fora-dos-totais ("Transferência") nunca entra em sugestão automática —
-      // memos "PIX TRANSF..." casam com o nome e a IA esvaziava os totais em
-      // silêncio. Só escolha explícita do usuário. Filtra o que a IA vê e
-      // valida o que ela devolve (mesma regra do handleImport da página).
-      const excludedIds = getExcludedFromTotalsIds(categories);
-      const suggestibleCategories = categories.filter((c) => !c.excludeFromTotals);
-      if (uncategorizedDescs.length > 0 && suggestibleCategories.length > 0) {
-        try {
-          const categoryInfos = suggestibleCategories.map((c) => ({
-            id: c.id,
-            name: c.name,
-            parentName: c.parentId ? categories.find((p) => p.id === c.parentId)?.name || null : null,
-            type: c.type,
-          }));
-          const aiRes = await fetch('/api/suggest-categories', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ descriptions: uncategorizedDescs, categories: categoryInfos, apiKey: localKey }),
-          });
-          if (aiRes.ok) {
-            const aiData = await aiRes.json() as {
-              suggestions: Record<string, { categoryId: string | null; confidence: number }>;
-              usage: { input_tokens: number; output_tokens: number };
-            };
-            setAiUsage((prev) => prev ? {
-              input_tokens: prev.input_tokens + (aiData.usage?.input_tokens || 0),
-              output_tokens: prev.output_tokens + (aiData.usage?.output_tokens || 0),
-            } : aiData.usage);
-            const aiMap = new Map<string, string>();
-            for (const p of parsed) {
-              if (!p.categoryId) {
-                const suggestion = aiData.suggestions?.[p.description];
-                if (
-                  suggestion?.categoryId &&
-                  suggestion.confidence >= 0.7 &&
-                  !excludedIds.has(suggestion.categoryId)
-                ) {
-                  p.categoryId = suggestion.categoryId;
-                  p.aiSuggested = true;
-                  aiMap.set(p.description, suggestion.categoryId);
-                }
-              }
-            }
-            setAiCategorizedDescriptions(aiMap);
-          }
-        } catch {
-          // AI categorization failed silently — rules still applied
-        }
-      }
+      // Sem sugestão de categoria por IA — o que as regras não categorizaram
+      // fica sem categoria, para o usuário categorizar manualmente (e as
+      // regras aprenderem disso).
 
       // Auto-detect billing month from the MOST RECENT transaction date — o mês
       // de pagamento nunca pode ficar anterior à última compra da fatura. (Antes
@@ -765,7 +709,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
     for (const [i, row] of items.entries()) {
       if (!selected.has(i)) continue;
-      const { isDuplicate: _, installmentType, periodicity, installmentAmount, aiSuggested: _ai, ...rest } = row;
+      const { isDuplicate: _, installmentType, periodicity, installmentAmount, ...rest } = row;
 
       // `purchaseDate` = competência (data da compra original, também de cada
       // parcela) — referência secundária, NÃO governa o mês. `invoiceDate` = a
@@ -823,17 +767,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           billingMonth: billingDate ? billingMonth : rest.billingMonth,
           provisionalDate: billingDate ? invoiceDate : rest.provisionalDate,
         });
-      }
-    }
-
-    // Auto-create rules for AI suggestions accepted by the user
-    if (addRule) {
-      const autoRuled = new Set<string>();
-      for (const [i, row] of items.entries()) {
-        if (!selected.has(i) || !row.aiSuggested || !row.categoryId) continue;
-        if (autoRuled.has(row.description)) continue;
-        autoRuled.add(row.description);
-        await addRule({ pattern: row.description, keywords: [], categoryId: row.categoryId });
       }
     }
 
@@ -1288,17 +1221,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         {/* Editable: category */}
                         <td className="p-1">
                           <div className="flex items-center gap-1">
-                            {item.aiSuggested && (
-                              <span title="Sugerido por IA" className="flex-shrink-0">
-                                <Sparkles size={12} className="text-purple-400" />
-                              </span>
-                            )}
                             {categories.length > 0 ? (
                               <select
                                 aria-label="Categoria"
                                 value={item.categoryId ?? ''}
                                 onChange={(e) => updateRow(i, 'categoryId', e.target.value)}
-                                className={inputClass + (item.aiSuggested ? ' border-purple-400/30' : '')}
+                                className={inputClass}
                               >
                                 <option value="">—</option>
                                 {(() => {
@@ -1543,14 +1471,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 <p className="text-sm text-text-primary">Importacao concluida!</p>
                 <p className="text-xs text-text-secondary mt-1">{selected.size} transacoes importadas</p>
               </div>
-              {aiCategorizedDescriptions.size > 0 && (
-                <div className="bg-purple-500/5 border border-purple-500/20 rounded-lg p-3 max-w-sm mx-auto text-center">
-                  <p className="text-xs text-text-primary flex items-center justify-center gap-1.5">
-                    <Sparkles size={14} className="text-purple-400" />
-                    {aiCategorizedDescriptions.size} regra{aiCategorizedDescriptions.size > 1 ? 's' : ''} criada{aiCategorizedDescriptions.size > 1 ? 's' : ''} automaticamente a partir da IA
-                  </p>
-                </div>
-              )}
             </div>
           )}
         </div>
