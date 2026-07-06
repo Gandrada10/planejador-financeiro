@@ -26,12 +26,10 @@ export type UserCollection = (typeof USER_COLLECTIONS)[number];
 export const BACKUP_FORMAT_VERSION = 1;
 
 // LocalStorage keys that hold per-device configuration worth backing up.
-// Tokens like anthropic/pluggy credentials are intentionally included so a
+// Tokens like the anthropic API key are intentionally included so a
 // full restore brings the app back exactly where it was.
 const LOCAL_STORAGE_KEYS = [
   'anthropic_api_key',
-  'pluggy_client_id',
-  'pluggy_client_secret',
 ];
 
 export interface BackupFile {

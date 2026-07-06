@@ -58,7 +58,7 @@ const OFX_MAX_BYTES = 15_000_000;
 // ─── OFX (conta corrente) — dedupe, encoding e auto-match de conta ─────────
 //
 // Irmão do caminho de IA acima: dedupe primeiro pelo FITID (chave natural do
-// OFX, mesmo padrão de `pluggyTransactionId` em PluggySync.tsx). FITID é único
+// OFX, id estável emitido pelo próprio banco). FITID é único
 // POR CONTA, não global (dois bancos podem emitir o mesmo FITID) — por isso só
 // tratamos como duplicata quando a CONTA de destino também casa. Sem conta
 // definida na linha OFX, ou sem match de conta, caímos no fallback por
@@ -308,7 +308,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           totalInstallments: null,
           cardNumber: null,
           projectId: null,
-          pluggyTransactionId: null,
           fitid: t.fitid,
           tags: [],
           notes: '',
@@ -560,7 +559,6 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           totalInstallments,
           cardNumber: t.cardNumber,
           projectId: null,
-          pluggyTransactionId: null,
           tags: [],
           notes: '',
           importBatch: null,

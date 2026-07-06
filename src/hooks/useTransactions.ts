@@ -49,7 +49,7 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     totalInstallments: (data.totalInstallments as number) ?? null,
     cardNumber: (data.cardNumber as string) || null,
     projectId: (data.projectId as string) || null,
-    pluggyTransactionId: (data.pluggyTransactionId as string) || null,
+    pluggyTransactionId: (data.pluggyTransactionId as string) || null, // legado, dados históricos
     tags: (data.tags as string[]) || [],
     notes: (data.notes as string) || '',
     importBatch: (data.importBatch as string) || null,
