@@ -15,7 +15,7 @@ import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
-import { getMonthYear, getMonthLabel, cn, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
+import { getMonthYear, getMonthLabel, cn, countsInTotals } from '../../lib/utils';
 import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
@@ -228,61 +228,15 @@ export function TransactionsPage() {
       }
     }
 
-    // 1. Apply rules first
+    // Apply rules (sem fallback de IA — categorização automática só via regras,
+    // que nascem das categorizações manuais do usuário)
     const categorized = items.map((item) => ({
       ...item,
       categoryId: item.categoryId || matchCategory(item.description),
     }));
 
-    // 2. AI fallback for uncategorized (e.g. PluggySync transactions)
-    const uncategorizedDescs = [...new Set(
-      categorized.filter((i) => !i.categoryId).map((i) => i.description)
-    )];
-    const apiKey = localStorage.getItem('anthropic_api_key') || '';
-    // Categorias fora-dos-totais ("Transferência") NUNCA entram em sugestão
-    // automática: memos de extrato ("PIX TRANSF...") casam com o NOME e a IA
-    // marcava ~90% do extrato como Transferência — sumindo dos totais em
-    // silêncio. Transferência só por escolha explícita (manual ou regra criada
-    // pelo usuário). Filtramos o que a IA VÊ e validamos o que ela DEVOLVE.
-    const excludedIds = getExcludedFromTotalsIds(categories);
-    const suggestibleCategories = categories.filter((c) => !c.excludeFromTotals);
-    if (uncategorizedDescs.length > 0 && apiKey && suggestibleCategories.length > 0) {
-      try {
-        const categoryInfos = suggestibleCategories.map((c) => ({
-          id: c.id,
-          name: c.name,
-          parentName: c.parentId ? categories.find((p) => p.id === c.parentId)?.name || null : null,
-          type: c.type,
-        }));
-        const res = await fetch('/api/suggest-categories', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ descriptions: uncategorizedDescs, categories: categoryInfos, apiKey }),
-        });
-        if (res.ok) {
-          const data = await res.json() as {
-            suggestions: Record<string, { categoryId: string | null; confidence: number }>;
-          };
-          for (const item of categorized) {
-            if (!item.categoryId) {
-              const suggestion = data.suggestions?.[item.description];
-              if (
-                suggestion?.categoryId &&
-                suggestion.confidence >= 0.7 &&
-                !excludedIds.has(suggestion.categoryId)
-              ) {
-                item.categoryId = suggestion.categoryId;
-              }
-            }
-          }
-        }
-      } catch {
-        // AI categorization failed silently
-      }
-    }
-
     await importBatch(categorized);
-  }, [accounts, categories, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [accounts, importBatch, matchCategory, getClosedCycle, reopenCycle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Aplica uma sessão e mostra o resultado REAL (aplicadas/puladas/erro) —
   // nada de sucesso silencioso nem erro engolido (C3).
@@ -652,7 +606,6 @@ export function TransactionsPage() {
           allTitulars={allTitulars}
           titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
           matchCategory={matchCategory}
-          addRule={addRule}
           onCreateRule={handleCreateRule}
           rules={rules}
           projects={activeProjects}
