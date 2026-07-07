@@ -51,7 +51,12 @@ export interface Transaction {
   totalInstallments: number | null;
   cardNumber: string | null;
   projectId: string | null;
-  pluggyTransactionId: string | null;
+  /**
+   * Legado (integração Pluggy/Open Finance removida): id da transação no
+   * Pluggy, presente apenas em dados históricos no Firestore. Nenhum código
+   * grava ou usa este campo hoje — mantido só para tipar os documentos antigos.
+   */
+  pluggyTransactionId?: string | null;
   tags: string[];
   notes: string;
   importBatch: string | null;
@@ -79,9 +84,8 @@ export interface Transaction {
   /**
    * Chave natural de dedupe do parser OFX (tag `FITID` do arquivo). Presente
    * só em transações importadas via extrato OFX de conta corrente; `null`/
-   * ausente nas demais origens (fatura de cartão via IA, Pluggy, manual).
-   * Dedupe contra reimportação usa este campo (ver `ImportModal.tsx`), no
-   * mesmo padrão já usado para `pluggyTransactionId`.
+   * ausente nas demais origens (fatura de cartão via IA, manual).
+   * Dedupe contra reimportação usa este campo (ver `ImportModal.tsx`).
    */
   fitid?: string | null;
 }

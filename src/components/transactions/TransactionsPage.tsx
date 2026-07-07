@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X, Landmark, ChevronDown, History, Clock, RotateCcw } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, ChevronDown, History, Clock, RotateCcw } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -11,7 +11,6 @@ import { useProjects } from '../../hooks/useProjects';
 import { TransactionTable } from './TransactionTable';
 import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
-import { PluggySync } from './PluggySync';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
@@ -29,9 +28,7 @@ export function TransactionsPage() {
   const { activeProjects } = useProjects();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
-  const [showPluggySync, setShowPluggySync] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const hasPluggyCredentials = !!(localStorage.getItem('pluggy_client_id') && localStorage.getItem('pluggy_client_secret'));
   const [filterMonth, setFilterMonth] = useState(getMonthYear());
   const [filterTitular, setFilterTitular] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
@@ -327,15 +324,6 @@ export function TransactionsPage() {
           >
             <Upload size={14} /> Importar Extrato
           </button>
-          {hasPluggyCredentials && (
-            <button
-              onClick={() => setShowPluggySync(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
-              title="Sincronizar transacoes automaticamente via Open Banking (Pluggy)"
-            >
-              <Landmark size={14} /> Sincronizar Banco
-            </button>
-          )}
           <div className="relative" ref={shareMenuRef}>
             <button
               onClick={() => setShareMenuOpen((v) => !v)}
@@ -609,15 +597,6 @@ export function TransactionsPage() {
           onCreateRule={handleCreateRule}
           rules={rules}
           projects={activeProjects}
-        />
-      )}
-      {showPluggySync && (
-        <PluggySync
-          existingTransactions={transactions}
-          accounts={accounts}
-          titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
-          onImport={handleImport}
-          onClose={() => setShowPluggySync(false)}
         />
       )}
       {showShareModal && (

@@ -2,7 +2,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { usePublicCategorizationSession } from '../../hooks/useCategorizationSession';
 import { CategorizationCard } from './CategorizationCard';
-import { Check, Undo2, Inbox, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Check, Undo2, Inbox, ChevronLeft, ChevronRight, X } from 'lucide-react';
 
 function firstName(name: string): string {
   const n = (name || '').trim();
@@ -20,6 +20,11 @@ export function CategorizationPage() {
   const [navIndex, setNavIndex] = useState<number | null>(null);
   const [undo, setUndo] = useState<{ txId: string; label: string } | null>(null);
   const [undoError, setUndoError] = useState<string | null>(null);
+  // "+ Nota" do toast: rascunho de nota para o item recém-categorizado, sem sair
+  // do fluxo. `undo` guarda txId/label; aqui guardamos a categoria e o texto.
+  const [noteDraft, setNoteDraft] = useState<{ txId: string; categoryId: string; text: string } | null>(null);
+  const [noteSaving, setNoteSaving] = useState(false);
+  const [noteError, setNoteError] = useState(false);
   // Card em voo (salvando ~220ms exit + write): trava a barra de navegação para
   // eliminar a corrida de double-tap (tocar categoria + Pular na mesma janela).
   const [cardBusy, setCardBusy] = useState(false);
@@ -164,6 +169,41 @@ export function CategorizationPage() {
     setUndo(null);
   }
 
+  // Abre o editor de nota a partir do toast, para o último item categorizado.
+  // Pausa o timeout do toast enquanto a nota estiver aberta.
+  function openNoteFromUndo() {
+    if (!undo) return;
+    const tx = transactions.find((t) => t.id === undo.txId);
+    if (!tx || !tx.categoryId) return;
+    if (undoTimer.current) window.clearTimeout(undoTimer.current);
+    setNoteError(false);
+    setNoteDraft({ txId: tx.id, categoryId: tx.categoryId, text: tx.notes ?? '' });
+  }
+
+  function closeNoteDraft() {
+    const keep = undo;
+    setNoteDraft(null);
+    setNoteError(false);
+    // Reabre a janela de 8s do desfazer (o timeout foi pausado ao abrir a nota).
+    if (keep) showUndo(keep.txId, keep.label);
+  }
+
+  async function saveNoteDraft() {
+    if (!noteDraft) return;
+    setNoteSaving(true);
+    setNoteError(false);
+    try {
+      await categorizeTransaction(noteDraft.txId, noteDraft.categoryId, noteDraft.text.trim());
+    } catch {
+      setNoteSaving(false);
+      setNoteError(true);
+      return;
+    }
+    setNoteSaving(false);
+    setNoteDraft(null);
+    setUndo(null);
+  }
+
   const greet = firstName(session.titularName);
 
   // C7: o toast precisa existir TAMBÉM na tela de celebração — antes, quando
@@ -171,15 +211,74 @@ export function CategorizationPage() {
   // JSX do toast e o desfazer ficava inalcançável. Alvo do botão ≥44px.
   const undoToast = undo && !undoError ? (
     <div className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex justify-center">
-      <div role="status" aria-live="polite" className="w-full max-w-lg flex items-center justify-between gap-3 bg-elevated border border-border rounded-full pl-4 pr-2 py-1.5 shadow-lg">
-        <span className="text-body text-text-secondary truncate">
+      <div role="status" aria-live="polite" className="w-full max-w-lg flex items-center justify-between gap-2.5 bg-elevated border border-border rounded-2xl pl-4 pr-2 py-2 shadow-lg">
+        <span className="min-w-0 text-body text-text-secondary truncate">
           Marcado como <b className="text-accent font-semibold">{undo.label}</b>
         </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={openNoteFromUndo}
+            className="min-h-[42px] px-3.5 inline-flex items-center rounded-full border border-accent-dim bg-accent/10 text-accent text-body font-semibold active:scale-[0.97] transition whitespace-nowrap"
+          >
+            + Nota
+          </button>
+          <button
+            onClick={handleUndo}
+            className="min-h-[42px] px-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-card text-text-primary text-body font-semibold active:scale-[0.97] transition whitespace-nowrap"
+          >
+            <Undo2 size={15} aria-hidden="true" /> Desfazer
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const noteEditorModal = noteDraft ? (
+    <div
+      className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center"
+      onClick={() => { if (!noteSaving) closeNoteDraft(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Adicionar nota"
+        onClick={(e) => e.stopPropagation()}
+        className="w-full max-w-lg bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-3"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-title font-bold text-text-primary">Nota</h2>
+          <button
+            onClick={closeNoteDraft}
+            disabled={noteSaving}
+            className="min-h-[44px] min-w-[44px] px-3 -mr-2 flex items-center gap-1.5 text-body font-semibold text-text-secondary rounded-control active:bg-elevated transition disabled:opacity-50"
+          >
+            <X size={16} aria-hidden="true" /> Fechar
+          </button>
+        </div>
+        {undo && (
+          <p className="text-body text-text-secondary -mt-1">
+            Para <b className="text-accent font-semibold">{undo.label}</b>
+          </p>
+        )}
+        <textarea
+          autoFocus
+          value={noteDraft.text}
+          onChange={(e) => setNoteDraft((d) => (d ? { ...d, text: e.target.value } : d))}
+          placeholder="Ex.: presente de aniversário da mãe…"
+          rows={3}
+          className="w-full px-3 py-2.5 bg-elevated border border-accent-dim rounded-control text-text-primary text-[16px] placeholder:text-ink-3 focus:border-accent resize-none"
+        />
+        {noteError && (
+          <p role="alert" className="text-caption text-accent-red">
+            Não consegui salvar — verifique a internet e tente de novo.
+          </p>
+        )}
         <button
-          onClick={handleUndo}
-          className="flex items-center gap-1.5 min-h-[44px] min-w-[44px] px-3 text-body font-semibold text-text-primary whitespace-nowrap"
+          onClick={saveNoteDraft}
+          disabled={noteSaving}
+          className="min-h-[52px] w-full flex items-center justify-center gap-2 bg-accent/10 border-2 border-accent rounded-control text-body font-bold text-text-primary active:scale-[0.98] transition disabled:opacity-50"
         >
-          <Undo2 size={15} /> Desfazer
+          {noteSaving ? 'Salvando…' : (<><Check size={17} /> Salvar nota</>)}
         </button>
       </div>
     </div>
@@ -216,6 +315,7 @@ export function CategorizationPage() {
         </div>
         {undoErrorBanner}
         {undoToast}
+        {noteEditorModal}
       </div>
     );
   }
@@ -319,7 +419,7 @@ export function CategorizationPage() {
 
       {/* Card */}
       <div className="flex-1 flex items-start justify-center px-3 pb-[env(safe-area-inset-bottom)] min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain">
-        <div className="w-full max-w-lg pb-4">
+        <div className="w-full max-w-lg pb-16">
           <CategorizationCard
             key={currentTx.id}
             transaction={currentTx}
@@ -332,9 +432,10 @@ export function CategorizationPage() {
         </div>
       </div>
 
-      {/* Toast desfazer / erro de desfazer */}
+      {/* Toast desfazer / erro de desfazer / editor de nota */}
       {undoErrorBanner}
       {undoToast}
+      {noteEditorModal}
     </div>
   );
 }
