@@ -211,22 +211,22 @@ export function CategorizationPage() {
   // JSX do toast e o desfazer ficava inalcançável. Alvo do botão ≥44px.
   const undoToast = undo && !undoError ? (
     <div className="fixed left-3 right-3 bottom-[calc(env(safe-area-inset-bottom)+12px)] z-40 flex justify-center">
-      <div role="status" aria-live="polite" className="w-full max-w-lg flex items-center justify-between gap-3 bg-elevated border border-border rounded-full pl-4 pr-2 py-1.5 shadow-lg">
-        <span className="text-body text-text-secondary truncate">
+      <div role="status" aria-live="polite" className="w-full max-w-lg flex items-center justify-between gap-2.5 bg-elevated border border-border rounded-2xl pl-4 pr-2 py-2 shadow-lg">
+        <span className="min-w-0 text-body text-text-secondary truncate">
           Marcado como <b className="text-accent font-semibold">{undo.label}</b>
         </span>
-        <div className="flex items-center shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           <button
             onClick={openNoteFromUndo}
-            className="min-h-[44px] px-2.5 text-body font-semibold text-accent whitespace-nowrap"
+            className="min-h-[42px] px-3.5 inline-flex items-center rounded-full border border-accent-dim bg-accent/10 text-accent text-body font-semibold active:scale-[0.97] transition whitespace-nowrap"
           >
             + Nota
           </button>
           <button
             onClick={handleUndo}
-            className="flex items-center gap-1.5 min-h-[44px] px-2.5 text-body font-semibold text-text-primary whitespace-nowrap"
+            className="min-h-[42px] px-3 inline-flex items-center gap-1.5 rounded-full border border-border bg-bg-card text-text-primary text-body font-semibold active:scale-[0.97] transition whitespace-nowrap"
           >
-            <Undo2 size={15} /> Desfazer
+            <Undo2 size={15} aria-hidden="true" /> Desfazer
           </button>
         </div>
       </div>
