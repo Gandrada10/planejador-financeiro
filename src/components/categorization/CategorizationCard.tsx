@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Search, X, MessageSquare, Sparkles, Check } from 'lucide-react';
+import { Search, X, MessageSquare, Sparkles, Check, ChevronLeft, ChevronDown } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
@@ -52,6 +52,10 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
   const [lastCategoryId, setLastCategoryId] = useState<string | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [search, setSearch] = useState('');
+  // Drill inline de subcategoria: ao tocar numa categoria-mãe que tem tipos,
+  // em vez de categorizar na hora abrimos as subs ali mesmo (sem modal).
+  // Resetado a cada lançamento pela remontagem (key={tx.id} no pai).
+  const [drillParent, setDrillParent] = useState<string | null>(null);
   // P4: dimensões da área REALMENTE visível (VisualViewport) enquanto o
   // bottom-sheet está aberto — usado para ancorar o sheet acima do teclado.
   const [viewport, setViewport] = useState<{ top: number; height: number } | null>(null);
@@ -105,6 +109,27 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
     }
     return picked;
   }, [quickCategoryIds, byId, eligible, suggestion]);
+
+  // Subcategorias elegíveis agrupadas pela mãe — base do drill inline. Só entra
+  // sub válida para o sinal do valor (o filtro já veio de `eligible`).
+  const subsByParent = useMemo(() => {
+    const m = new Map<string, Category[]>();
+    for (const c of eligible) {
+      if (!c.parentId) continue;
+      const arr = m.get(c.parentId);
+      if (arr) arr.push(c);
+      else m.set(c.parentId, [c]);
+    }
+    for (const arr of m.values())
+      arr.sort((a, b) => a.name.localeCompare(b.name, 'pt-BR', { sensitivity: 'base' }));
+    return m;
+  }, [eligible]);
+  const hasSubs = useCallback(
+    (c: Category) => !c.parentId && (subsByParent.get(c.id)?.length ?? 0) > 0,
+    [subsByParent]
+  );
+  const drillCategory = drillParent ? byId.get(drillParent) : undefined;
+  const drillSubs = drillParent ? subsByParent.get(drillParent) ?? [] : [];
 
   // Estado é resetado por remontagem (key={tx.id} no pai), sem efeito.
 
@@ -300,27 +325,79 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
         )}
       </div>
 
-      {/* Zona do polegar: categorias frequentes */}
+      {/* Zona do polegar: categorias frequentes — ou o drill inline de
+          subcategoria quando o usuário toca numa mãe que tem tipos. */}
       <div className="flex flex-col gap-2">
-        <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-1">
-          {suggestion ? 'Outras categorias' : 'Categorias frequentes'}
-        </p>
-        <div className="grid grid-cols-3 gap-2">
-          {quick.map((c) => (
+        {drillCategory ? (
+          <>
             <button
-              key={c.id}
-              onClick={() => handleSelect(c.id)}
+              onClick={() => setDrillParent(null)}
               disabled={saving}
-              aria-pressed={selectedId === c.id}
-              className={`min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
-                selectedId === c.id ? 'border-accent' : 'border-border'
+              className="self-start min-h-[44px] -ml-1 px-2 inline-flex items-center gap-1 rounded-full text-caption font-semibold text-text-secondary active:bg-elevated transition disabled:opacity-50"
+            >
+              <ChevronLeft size={16} aria-hidden="true" /> Voltar
+            </button>
+            <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-1">
+              {drillCategory.name} · qual tipo?
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {drillSubs.map((s) => (
+                <button
+                  key={s.id}
+                  onClick={() => handleSelect(s.id)}
+                  disabled={saving}
+                  aria-pressed={selectedId === s.id}
+                  className={`min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
+                    selectedId === s.id ? 'border-accent' : 'border-border'
+                  }`}
+                >
+                  <CategoryIcon icon={s.icon} size={21} style={{ color: s.color }} />
+                  <span className="text-center leading-tight line-clamp-2">{s.name}</span>
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => handleSelect(drillCategory.id)}
+              disabled={saving}
+              aria-pressed={selectedId === drillCategory.id}
+              className={`w-full min-h-[48px] flex items-center justify-center gap-2 bg-accent/10 rounded-control text-body font-semibold text-text-primary active:bg-elevated transition disabled:opacity-50 border-2 ${
+                selectedId === drillCategory.id ? 'border-accent' : 'border-accent-dim'
               }`}
             >
-              <CategoryIcon icon={c.icon} size={21} style={{ color: c.color }} />
-              <span className="text-center leading-tight line-clamp-2">{c.name}</span>
+              <CategoryIcon icon={drillCategory.icon} size={18} style={{ color: drillCategory.color }} />
+              Usar {drillCategory.name} (geral)
             </button>
-          ))}
-        </div>
+          </>
+        ) : (
+          <>
+            <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-1">
+              {suggestion ? 'Outras categorias' : 'Categorias frequentes'}
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {quick.map((c) => {
+                const withSubs = hasSubs(c);
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => (withSubs ? setDrillParent(c.id) : handleSelect(c.id))}
+                    disabled={saving}
+                    aria-pressed={selectedId === c.id}
+                    aria-haspopup={withSubs ? 'menu' : undefined}
+                    className={`relative min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
+                      selectedId === c.id ? 'border-accent' : 'border-border'
+                    }`}
+                  >
+                    <CategoryIcon icon={c.icon} size={21} style={{ color: c.color }} />
+                    <span className="text-center leading-tight line-clamp-2">{c.name}</span>
+                    {withSubs && (
+                      <ChevronDown size={13} className="absolute top-1 right-1 text-ink-3" aria-hidden="true" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </>
+        )}
 
         {/* "Buscar categoria" sozinho em linha própria, largura total, logo abaixo
             da grade de sugestões. O "Pular" subiu para a barra de topo (ao lado do
@@ -342,7 +419,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
             categorizar (sem fill de marca), mas nunca discreto. */}
         <div className="flex flex-col gap-1.5 px-1 pt-1">
           <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold px-0.5">
-            Observação <span className="normal-case tracking-normal font-medium">(opcional)</span>
+            Nota <span className="normal-case tracking-normal font-medium">(opcional)</span>
           </p>
           {!showNotes ? (
             <button
@@ -353,7 +430,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
               {notes ? (
                 <span className="flex-1 min-w-0 text-body font-medium text-text-primary truncate">{notes}</span>
               ) : (
-                <span className="flex-1 text-body font-semibold text-text-primary">Adicionar observação</span>
+                <span className="flex-1 text-body font-semibold text-text-primary">+ Nota</span>
               )}
               <span className="shrink-0 text-caption font-semibold text-accent">{notes ? 'Editar' : 'Adicionar'}</span>
             </button>
@@ -361,7 +438,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
             <div className="flex flex-col gap-2">
               <textarea
                 autoFocus
-                aria-label="Observação"
+                aria-label="Nota"
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
                 placeholder="Ex.: presente de aniversário da mãe…"
