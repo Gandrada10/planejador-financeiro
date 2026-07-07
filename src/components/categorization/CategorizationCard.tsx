@@ -507,7 +507,10 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
                 </button>
               )}
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col">
+            {/* pb generoso: no iOS Safari a barra flutuante (e o teclado) cobrem
+                a base sem descontar do visualViewport — este respiro deixa o
+                último item rolar acima do ponto cego e ser selecionável. */}
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain flex flex-col pb-28">
               {searchResults.length === 0 ? (
                 <p className="text-body text-text-secondary text-center py-6">Nenhuma categoria encontrada</p>
               ) : (
