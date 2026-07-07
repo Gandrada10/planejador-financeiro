@@ -245,7 +245,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
   }, [sheetOpen, closeSheet]);
 
   return (
-    <div className={`flex flex-col gap-3 transition-all duration-200 ease-out ${exiting ? 'opacity-0 translate-x-10' : 'opacity-100 translate-x-0'}`}>
+    <div className={`flex flex-col gap-2.5 transition-all duration-200 ease-out ${exiting ? 'opacity-0 translate-x-10' : 'opacity-100 translate-x-0'}`}>
       {/* Erro de escrita (C2): visível, com retry — nunca congelar em silêncio */}
       {saveError && (
         <div role="alert" className="bg-accent-red/10 border border-accent-red/50 rounded-card p-4 flex flex-col gap-2.5">
@@ -274,11 +274,11 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
         </div>
       )}
       {/* Cartão da transação */}
-      <div className="bg-bg-card border border-border rounded-card p-5">
+      <div className="bg-bg-card border border-border rounded-card p-4">
         <p className={`text-caption uppercase tracking-[0.12em] font-semibold ${isIncome ? 'text-accent-green' : 'text-ink-3'}`}>
           {isIncome ? 'Entrada · confirme a categoria' : 'Gasto · escolha a categoria'}
         </p>
-        <p className="text-text-primary text-lg font-bold leading-tight mt-1.5 break-words">
+        <p className="text-text-primary text-lg font-bold leading-tight mt-1 break-words">
           {transaction.description}
         </p>
         <div className="flex items-center gap-2 mt-1 text-body text-text-secondary min-w-0">
@@ -294,7 +294,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
             </span>
           )}
         </div>
-        <p className={`text-kpi font-bold tnum mt-2 ${isIncome ? 'text-accent-green' : 'text-accent-red'}`}>
+        <p className={`text-kpi font-bold tnum mt-1.5 ${isIncome ? 'text-accent-green' : 'text-accent-red'}`}>
           {formatBRL(transaction.amount)}
         </p>
 
@@ -305,7 +305,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
               onClick={() => handleSelect(suggestion.id)}
               disabled={saving}
               aria-pressed={selectedId === suggestion.id}
-              className={`mt-4 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-4 bg-accent/10 text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50 border-2 ${
+              className={`mt-3 w-full flex items-center justify-center gap-2.5 rounded-control px-4 py-3.5 bg-accent/10 text-text-primary text-lg font-bold active:scale-[0.98] transition disabled:opacity-50 border-2 ${
                 selectedId === suggestion.id ? 'border-accent' : 'border-border'
               }`}
             >
@@ -313,13 +313,13 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
               <span><span className="text-text-secondary font-medium">É </span>{suggestion.name}<span className="text-text-secondary font-medium">?</span></span>
             </button>
             {transaction.suggestionReason && (
-              <p className="mt-2 text-caption text-ink-3 text-center flex items-center justify-center gap-1.5">
+              <p className="mt-1.5 text-caption text-ink-3 text-center flex items-center justify-center gap-1.5">
                 <Sparkles size={12} /> {transaction.suggestionReason} · um toque confirma
               </p>
             )}
           </>
         ) : (
-          <p className="mt-4 text-body text-text-secondary text-center border border-dashed border-border rounded-control py-3 px-3 leading-snug">
+          <p className="mt-3 text-body text-text-secondary text-center border border-dashed border-border rounded-control py-2.5 px-3 leading-snug">
             Primeira vez que isso aparece. Escolha abaixo — o app memoriza para as próximas.
           </p>
         )}
@@ -347,7 +347,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
                   onClick={() => handleSelect(s.id)}
                   disabled={saving}
                   aria-pressed={selectedId === s.id}
-                  className={`min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
+                  className={`min-h-[58px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-2.5 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
                     selectedId === s.id ? 'border-accent' : 'border-border'
                   }`}
                 >
@@ -383,7 +383,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
                     disabled={saving}
                     aria-pressed={selectedId === c.id}
                     aria-haspopup={withSubs ? 'menu' : undefined}
-                    className={`relative min-h-[66px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-3 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
+                    className={`relative min-h-[58px] flex flex-col items-center justify-center gap-1.5 bg-bg-card rounded-control px-1.5 py-2.5 text-text-primary text-caption font-semibold active:scale-[0.95] active:bg-elevated transition disabled:opacity-50 border-2 ${
                       selectedId === c.id ? 'border-accent' : 'border-border'
                     }`}
                   >
@@ -424,7 +424,7 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
           {!showNotes ? (
             <button
               onClick={() => setShowNotes(true)}
-              className="w-full min-h-[56px] flex items-center gap-3 px-3.5 py-3 rounded-control bg-bg-card border border-border text-left active:bg-elevated transition-colors"
+              className="w-full min-h-[50px] flex items-center gap-3 px-3.5 py-2.5 rounded-control bg-bg-card border border-border text-left active:bg-elevated transition-colors"
             >
               <MessageSquare size={20} className="shrink-0 text-accent" />
               {notes ? (
