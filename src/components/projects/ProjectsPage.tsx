@@ -3,7 +3,7 @@ import { Plus, Trash2, Archive, RotateCcw, Pencil, Check, X, ChevronDown, Chevro
 import { useProjects } from '../../hooks/useProjects';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
-import { formatBRL, countsInTotals } from '../../lib/utils';
+import { formatBRL, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 import type { Project, Transaction } from '../../types';
 
 const PROJECT_COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
@@ -41,8 +41,10 @@ export function ProjectsPage() {
     // Transferências (ex.: pagamento de fatura, PIX interno) não contam como
     // receita/despesa do projeto — só a contagem inclui todos os lançamentos.
     const counted = txs.filter((t) => countsInTotals(t, categories));
-    const income = counted.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-    const expense = counted.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+    const income = counted.filter((t) => isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0);
+    // Despesa inclui reembolsos (positivos) como contra-despesa: somados
+    // assinados, reduzem o gasto do projeto para o custo real.
+    const expense = counted.filter((t) => isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
     return { count: txs.length, income, expense, balance: income + expense };
   }
 

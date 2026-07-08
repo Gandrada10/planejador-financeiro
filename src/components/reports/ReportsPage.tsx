@@ -14,7 +14,7 @@ import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
 import { ExportFullReportModal } from './ExportFullReportModal';
 import { TransactionEditModal } from '../transactions/TransactionEditModal';
-import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 type ReportTab = 'categorias' | 'fluxo' | 'evolucao';
@@ -75,11 +75,11 @@ export function ReportsPage() {
   );
 
   const totalEntries = useMemo(
-    () => filteredTransactions.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0),
+    () => filteredTransactions.filter((t) => isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0),
     [filteredTransactions]
   );
   const totalExits = useMemo(
-    () => filteredTransactions.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0),
+    () => filteredTransactions.filter((t) => isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0),
     [filteredTransactions]
   );
   const totalBalance = totalEntries + totalExits;

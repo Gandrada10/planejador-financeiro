@@ -14,7 +14,7 @@ import { ImportModal } from './ImportModal';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
-import { getMonthYear, getMonthLabel, cn, countsInTotals } from '../../lib/utils';
+import { getMonthYear, getMonthLabel, cn, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
@@ -433,10 +433,10 @@ export function TransactionsPage() {
       <div className="flex gap-4 text-xs text-text-secondary flex-wrap">
         <span>{filtered.length} transacoes</span>
         <span className="text-accent-green">
-          Receitas: R$ {filtered.filter((t) => countsInTotals(t, categories) && t.amount > 0).reduce((s, t) => s + t.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          Receitas: R$ {filtered.filter((t) => countsInTotals(t, categories) && isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </span>
         <span className="text-accent-red">
-          Despesas: R$ {Math.abs(filtered.filter((t) => countsInTotals(t, categories) && t.amount < 0).reduce((s, t) => s + t.amount, 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+          Despesas: R$ {Math.abs(filtered.filter((t) => countsInTotals(t, categories) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
         </span>
         {filtered.filter((t) => !t.reconciled).length > 0 && (
           <button

@@ -10,7 +10,7 @@ import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { MonthSelector } from '../shared/MonthSelector';
 import { InvoiceSummaryPanel } from './InvoiceSummaryPanel';
 import { InvoiceTransactionList } from './InvoiceTransactionList';
-import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel, invoiceDateFor, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, getMonthLabel, invoiceDateFor, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 
 export function CreditCardPage() {
   const [monthYear, setMonthYear] = useState(getMonthYear());
@@ -67,8 +67,8 @@ export function CreditCardPage() {
   }, [invoiceTransactions, excludedIds]);
 
   // Totals
-  const totalExpenses = invoiceTransactions.filter((t) => countsInTotals(t, excludedIds) && t.amount < 0).reduce((s, t) => s + t.amount, 0);
-  const totalCredits = invoiceTransactions.filter((t) => countsInTotals(t, excludedIds) && t.amount > 0).reduce((s, t) => s + t.amount, 0);
+  const totalExpenses = invoiceTransactions.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
+  const totalCredits = invoiceTransactions.filter((t) => countsInTotals(t, excludedIds) && isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0);
   const totalInvoice = totalExpenses + totalCredits;
 
   // Previous balance (from previous month cycle)

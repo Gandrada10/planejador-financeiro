@@ -51,6 +51,12 @@ export interface Transaction {
   totalInstallments: number | null;
   cardNumber: string | null;
   projectId: string | null;
+  /** Marca um valor POSITIVO como REEMBOLSO (recuperação de um gasto — ex.:
+   *  amigos te pagam de volta ingressos comprados no seu cartão). Nos totais
+   *  ele NÃO conta como receita: abate a despesa (contra-despesa), para o
+   *  líquido refletir o seu custo real. Ver `isIncomeAmount`/`isExpenseAmount`
+   *  em `src/lib/utils.ts`. */
+  isReimbursement?: boolean;
   /**
    * Legado (integração Pluggy/Open Finance removida): id da transação no
    * Pluggy, presente apenas em dados históricos no Firestore. Nenhum código

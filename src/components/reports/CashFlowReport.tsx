@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { FileSpreadsheet, Download } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
-import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 
 type Interval = 'mensal' | 'anual';
 
@@ -66,8 +66,8 @@ export function CashFlowReport() {
     let runningSaldo = saldoAnterior;
     const rows = periods.map((periodKey) => {
       const periodTxs = transactions.filter((t) => countsInTotals(t, excludedIds) && txPeriodKey(t.date) === periodKey);
-      const entradas = periodTxs.filter((t) => t.amount > 0).reduce((s, t) => s + t.amount, 0);
-      const saidas = periodTxs.filter((t) => t.amount < 0).reduce((s, t) => s + t.amount, 0);
+      const entradas = periodTxs.filter((t) => isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0);
+      const saidas = periodTxs.filter((t) => isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
       const resultado = entradas + saidas;
       runningSaldo += resultado;
       return { periodKey, label: periodLabel(periodKey), entradas, saidas, resultado, saldo: runningSaldo, empty: periodTxs.length === 0 };

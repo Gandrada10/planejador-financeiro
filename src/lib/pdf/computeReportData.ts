@@ -1,5 +1,5 @@
 import type { Category, Transaction } from '../../types';
-import { getMonthLabel, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds } from '../utils';
+import { getMonthLabel, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../utils';
 import type {
   BudgetProgress,
   CashFlowByAccount,
@@ -109,8 +109,8 @@ function computeKpis(
     const my = getMonthYear(t.date);
     return my >= period.startMonth && my <= period.endMonth;
   });
-  const totalEntries = sum(inPeriod.filter((t) => t.amount > 0).map((t) => t.amount));
-  const totalExits = sum(inPeriod.filter((t) => t.amount < 0).map((t) => t.amount));
+  const totalEntries = sum(inPeriod.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
+  const totalExits = sum(inPeriod.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
   const totalBalance = totalEntries + totalExits;
 
   // YTD based on end month's year (calendar year-to-date up to end month inclusive)
@@ -167,7 +167,7 @@ function computeDashboardCashFlow(
     const key = t.account || 'Sem conta';
     if (!map.has(key)) map.set(key, { entries: 0, exits: 0 });
     const acc = map.get(key)!;
-    if (t.amount > 0) acc.entries += t.amount;
+    if (isIncomeAmount(t)) acc.entries += t.amount;
     else acc.exits += t.amount;
   }
   return Array.from(map.entries())
@@ -192,7 +192,7 @@ function computeExpensesByCategory(
 ): ExpenseCategoryBreakdown[] {
   const inPeriod = transactions.filter((t) => {
     const my = getMonthYear(t.date);
-    return my >= period.startMonth && my <= period.endMonth && t.amount < 0;
+    return my >= period.startMonth && my <= period.endMonth && isExpenseAmount(t);
   });
   const map = new Map<string, { amount: number; subs: Map<string, number> }>();
   for (const t of inPeriod) {
@@ -247,7 +247,7 @@ function computeBudgetProgress(
   }
 
   for (const t of deps.transactions) {
-    if (t.amount >= 0) continue;
+    if (!isExpenseAmount(t)) continue;
     if (!t.categoryId) continue;
     if (!byCategory.has(t.categoryId)) continue;
     const my = getMonthYear(t.date);
@@ -283,8 +283,8 @@ function computeProjects(deps: ReportDeps, period: ResolvedPeriod): ProjectSumma
         const my = getMonthYear(t.date);
         return my >= period.startMonth && my <= period.endMonth;
       });
-      const spent = sum(ptxs.filter((t) => t.amount < 0).map((t) => t.amount));
-      const income = sum(ptxs.filter((t) => t.amount > 0).map((t) => t.amount));
+      const spent = sum(ptxs.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
+      const income = sum(ptxs.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
       return {
         id: p.id,
         name: p.name,
@@ -306,8 +306,8 @@ function computeByCategory(
     const my = getMonthYear(t.date);
     return my >= period.startMonth && my <= period.endMonth;
   });
-  const totalEntries = sum(inPeriod.filter((t) => t.amount > 0).map((t) => t.amount));
-  const totalExits = sum(inPeriod.filter((t) => t.amount < 0).map((t) => t.amount));
+  const totalEntries = sum(inPeriod.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
+  const totalExits = sum(inPeriod.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
   const totalBalance = totalEntries + totalExits;
   const totalAbs = Math.abs(totalEntries) + Math.abs(totalExits);
 
@@ -421,8 +421,8 @@ function computeCashFlow(
   let runningSaldo = saldoAnterior;
   const rows: CashFlowRow[] = period.months.map((monthYear) => {
     const monthTxs = transactions.filter((t) => getMonthYear(t.date) === monthYear);
-    const entradas = sum(monthTxs.filter((t) => t.amount > 0).map((t) => t.amount));
-    const saidas = sum(monthTxs.filter((t) => t.amount < 0).map((t) => t.amount));
+    const entradas = sum(monthTxs.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
+    const saidas = sum(monthTxs.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
     const resultado = entradas + saidas;
     runningSaldo += resultado;
     return {
@@ -474,8 +474,8 @@ function computeEvolution(
   };
   for (const m of months) {
     const monthTxs = deps.transactions.filter((t) => getMonthYear(t.date) === m);
-    sectionTotals.receitas[m] = sum(monthTxs.filter((t) => t.amount > 0).map((t) => t.amount));
-    sectionTotals.despesas[m] = sum(monthTxs.filter((t) => t.amount < 0).map((t) => t.amount));
+    sectionTotals.receitas[m] = sum(monthTxs.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
+    sectionTotals.despesas[m] = sum(monthTxs.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
   }
 
   const incomeCats: Category[] = [];

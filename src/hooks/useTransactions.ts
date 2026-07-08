@@ -59,6 +59,7 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     billingMonth: (data.billingMonth as string) || null,
     provisionalDate: data.provisionalDate ? (data.provisionalDate as Timestamp).toDate() : null,
     fitid: (data.fitid as string) || null,
+    isReimbursement: (data.isReimbursement as boolean) || false,
   };
 }
 

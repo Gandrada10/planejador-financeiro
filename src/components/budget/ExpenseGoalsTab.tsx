@@ -13,6 +13,7 @@ import {
   parseMoneyInput,
   countsInTotals,
   getExcludedFromTotalsIds,
+  isExpenseAmount,
 } from '../../lib/utils';
 
 interface BudgetRow {
@@ -86,7 +87,7 @@ export function ExpenseGoalsTab() {
 
   // Month transactions (expenses only, absolute values)
   const monthExpenses = useMemo(
-    () => transactions.filter((t) => getMonthYear(t.date) === monthYear && t.amount < 0 && countsInTotals(t, excludedIds)),
+    () => transactions.filter((t) => getMonthYear(t.date) === monthYear && isExpenseAmount(t) && countsInTotals(t, excludedIds)),
     [transactions, monthYear, excludedIds]
   );
 
@@ -95,7 +96,9 @@ export function ExpenseGoalsTab() {
     const map = new Map<string, number>();
     for (const t of monthExpenses) {
       const catId = t.categoryId || '__uncategorized';
-      map.set(catId, (map.get(catId) || 0) + Math.abs(t.amount));
+      // `-t.amount`: despesa (negativa) vira positivo (= abs); reembolso
+      // (positivo) subtrai, reduzindo o realizado da meta (contra-despesa).
+      map.set(catId, (map.get(catId) || 0) - t.amount);
     }
     return map;
   }, [monthExpenses]);
