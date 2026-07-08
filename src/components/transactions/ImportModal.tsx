@@ -242,13 +242,31 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   //
   // .ofx/.ofc → parser determinístico (parseOfx), sem IA, conta corrente.
   // Todo o resto (.csv/.xlsx/.xls/.pdf) → caminho de IA existente, intacto.
-  function routeFile(file: File) {
+  async function routeFile(file: File) {
     const ext = file.name.split('.').pop()?.toLowerCase();
     if (ext === 'ofx' || ext === 'ofc') {
       handleParseOfx(file);
-    } else {
-      handleParse(file);
+      return;
     }
+    // Alguns bancos (ex.: Banco do Brasil) exportam o OFX com nome SEM `.ofx`.
+    // Antes de recusar como "formato não suportado", confirmamos pelo CONTEÚDO:
+    // se o cabeçalho é OFX, mandamos pro parser determinístico. Só olhamos os
+    // bytes quando a extensão não é uma das conhecidas de IA (csv/xlsx/xls/pdf),
+    // pra não ler à toa quem já se identificou pela extensão.
+    const knownAi = ext === 'csv' || ext === 'xlsx' || ext === 'xls' || ext === 'pdf';
+    if (!knownAi) {
+      try {
+        const head = new TextDecoder('windows-1252').decode(await file.slice(0, 2048).arrayBuffer());
+        if (/OFXHEADER\s*[:=]/i.test(head) || /DATA\s*:\s*OFXSGML/i.test(head) || /<OFX>/i.test(head)) {
+          handleParseOfx(file);
+          return;
+        }
+      } catch {
+        // Não conseguiu ler o cabeçalho → segue pro caminho padrão, que mostra
+        // o erro de formato apropriado.
+      }
+    }
+    handleParse(file);
   }
 
   // ─── Parse via OFX (determinístico, sem IA) ────────────────────────────────
