@@ -3,9 +3,6 @@ import { Download, FileSpreadsheet, ChevronDown, ChevronRight, ChevronsUpDown, C
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
-import { useAccounts } from '../../hooks/useAccounts';
-import { useFamilyMembers } from '../../hooks/useFamilyMembers';
-import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CategoryIcon } from '../shared/CategoryIcon';
@@ -37,12 +34,9 @@ interface SubCategoryGroup {
 }
 
 export function ReportsPage() {
-  const { transactions, loading, updateTransaction, deleteTransaction } = useTransactions();
+  const { transactions, loading } = useTransactions();
   const { categories, rootCategories, subCategories } = useCategories();
   const { budgets } = useBudgets();
-  const { accounts, accountNames } = useAccounts();
-  const { memberNames: familyMemberNames } = useFamilyMembers();
-  const { titularNames } = useTitularMappings();
   const { activeProjects } = useProjects();
   const [activeTab, setActiveTab] = useState<ReportTab>('categorias');
   const [monthYear, setMonthYear] = useState(getMonthYear());
@@ -538,7 +532,7 @@ export function ReportsPage() {
                                     >
                                       {project?.name || '—'}
                                     </span>
-                                  </button>
+                                  </div>
                                 );
                               })}
                             </div>
