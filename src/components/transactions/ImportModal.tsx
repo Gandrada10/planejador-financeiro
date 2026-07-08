@@ -65,8 +65,12 @@ const OFX_MAX_BYTES = 15_000_000;
 // data+valor+descrição, que não corre esse risco de colisão entre contas.
 function isOfxDuplicate(item: ImportItem, existing: Transaction[]): boolean {
   if (item.fitid && item.account) {
+    // Casa também pelo VALOR: alguns bancos (ex.: Banco do Brasil) reusam o
+    // mesmo FITID em transações diferentes (todos os "Resgate CDB" com o mesmo
+    // id). Sem o valor, um Resgate novo seria marcado como duplicata de outro
+    // já importado. Duplicata real tem FITID, conta E valor iguais.
     const fitidMatch = existing.some(
-      (t) => t.fitid === item.fitid && t.account === item.account
+      (t) => t.fitid === item.fitid && t.account === item.account && Math.abs(t.amount - item.amount) < 0.01
     );
     if (fitidMatch) return true;
   }
@@ -294,11 +298,16 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     setOfxParsing(true);
 
     try {
-      // OFX declara CHARSET:1252 (Windows-1252/Latin-1), NÃO UTF-8 — ler como
-      // UTF-8 quebra os acentos do MEMO silenciosamente (mojibake). Ver nota
-      // de encoding no topo de `src/lib/parseOfx.ts`.
+      // Encoding varia por banco: Itaú exporta CHARSET:1252 (Windows-1252),
+      // mas o Banco do Brasil declara ENCODING:UTF-8. Ler com o decoder errado
+      // embaralha os acentos do MEMO (mojibake). Então lemos o cabeçalho OFX
+      // (ASCII) primeiro para escolher o decoder do corpo. Ver nota de encoding
+      // no topo de `src/lib/parseOfx.ts`.
       const buf = await file.arrayBuffer();
-      const text = new TextDecoder('windows-1252').decode(buf);
+      const header = new TextDecoder('latin1').decode(buf.slice(0, 512));
+      const isUtf8 =
+        /ENCODING\s*:\s*UTF-?8/i.test(header) || /encoding\s*=\s*["']?utf-?8/i.test(header);
+      const text = new TextDecoder(isUtf8 ? 'utf-8' : 'windows-1252').decode(buf);
       const result = parseOfx(text);
 
       if (result.transactions.length === 0) {
@@ -1027,6 +1036,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     )}
                     {ofxMeta.duplicatesInFile > 0 && (
                       <> · {ofxMeta.duplicatesInFile} duplicado{ofxMeta.duplicatesInFile !== 1 ? 's' : ''} ignorado{ofxMeta.duplicatesInFile !== 1 ? 's' : ''} no arquivo</>
+                    )}
+                    {ofxMeta.balanceSkipped > 0 && (
+                      <> · {ofxMeta.balanceSkipped} linha{ofxMeta.balanceSkipped !== 1 ? 's' : ''} de saldo ignorada{ofxMeta.balanceSkipped !== 1 ? 's' : ''}</>
                     )}
                   </p>
                   {rowAccountNames.length === 0 && (
