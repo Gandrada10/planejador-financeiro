@@ -460,7 +460,19 @@ export function useCategorizationSessions() {
     let skipped = 0;
     const errors: string[] = [];
     for (const s of sessions) {
-      if (s.status === 'active' && s.categorizedCount > 0) {
+      // Sessão ativa com trabalho feito: aplica o delta pendente.
+      const activePending = s.status === 'active' && s.categorizedCount > 0;
+      // Sessão JÁ aplicada mas com edição POSTERIOR ao apply: quando quem
+      // categoriza volta num item e muda categoria/nota depois de a sessão ter
+      // sido fechada (status 'applied'), o novo delta (applied:false) ficava
+      // preso na subcoleção porque este laço só olhava 'active' — e a edição
+      // nunca chegava ao sistema. `lastActivityAt > appliedAt` sinaliza que
+      // houve atividade após o último apply; reaplicamos o delta. Após o
+      // reapply, appliedAt volta a ficar à frente e a sessão não é reprocessada
+      // à toa.
+      const appliedWithNewEdits =
+        s.status === 'applied' && !!s.lastActivityAt && !!s.appliedAt && s.lastActivityAt > s.appliedAt;
+      if (activePending || appliedWithNewEdits) {
         const res = await applyCategorizationsFromSession(s.id);
         applied += res.applied;
         skipped += res.skipped;
