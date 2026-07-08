@@ -112,6 +112,10 @@ export interface OfxParseMeta {
    *  ausente). Nunca vira NaN silencioso — ou parseia certo, ou é
    *  descartada e contada aqui. */
   skipped: number;
+  /** Linhas de SALDO ("Saldo do dia", "Saldo Anterior") que alguns bancos
+   *  (ex.: Banco do Brasil) emitem como STMTTRN mas NÃO são transações —
+   *  reconhecidas pelo NAME e puladas sem virar erro nem lançamento. */
+  balanceSkipped: number;
   /** Transações descartadas por FITID repetido dentro do MESMO arquivo
    *  (mantida a 1ª ocorrência). Dedupe CONTRA dados já importados
    *  (Firestore) é responsabilidade do caller, usando `fitid` de cada
@@ -233,6 +237,7 @@ export function parseOfx(text: string): OfxParseResult {
     stmttrnCount: 0,
     parsedCount: 0,
     skipped: 0,
+    balanceSkipped: 0,
     duplicatesInFile: 0,
     warnings,
   };
@@ -247,7 +252,7 @@ export function parseOfx(text: string): OfxParseResult {
   meta.dtEnd = parseOfxDate(extractTagValue(tranListBlock, 'DTEND'));
 
   const stmttrnRegex = /<STMTTRN>([\s\S]*?)<\/STMTTRN>/gi;
-  const seenFitids = new Set<string>();
+  const seenKeys = new Set<string>();
   const transactions: OfxParsedTransaction[] = [];
   let match: RegExpExecArray | null;
   let index = 0;
@@ -262,7 +267,17 @@ export function parseOfx(text: string): OfxParseResult {
     const trnAmtRaw = extractTagValue(block, 'TRNAMT');
     const fitidRaw = extractTagValue(block, 'FITID');
     const checkNum = extractTagValue(block, 'CHECKNUM');
+    const name = extractTagValue(block, 'NAME');
     const memo = extractTagValue(block, 'MEMO');
+
+    // Linhas de SALDO ("Saldo do dia", "Saldo Anterior") que alguns bancos
+    // (ex.: Banco do Brasil) emitem como STMTTRN não são transações —
+    // reconhecidas pelo NAME e puladas ANTES do parse de data, para não
+    // poluir os avisos com "data inválida" nem criar lançamento fantasma.
+    if (name && /^\s*saldo\b/i.test(name)) {
+      meta.balanceSkipped += 1;
+      continue;
+    }
 
     const date = parseOfxDate(dtPostedRaw);
     if (date === null) {
@@ -282,12 +297,18 @@ export function parseOfx(text: string): OfxParseResult {
     if (!fitidRaw) {
       warnings.push(`STMTTRN #${index}: FITID ausente — usando chave sintética "${fitid}" (dedupe menos confiável para esta transação).`);
     }
-    if (seenFitids.has(fitid)) {
+    // Dedupe no arquivo por (FITID + data + valor), não só FITID: alguns bancos
+    // (ex.: Banco do Brasil) reusam o MESMO FITID em transações DIFERENTES
+    // (todos os "Resgate CDB" com o mesmo id). Deduplicar só por FITID
+    // descartava transações reais e distintas. Só é duplicata quando FITID,
+    // data e valor batem — aí sim é a mesma linha repetida no arquivo.
+    const dedupeKey = `${fitid}|${date.getTime()}|${amount}`;
+    if (seenKeys.has(dedupeKey)) {
       meta.duplicatesInFile += 1;
-      warnings.push(`STMTTRN #${index}: FITID "${fitid}" repetido no arquivo — descartado (mantida a 1ª ocorrência).`);
+      warnings.push(`STMTTRN #${index}: duplicata exata (mesmo FITID, data e valor) — descartada (mantida a 1ª ocorrência).`);
       continue;
     }
-    seenFitids.add(fitid);
+    seenKeys.add(dedupeKey);
 
     if (trnType) {
       const t = trnType.toUpperCase();
@@ -302,7 +323,10 @@ export function parseOfx(text: string): OfxParseResult {
       fitid,
       date,
       purchaseDate: null,
-      description: memo ?? '',
+      // MEMO quando existe (traz o detalhe/contraparte); senão NAME — vários
+      // bancos deixam o MEMO vazio em lançamentos como "Resgate CDB",
+      // "Rendimento", etc., que ficariam sem descrição.
+      description: memo ?? name ?? '',
       amount,
       trnType,
       checkNum,
