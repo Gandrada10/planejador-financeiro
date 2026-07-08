@@ -13,7 +13,6 @@ import { CashFlowReport } from './CashFlowReport';
 import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
 import { ExportFullReportModal } from './ExportFullReportModal';
-import { TransactionEditModal } from '../transactions/TransactionEditModal';
 import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
@@ -50,7 +49,6 @@ export function ReportsPage() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(new Set());
   const [expandedSubs, setExpandedSubs] = useState<Set<string>>(new Set());
   const [fullReportOpen, setFullReportOpen] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const availableMonths = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));
@@ -506,11 +504,8 @@ export function ReportsPage() {
                               {sub.transactions.map((t) => {
                                 const project = t.projectId ? activeProjects.find((p) => p.id === t.projectId) : null;
                                 return (
-                                  <button
-                                    type="button"
+                                  <div
                                     key={t.id}
-                                    onClick={() => setEditingTransaction(t)}
-                                    title="Clique para editar o lançamento"
                                     className="w-full flex items-center gap-3 px-4 pr-6 py-1 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
                                   >
                                     <span className="text-text-secondary w-[72px] flex-shrink-0 tabular-nums">
@@ -563,20 +558,6 @@ export function ReportsPage() {
       <FinancialChat transactions={transactions} categories={categories} budgets={budgets} />
 
       <ExportFullReportModal open={fullReportOpen} onClose={() => setFullReportOpen(false)} />
-
-      {editingTransaction && (
-        <TransactionEditModal
-          transaction={editingTransaction}
-          onSave={updateTransaction}
-          onDelete={deleteTransaction}
-          onClose={() => setEditingTransaction(null)}
-          categories={categories}
-          accounts={accounts}
-          accountNames={accountNames}
-          titularNames={familyMemberNames.length > 0 ? familyMemberNames : titularNames}
-          projects={activeProjects}
-        />
-      )}
     </div>
   );
 }

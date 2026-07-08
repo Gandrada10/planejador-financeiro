@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil, RefreshCcw } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
@@ -542,28 +542,46 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                           </div>
                         ) : null}
 
-                        {/* Amount - editable */}
+                        {/* Amount - editable + reembolso badge */}
                         <div
                           data-tab-cell
-                          className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
-                          // Pré-preenche já no formato mascarado pt-BR: toFixed(2)
-                          // garante 2 casas p/ o applyMoneyMask (que lê os dígitos
-                          // como centavos) reconstruir certo — -8022.48 → "-8.022,48",
-                          // -90 → "-90,00" (não "-0,90").
-                          onClick={() => onUpdate && startEdit(t.id, 'amount', applyMoneyMask(t.amount.toFixed(2)))}
+                          className={`flex items-center justify-end gap-1.5 flex-shrink-0 text-xs font-bold overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
                         >
-                          {editingCell?.id === t.id && editingCell.field === 'amount' ? (
-                            <input
-                              autoFocus
-                              inputMode="decimal"
-                              value={editValue}
-                              onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
-                              onBlur={() => commitEdit(t)}
-                              onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
-                            />
-                          ) : (
-                            formatBRL(t.amount)
+                          <div
+                            className="flex-1 text-right"
+                            onClick={() => onUpdate && startEdit(t.id, 'amount', applyMoneyMask(t.amount.toFixed(2)))}
+                          >
+                            {editingCell?.id === t.id && editingCell.field === 'amount' ? (
+                              <input
+                                autoFocus
+                                inputMode="decimal"
+                                value={editValue}
+                                onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
+                                onBlur={() => commitEdit(t)}
+                                onKeyDown={(e) => handleKeyDown(e, t)}
+                                className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                              />
+                            ) : (
+                              formatBRL(t.amount)
+                            )}
+                          </div>
+                          {/* Toggle reembolso: só mostra se é receita (amount > 0) */}
+                          {t.amount > 0 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onUpdate && onUpdate(t.id, { isReimbursement: !t.isReimbursement });
+                              }}
+                              className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors whitespace-nowrap flex-shrink-0 ${
+                                t.isReimbursement
+                                  ? 'bg-accent/20 text-accent border border-accent/40'
+                                  : 'bg-text-secondary/10 text-text-secondary border border-text-secondary/20 hover:border-accent hover:bg-accent/10 hover:text-accent'
+                              }`}
+                              title={t.isReimbursement ? 'Marcado como reembolso. Clique para desmarcar.' : 'Marque como reembolso (abate despesa)'}
+                            >
+                              <RefreshCcw size={8} className="flex-shrink-0" />
+                              Reemb
+                            </button>
                           )}
                         </div>
 

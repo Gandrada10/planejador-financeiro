@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil } from 'lucide-react';
+import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw } from 'lucide-react';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
@@ -460,28 +460,52 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                   </div>
                 </td>
 
-                {/* Valor - editable */}
+                {/* Valor - editable + reembolso badge */}
                 <td
                   data-tab-cell
                   className={`p-2 text-right font-bold truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
-                  onClick={() => startEdit(t.id, 'amount', t.amount < 0
-                    ? '-' + applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
-                    : applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
-                  )}
                 >
-                  {editingCell?.id === t.id && editingCell.field === 'amount' ? (
-                    <input
-                      autoFocus
-                      inputMode="numeric"
-                      value={editValue}
-                      onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
-                      onBlur={commitEdit}
-                      onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
-                    />
-                  ) : (
-                    formatBRL(t.amount)
-                  )}
+                  <div className="flex items-center justify-end gap-1.5">
+                    <div
+                      onClick={() => startEdit(t.id, 'amount', t.amount < 0
+                        ? '-' + applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
+                        : applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
+                      )}
+                      className="flex-1"
+                    >
+                      {editingCell?.id === t.id && editingCell.field === 'amount' ? (
+                        <input
+                          autoFocus
+                          inputMode="numeric"
+                          value={editValue}
+                          onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
+                          onBlur={commitEdit}
+                          onKeyDown={handleKeyDown}
+                          className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                        />
+                      ) : (
+                        formatBRL(t.amount)
+                      )}
+                    </div>
+                    {/* Toggle reembolso: só mostra se é receita (amount > 0) */}
+                    {t.amount > 0 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onUpdate(t.id, { isReimbursement: !t.isReimbursement });
+                        }}
+                        className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors whitespace-nowrap ${
+                          t.isReimbursement
+                            ? 'bg-accent/20 text-accent border border-accent/40'
+                            : 'bg-text-secondary/10 text-text-secondary border border-text-secondary/20 hover:border-accent hover:bg-accent/10 hover:text-accent'
+                        }`}
+                        title={t.isReimbursement ? 'Marcado como reembolso. Clique para desmarcar.' : 'Marque como reembolso (abate despesa)'}
+                      >
+                        <RefreshCcw size={8} className="flex-shrink-0" />
+                        Reemb
+                      </button>
+                    )}
+                  </div>
                 </td>
 
                 {/* Parcelas - editable */}
