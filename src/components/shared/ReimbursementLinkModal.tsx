@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, Fragment } from 'react';
 import { X, Search, RefreshCcw, Clock } from 'lucide-react';
 import type { Transaction, Category } from '../../types';
 import { formatBRL, formatDate, getMonthLabel, getMonthYear } from '../../lib/utils';
@@ -52,7 +52,7 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
         }
         return b.date.getTime() - a.date.getTime();
       })
-      .slice(0, 60);
+      .slice(0, 150);
   }, [allTransactions, search, transaction.id, categories]);
 
   function linkTo(expense: Transaction) {
@@ -134,34 +134,54 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
           {candidates.length === 0 ? (
             <div className="p-6 text-center text-text-secondary text-xs">Nenhuma despesa encontrada.</div>
           ) : (
-            candidates.map((t) => {
-              const isLinked = transaction.reimbursementFor === t.id;
-              return (
-                <button
-                  key={t.id}
-                  onClick={() => linkTo(t)}
-                  className={`w-full flex items-center gap-3 px-4 py-2 border-b border-border/20 text-left hover:bg-bg-secondary/40 transition-colors ${
-                    isLinked ? 'bg-accent/10' : ''
-                  }`}
-                >
-                  <span className="text-text-secondary text-[10px] tabular-nums w-[62px] flex-shrink-0">
-                    {formatDate(t.date)}
-                  </span>
-                  <span className="flex-1 min-w-0">
-                    <span className="block text-xs text-text-primary truncate flex items-center gap-1.5">
-                      {t.awaitingReimbursement && <Clock size={11} className="text-accent flex-shrink-0" />}
-                      {t.description}
+            // Agrupa por mês (separadores) para deixar claro que dá para
+            // vincular a despesas de QUALQUER mês, não só o atual. As marcadas
+            // como "aguardando reembolso" ficam numa seção no topo.
+            (() => {
+              const rows: React.ReactNode[] = [];
+              let lastKey = '';
+              for (const t of candidates) {
+                const key = t.awaitingReimbursement ? '__await' : getMonthYear(t.date);
+                if (key !== lastKey) {
+                  lastKey = key;
+                  rows.push(
+                    <div
+                      key={`h-${key}`}
+                      className="sticky top-0 px-4 py-1 bg-bg-secondary text-[10px] uppercase tracking-wider text-text-secondary border-b border-border/40 z-10"
+                    >
+                      {key === '__await' ? 'Aguardando reembolso' : getMonthLabel(getMonthYear(t.date))}
+                    </div>
+                  );
+                }
+                const isLinked = transaction.reimbursementFor === t.id;
+                rows.push(
+                  <button
+                    key={t.id}
+                    onClick={() => linkTo(t)}
+                    className={`w-full flex items-center gap-3 px-4 py-2 border-b border-border/20 text-left hover:bg-bg-secondary/40 transition-colors ${
+                      isLinked ? 'bg-accent/10' : ''
+                    }`}
+                  >
+                    <span className="text-text-secondary text-[10px] tabular-nums w-[62px] flex-shrink-0">
+                      {formatDate(t.date)}
                     </span>
-                    <span className="block text-[10px] text-text-secondary truncate">
-                      {catName(t.categoryId) || 'Sem categoria'}
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-xs text-text-primary truncate flex items-center gap-1.5">
+                        {t.awaitingReimbursement && <Clock size={11} className="text-accent flex-shrink-0" />}
+                        {t.description}
+                      </span>
+                      <span className="block text-[10px] text-text-secondary truncate">
+                        {catName(t.categoryId) || 'Sem categoria'}
+                      </span>
                     </span>
-                  </span>
-                  <span className="text-accent-red font-bold text-xs tabular-nums flex-shrink-0">
-                    {formatBRL(t.amount)}
-                  </span>
-                </button>
-              );
-            })
+                    <span className="text-accent-red font-bold text-xs tabular-nums flex-shrink-0">
+                      {formatBRL(t.amount)}
+                    </span>
+                  </button>
+                );
+              }
+              return <Fragment>{rows}</Fragment>;
+            })()
           )}
         </div>
 
