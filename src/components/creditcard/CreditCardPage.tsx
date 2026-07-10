@@ -362,6 +362,7 @@ export function CreditCardPage() {
             groups={titularGroups}
             categories={categories}
             projects={activeProjects}
+            everyTransaction={transactions}
             totalTransactions={invoiceTransactions.length}
             availableMonths={availableMonths}
             currentMonthYear={monthYear}

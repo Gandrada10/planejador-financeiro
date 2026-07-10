@@ -8,7 +8,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount } from '../../lib/utils';
+import { formatBRL, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, accountingDate } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 interface Props {
@@ -89,8 +89,9 @@ export function YoyDeviationPanel({
 
     for (const t of transactions) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const ty = t.date.getFullYear();
-      const tm = t.date.getMonth() + 1;
+      const ad = accountingDate(t);
+      const ty = ad.getFullYear();
+      const tm = ad.getMonth() + 1;
       if (tm > m) continue;
       const isCurr = ty === y;
       const isPrev = ty === prevYear;

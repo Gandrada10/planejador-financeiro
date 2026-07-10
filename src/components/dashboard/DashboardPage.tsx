@@ -9,7 +9,7 @@ import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
-import { formatBRL, formatDate, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -27,7 +27,7 @@ export function DashboardPage() {
   const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
   const monthTransactions = useMemo(
-    () => transactions.filter((t) => getMonthYear(t.date) === monthYear),
+    () => transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear),
     [transactions, monthYear]
   );
 
@@ -45,7 +45,7 @@ export function DashboardPage() {
   const currentYear = monthYear.split('-')[0];
   const yearBalance = useMemo(() => {
     return transactions
-      .filter((t) => countsInTotals(t, excludedIds) && getMonthYear(t.date).startsWith(currentYear))
+      .filter((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)).startsWith(currentYear))
       .reduce((s, t) => s + t.amount, 0);
   }, [transactions, currentYear, excludedIds]);
 
@@ -57,10 +57,10 @@ export function DashboardPage() {
       const d = new Date(y, m - 1 - i, 1);
       last12.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
-    const withData = last12.filter((mo) => transactions.some((t) => countsInTotals(t, excludedIds) && getMonthYear(t.date) === mo));
+    const withData = last12.filter((mo) => transactions.some((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)) === mo));
     if (withData.length === 0) return 0;
     const total = withData.reduce((sum, mo) => {
-      return sum + transactions.filter((t) => countsInTotals(t, excludedIds) && getMonthYear(t.date) === mo).reduce((s, t) => s + t.amount, 0);
+      return sum + transactions.filter((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)) === mo).reduce((s, t) => s + t.amount, 0);
     }, 0);
     return total / withData.length;
   }, [transactions, monthYear, excludedIds]);

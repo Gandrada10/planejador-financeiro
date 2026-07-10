@@ -567,6 +567,7 @@ export function TransactionsPage() {
 
       <TransactionTable
         transactions={filtered}
+        allTransactions={transactions}
         categories={categories}
         projects={activeProjects}
         accountNames={accountNames}

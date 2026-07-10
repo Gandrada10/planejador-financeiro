@@ -243,6 +243,19 @@ export function isExpenseAmount(t: { amount: number; isReimbursement?: boolean }
 }
 
 /**
+ * Data contábil de uma transação — a que os TOTAIS por mês devem usar. Para um
+ * reembolso vinculado a uma despesa (`reimbursementFor`), o `useTransactions`
+ * preenche `effectiveDate` com a data da despesa abatida, ancorando o
+ * abatimento no MÊS DA COMPRA (Opção 1). Sem vínculo, é a própria `date`.
+ *
+ * Use SÓ para agrupar/filtrar total por mês. Para exibir ou ordenar uma
+ * transação individual, use sempre `t.date` (a lista mostra o mês real).
+ */
+export function accountingDate(t: { date: Date; effectiveDate?: Date }): Date {
+  return t.effectiveDate ?? t.date;
+}
+
+/**
  * Apply Brazilian money mask as user types.
  * Transforms raw keypresses into formatted currency: "12345" → "123,45"
  * Supports negative values for expenses.

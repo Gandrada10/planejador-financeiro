@@ -10,6 +10,7 @@ import {
   countsInTotals,
   getExcludedFromTotalsIds,
   isExpenseAmount,
+  accountingDate,
 } from '../../lib/utils';
 
 interface EvolutionRow {
@@ -64,7 +65,7 @@ export function GoalsEvolutionTab() {
     const monthData = months.map((my) => {
       const monthBudgets = getBudgetsForMonth(my);
       const monthTx = transactions.filter(
-        (t) => getMonthYear(t.date) === my && isExpenseAmount(t) && countsInTotals(t, excludedIds)
+        (t) => getMonthYear(accountingDate(t)) === my && isExpenseAmount(t) && countsInTotals(t, excludedIds)
       );
 
       // Total budget for month

@@ -10,7 +10,7 @@ import { CashFlowReport } from './CashFlowReport';
 import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
 import { ExportFullReportModal } from './ExportFullReportModal';
-import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 type ReportTab = 'categorias' | 'fluxo' | 'evolucao';
@@ -56,7 +56,7 @@ export function ReportsPage() {
   const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
   const monthTransactions = useMemo(
-    () => transactions.filter((t) => getMonthYear(t.date) === monthYear),
+    () => transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear),
     [transactions, monthYear]
   );
 

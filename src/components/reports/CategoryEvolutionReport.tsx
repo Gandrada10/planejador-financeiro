@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, FileSpreadsheet, Download } from 'lucide-rea
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 import type { Category } from '../../types';
 
 type Interval = 'mensal' | 'anual';
@@ -236,7 +236,7 @@ export function CategoryEvolutionReport() {
     const periodSet = new Set(periods);
     for (const t of transactions) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const key = txPeriodKey(t.date);
+      const key = txPeriodKey(accountingDate(t));
       if (!periodSet.has(key)) continue;
       const catId = t.categoryId || '__none';
       if (!result[catId]) result[catId] = {};
@@ -262,7 +262,7 @@ export function CategoryEvolutionReport() {
     }
     for (const t of transactions) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const key = txPeriodKey(t.date);
+      const key = txPeriodKey(accountingDate(t));
       if (!periodSet.has(key)) continue;
       if (isIncomeAmount(t)) receitas[key] += t.amount;
       else if (isExpenseAmount(t)) despesas[key] += t.amount;

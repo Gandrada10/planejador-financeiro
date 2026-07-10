@@ -60,7 +60,25 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     provisionalDate: data.provisionalDate ? (data.provisionalDate as Timestamp).toDate() : null,
     fitid: (data.fitid as string) || null,
     isReimbursement: (data.isReimbursement as boolean) || false,
+    reimbursementFor: (data.reimbursementFor as string) || null,
+    awaitingReimbursement: (data.awaitingReimbursement as boolean) || false,
   };
+}
+
+/**
+ * Preenche `effectiveDate` de cada transação (data para TOTAIS). Um reembolso
+ * vinculado (`reimbursementFor`) herda a data da despesa que abate — ancorando
+ * o abatimento no mês da compra (Opção 1). Os demais ficam na própria `date`.
+ * Resolvido aqui, uma vez, com todas as transações em mãos. Muta os objetos da
+ * lista (recém-criados por docToTransaction — sem alias externo).
+ */
+function resolveEffectiveDates(list: Transaction[]): Transaction[] {
+  const byId = new Map(list.map((t) => [t.id, t]));
+  for (const t of list) {
+    const target = t.reimbursementFor ? byId.get(t.reimbursementFor) : undefined;
+    t.effectiveDate = target ? target.date : t.date;
+  }
+  return list;
 }
 
 export function useTransactions() {
@@ -75,7 +93,7 @@ export function useTransactions() {
     const q = query(ref, orderBy('date', 'desc'));
 
     return onSnapshot(q, (snap) => {
-      setTransactions(snap.docs.map((d) => docToTransaction(d.id, d.data())));
+      setTransactions(resolveEffectiveDates(snap.docs.map((d) => docToTransaction(d.id, d.data()))));
       setLoading(false);
     });
   }, []);

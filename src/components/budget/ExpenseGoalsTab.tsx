@@ -14,6 +14,7 @@ import {
   countsInTotals,
   getExcludedFromTotalsIds,
   isExpenseAmount,
+  accountingDate,
 } from '../../lib/utils';
 
 interface BudgetRow {
@@ -87,7 +88,7 @@ export function ExpenseGoalsTab() {
 
   // Month transactions (expenses only, absolute values)
   const monthExpenses = useMemo(
-    () => transactions.filter((t) => getMonthYear(t.date) === monthYear && isExpenseAmount(t) && countsInTotals(t, excludedIds)),
+    () => transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear && isExpenseAmount(t) && countsInTotals(t, excludedIds)),
     [transactions, monthYear, excludedIds]
   );
 

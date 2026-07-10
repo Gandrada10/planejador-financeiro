@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw } from 'lucide-react';
+import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 import { BatchEditModal } from '../shared/BatchEditModal';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { ReimbursementLinkModal } from '../shared/ReimbursementLinkModal';
 
 interface Props {
   transactions: Transaction[];
@@ -15,6 +16,9 @@ interface Props {
   memberNames?: string[];
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
+  /** Todas as transações (não só as filtradas) — para o modal de reembolso
+   *  achar despesas candidatas de qualquer mês. */
+  allTransactions?: Transaction[];
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
   onBatchUpdate?: (ids: string[], data: Partial<Transaction>) => Promise<void> | void;
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
@@ -24,7 +28,8 @@ interface Props {
   rules?: CategoryRule[];
 }
 
-export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [], allTransactions }: Props) {
+  const [reimbTx, setReimbTx] = useState<Transaction | null>(null);
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -466,11 +471,12 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         </button>
                       );
                     })()}
-                    {/* Reembolso: ícone-só, mesmo padrão do raio. Só em receitas. */}
+                    {/* Reembolso (receita): abre modal p/ vincular à despesa
+                        abatida — define categoria e ancora no mês da compra. */}
                     {t.amount > 0 && (
                       <button
-                        title={t.isReimbursement ? 'Reembolso (abate despesa) — clique para desmarcar' : 'Marcar como reembolso (abate despesa em vez de contar como receita)'}
-                        onClick={() => onUpdate(t.id, { isReimbursement: !t.isReimbursement })}
+                        title={t.isReimbursement ? 'Reembolso — clique para editar/desvincular' : 'Marcar como reembolso (abate uma despesa)'}
+                        onClick={() => setReimbTx(t)}
                         className={`flex-shrink-0 transition-colors ${
                           t.isReimbursement
                             ? 'text-accent hover:text-accent/80'
@@ -478,6 +484,21 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         }`}
                       >
                         <RefreshCcw size={12} />
+                      </button>
+                    )}
+                    {/* Aguardando reembolso (despesa): sinalizador visual, não
+                        altera totais; aparece nos candidatos do modal. */}
+                    {t.amount < 0 && (
+                      <button
+                        title={t.awaitingReimbursement ? 'Aguardando reembolso — clique para desmarcar' : 'Marcar: aguardando reembolso (espera receber de volta)'}
+                        onClick={() => onUpdate(t.id, { awaitingReimbursement: !t.awaitingReimbursement })}
+                        className={`flex-shrink-0 transition-colors ${
+                          t.awaitingReimbursement
+                            ? 'text-accent hover:text-accent/80'
+                            : 'text-text-secondary/60 hover:text-accent'
+                        }`}
+                      >
+                        <Clock size={12} />
                       </button>
                     )}
                   </div>
@@ -667,6 +688,16 @@ export function TransactionTable({ transactions, categories, projects = [], acco
             confirmState.resolve(false);
             setConfirmState(null);
           }}
+        />
+      )}
+
+      {reimbTx && (
+        <ReimbursementLinkModal
+          transaction={reimbTx}
+          allTransactions={allTransactions ?? transactions}
+          categories={categories}
+          onUpdate={onUpdate}
+          onClose={() => setReimbTx(null)}
         />
       )}
     </div>
