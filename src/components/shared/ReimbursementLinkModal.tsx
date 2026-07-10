@@ -18,6 +18,16 @@ interface Props {
 // abate no próprio mês (comportamento simples). Ver `accountingDate`.
 export function ReimbursementLinkModal({ transaction, allTransactions, categories, onUpdate, onClose }: Props) {
   const [search, setSearch] = useState('');
+  const [monthFilter, setMonthFilter] = useState('');
+
+  // Meses que têm despesas — para o seletor. Com muitas transações no mês
+  // corrente, uma lista só cronológica nunca alcança meses antigos; o seletor
+  // deixa escolher qualquer mês diretamente.
+  const availableMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const t of allTransactions) if (t.amount < 0) set.add(getMonthYear(t.date));
+    return [...set].sort().reverse();
+  }, [allTransactions]);
 
   const catName = (id: string | null) => {
     if (!id) return null;
@@ -41,6 +51,7 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
     const q = search.trim().toLowerCase();
     return allTransactions
       .filter((t) => t.amount < 0 && t.id !== transaction.id)
+      .filter((t) => !monthFilter || getMonthYear(t.date) === monthFilter)
       .filter((t) => {
         if (!q) return true;
         const cat = catName(t.categoryId)?.toLowerCase() || '';
@@ -52,8 +63,8 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
         }
         return b.date.getTime() - a.date.getTime();
       })
-      .slice(0, 150);
-  }, [allTransactions, search, transaction.id, categories]);
+      .slice(0, 300);
+  }, [allTransactions, search, monthFilter, transaction.id, categories]);
 
   function linkTo(expense: Transaction) {
     // Copia a categoria da despesa para o reembolso abater a categoria certa,
@@ -117,8 +128,8 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
           )}
         </div>
 
-        <div className="p-3 border-b border-border">
-          <div className="relative">
+        <div className="p-3 border-b border-border flex gap-2">
+          <div className="relative flex-1">
             <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-text-secondary" />
             <input
               autoFocus
@@ -128,6 +139,17 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
               className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
             />
           </div>
+          <select
+            value={monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value)}
+            className="bg-bg-secondary border border-border rounded px-2 py-2 text-text-primary text-xs focus:outline-none focus:border-accent flex-shrink-0"
+            title="Filtrar despesas por mês"
+          >
+            <option value="">Todos os meses</option>
+            {availableMonths.map((m) => (
+              <option key={m} value={m}>{getMonthLabel(m)}</option>
+            ))}
+          </select>
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-0">
