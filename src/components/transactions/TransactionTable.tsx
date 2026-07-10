@@ -1,11 +1,12 @@
 import { useState, useMemo } from 'react';
-import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil } from 'lucide-react';
+import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 import { BatchEditModal } from '../shared/BatchEditModal';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { ReimbursementLinkModal } from '../shared/ReimbursementLinkModal';
 
 interface Props {
   transactions: Transaction[];
@@ -15,6 +16,9 @@ interface Props {
   memberNames?: string[];
   onUpdate: (id: string, data: Partial<Transaction>) => void;
   onDelete: (id: string) => void;
+  /** Todas as transações (não só as filtradas) — para o modal de reembolso
+   *  achar despesas candidatas de qualquer mês. */
+  allTransactions?: Transaction[];
   onBatchReconcile?: (ids: string[], reconciled: boolean) => void;
   onBatchUpdate?: (ids: string[], data: Partial<Transaction>) => Promise<void> | void;
   checkClosedCycle?: (transaction: Transaction) => { cycleId: string; label: string } | null;
@@ -24,7 +28,8 @@ interface Props {
   rules?: CategoryRule[];
 }
 
-export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
+export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [], allTransactions }: Props) {
+  const [reimbTx, setReimbTx] = useState<Transaction | null>(null);
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -269,23 +274,29 @@ export function TransactionTable({ transactions, categories, projects = [], acco
         />
       )}
 
-      <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full min-w-[1131px] text-xs table-fixed">
+      {/* max-h + sticky header: a tabela rola dentro da própria área visível,
+          então a barra de rolagem horizontal fica sempre alcançável no rodapé
+          (antes ela existia, mas só aparecia depois de TODAS as linhas). As
+          colunas comprimem até o piso do colgroup; abaixo do min-w, rola. */}
+      <div className="overflow-auto bg-bg-card border border-border rounded-lg max-h-[calc(100vh-190px)]">
+        <table className="w-full min-w-[1086px] text-xs table-fixed">
           <colgroup>
             <col style={{ width: 28 }} />  {/* dot */}
-            <col style={{ width: 85 }} />  {/* competencia */}
-            <col style={{ width: 85 }} />  {/* data */}
-            <col style={{ width: 170 }} /> {/* descricao */}
-            <col style={{ width: 215 }} /> {/* categoria */}
+            <col style={{ width: 75 }} />  {/* data */}
+            <col style={{ width: 75 }} />  {/* competencia */}
+            <col style={{ width: 185 }} /> {/* descricao */}
+            <col style={{ width: 225 }} /> {/* categoria */}
             <col style={{ width: 100 }} /> {/* valor */}
             <col style={{ width: 60 }} />  {/* parcelas */}
             <col style={{ width: 105 }} /> {/* conta */}
             <col style={{ width: 125 }} /> {/* membro */}
-            <col style={{ width: 130 }} /> {/* projeto */}
+            <col style={{ width: 105 }} /> {/* projeto */}
             <col style={{ width: 28 }} />  {/* delete */}
           </colgroup>
           <thead>
-            <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
+            {/* sticky vai nos th (não funciona em thead/tr); a "borda" de baixo
+                é sombra interna porque borda em th sticky some com border-collapse */}
+            <tr className="text-text-secondary uppercase tracking-wider text-[10px] [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-bg-card [&>th]:shadow-[inset_0_-1px_0_var(--color-border)]">
               <th className="p-2 text-center">
                 <div
                   className={`w-3 h-3 rounded-full border mx-auto cursor-pointer transition-colors ${
@@ -422,7 +433,10 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                     <CategoryCombobox
                       className="min-w-0 flex-1"
                       categories={categories}
-                      amount={t.amount}
+                      // Reembolso abate uma DESPESA: o dropdown oferece as
+                      // categorias de despesa (a do gasto abatido), mesmo o
+                      // valor sendo positivo — por isso o sentinela -1.
+                      amount={t.isReimbursement ? -1 : t.amount}
                       value={t.categoryId}
                       onChange={async (val) => {
                         const ok = await guardClosedCycle(t);
@@ -457,6 +471,36 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         </button>
                       );
                     })()}
+                    {/* Reembolso (receita): abre modal p/ vincular à despesa
+                        abatida — define categoria e ancora no mês da compra. */}
+                    {t.amount > 0 && (
+                      <button
+                        title={t.isReimbursement ? 'Reembolso — clique para editar/desvincular' : 'Marcar como reembolso (abate uma despesa)'}
+                        onClick={() => setReimbTx(t)}
+                        className={`flex-shrink-0 transition-colors ${
+                          t.isReimbursement
+                            ? 'text-accent hover:text-accent/80'
+                            : 'text-text-secondary/60 hover:text-accent'
+                        }`}
+                      >
+                        <RefreshCcw size={12} />
+                      </button>
+                    )}
+                    {/* Aguardando reembolso (despesa): sinalizador visual, não
+                        altera totais; aparece nos candidatos do modal. */}
+                    {t.amount < 0 && (
+                      <button
+                        title={t.awaitingReimbursement ? 'Aguardando reembolso — clique para desmarcar' : 'Marcar: aguardando reembolso (espera receber de volta)'}
+                        onClick={() => onUpdate(t.id, { awaitingReimbursement: !t.awaitingReimbursement })}
+                        className={`flex-shrink-0 transition-colors ${
+                          t.awaitingReimbursement
+                            ? 'text-accent hover:text-accent/80'
+                            : 'text-text-secondary/60 hover:text-accent'
+                        }`}
+                      >
+                        <Clock size={12} />
+                      </button>
+                    )}
                   </div>
                 </td>
 
@@ -644,6 +688,16 @@ export function TransactionTable({ transactions, categories, projects = [], acco
             confirmState.resolve(false);
             setConfirmState(null);
           }}
+        />
+      )}
+
+      {reimbTx && (
+        <ReimbursementLinkModal
+          transaction={reimbTx}
+          allTransactions={allTransactions ?? transactions}
+          categories={categories}
+          onUpdate={onUpdate}
+          onClose={() => setReimbTx(null)}
         />
       )}
     </div>

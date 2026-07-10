@@ -9,6 +9,8 @@ import {
   getMonthLabel,
   countsInTotals,
   getExcludedFromTotalsIds,
+  isExpenseAmount,
+  accountingDate,
 } from '../../lib/utils';
 
 interface EvolutionRow {
@@ -63,14 +65,15 @@ export function GoalsEvolutionTab() {
     const monthData = months.map((my) => {
       const monthBudgets = getBudgetsForMonth(my);
       const monthTx = transactions.filter(
-        (t) => getMonthYear(t.date) === my && t.amount < 0 && countsInTotals(t, excludedIds)
+        (t) => getMonthYear(accountingDate(t)) === my && isExpenseAmount(t) && countsInTotals(t, excludedIds)
       );
 
       // Total budget for month
       const totalBudget = monthBudgets.reduce((s, b) => s + b.limitAmount, 0);
 
       // Total spending for month
-      const totalSpending = monthTx.reduce((s, t) => s + Math.abs(t.amount), 0);
+      // `-t.amount`: despesa vira positivo; reembolso (positivo) subtrai.
+      const totalSpending = monthTx.reduce((s, t) => s - t.amount, 0);
 
       // Per-category data (using budget category IDs)
       const catData = new Map<string, { meta: number; realizado: number }>();

@@ -8,7 +8,7 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
+import { formatBRL, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, accountingDate } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 interface Props {
@@ -89,16 +89,19 @@ export function YoyDeviationPanel({
 
     for (const t of transactions) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const ty = t.date.getFullYear();
-      const tm = t.date.getMonth() + 1;
+      const ad = accountingDate(t);
+      const ty = ad.getFullYear();
+      const tm = ad.getMonth() + 1;
       if (tm > m) continue;
       const isCurr = ty === y;
       const isPrev = ty === prevYear;
       if (!isCurr && !isPrev) continue;
       if (isPrev) hasPrev = true;
 
-      const amt = Math.abs(t.amount);
-      const isIncome = t.amount > 0;
+      const isIncome = isIncomeAmount(t);
+      // Reembolso (positivo, não-receita) entra no bucket de despesa como
+      // valor NEGATIVO, reduzindo o gasto (contra-despesa).
+      const amt = isIncome ? t.amount : -t.amount;
       const catId = t.categoryId || UNCATEGORIZED_ID;
       const cat = categories.find((c) => c.id === catId);
       const parentId = cat?.parentId || catId;

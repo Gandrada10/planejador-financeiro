@@ -51,6 +51,28 @@ export interface Transaction {
   totalInstallments: number | null;
   cardNumber: string | null;
   projectId: string | null;
+  /** Marca um valor POSITIVO como REEMBOLSO (recuperação de um gasto — ex.:
+   *  amigos te pagam de volta ingressos comprados no seu cartão). Nos totais
+   *  ele NÃO conta como receita: abate a despesa (contra-despesa), para o
+   *  líquido refletir o seu custo real. Ver `isIncomeAmount`/`isExpenseAmount`
+   *  em `src/lib/utils.ts`. */
+  isReimbursement?: boolean;
+  /** Id da DESPESA (transação) que este reembolso abate. Quando presente, os
+   *  TOTAIS atribuem o abatimento ao MÊS DA DESPESA (Opção 1 — ancorar no mês
+   *  da compra), não ao mês em que o dinheiro entrou. A LISTA continua no mês
+   *  real. Ver `accountingDate`/`effectiveDate`. */
+  reimbursementFor?: string | null;
+  /** Marca uma DESPESA que você espera receber de volta mas ainda não chegou.
+   *  Só sinalizador visual — não altera nenhum total. */
+  awaitingReimbursement?: boolean;
+  /** Categoria que a transação tinha ANTES de ser vinculada como reembolso
+   *  (o vínculo sobrescreve a categoria com a da despesa abatida). Restaurada
+   *  ao deixar de ser reembolso, para a transação voltar ao estado original. */
+  reimbursementPrevCategoryId?: string | null;
+  /** NÃO persistido (derivado em `useTransactions`). Data usada nos TOTAIS:
+   *  para reembolso vinculado é a data da despesa abatida; senão a própria
+   *  `date`. Use via `accountingDate(t)`; nunca para exibir/ordenar. */
+  effectiveDate?: Date;
   /**
    * Legado (integração Pluggy/Open Finance removida): id da transação no
    * Pluggy, presente apenas em dados históricos no Firestore. Nenhum código

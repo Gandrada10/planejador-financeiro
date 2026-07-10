@@ -51,6 +51,7 @@ export function TransactionEditModal({
   );
   const [projectId, setProjectId] = useState(transaction.projectId || '');
   const [notes, setNotes] = useState(transaction.notes || '');
+  const [isReimbursement, setIsReimbursement] = useState(!!transaction.isReimbursement);
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -65,7 +66,9 @@ export function TransactionEditModal({
     [accounts, account]
   );
   const isCard = selectedAccount?.type === 'cartao';
-  const filteredCategories = filterCategoriesByAmount(categories, type === 'despesa' ? -1 : 1);
+  // Reembolso abate uma DESPESA, então oferece categorias de despesa mesmo
+  // sendo um valor positivo (receita) — a categoria certa é a do gasto abatido.
+  const filteredCategories = filterCategoriesByAmount(categories, (type === 'despesa' || isReimbursement) ? -1 : 1);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -87,6 +90,8 @@ export function TransactionEditModal({
       installmentNumber: totalInst ? (instNum || 1) : null,
       totalInstallments: totalInst || null,
       projectId: projectId || null,
+      // Só faz sentido em valor positivo (receita); em despesa, força false.
+      isReimbursement: type === 'receita' ? isReimbursement : false,
       notes,
     };
 
@@ -138,6 +143,20 @@ export function TransactionEditModal({
               Receita
             </button>
           </div>
+
+          {type === 'receita' && (
+            <label className="flex items-start gap-2 px-3 py-2 bg-bg-secondary/50 border border-border rounded cursor-pointer">
+              <input
+                type="checkbox"
+                checked={isReimbursement}
+                onChange={(e) => setIsReimbursement(e.target.checked)}
+                className="mt-0.5 accent-accent"
+              />
+              <span className="text-[11px] text-text-secondary leading-snug">
+                <span className="font-semibold text-text-primary">É reembolso</span> — recuperação de um gasto (ex.: alguém te pagou de volta). Abate a despesa nos totais, em vez de contar como receita. Categorize com a categoria do gasto.
+              </span>
+            </label>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

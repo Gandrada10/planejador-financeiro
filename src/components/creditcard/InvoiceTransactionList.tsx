@@ -1,10 +1,11 @@
-import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
 import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 import { BatchEditModal } from '../shared/BatchEditModal';
+import { ReimbursementLinkModal } from '../shared/ReimbursementLinkModal';
 
 interface TitularGroup {
   titular: string;
@@ -16,6 +17,10 @@ interface Props {
   groups: TitularGroup[];
   categories: Category[];
   projects?: Project[];
+  /** Todas as transações do sistema — para o modal de reembolso achar
+   *  despesas de qualquer conta/mês (não só as da fatura atual). O nome evita
+   *  colidir com o `allTransactions` interno, que é só a fatura. */
+  everyTransaction?: Transaction[];
   totalTransactions: number;
   availableMonths?: string[];
   currentMonthYear?: string;
@@ -32,7 +37,8 @@ interface Props {
   rules?: CategoryRule[];
 }
 
-export function InvoiceTransactionList({ groups, categories, projects = [], totalTransactions, availableMonths = [], currentMonthYear, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchMove, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
+export function InvoiceTransactionList({ groups, categories, projects = [], everyTransaction, totalTransactions, availableMonths = [], currentMonthYear, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchMove, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [] }: Props) {
+  const [reimbTx, setReimbTx] = useState<Transaction | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -506,7 +512,9 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                             <CategoryCombobox
                               className="min-w-0 flex-1"
                               categories={categories}
-                              amount={t.amount}
+                              // Reembolso abate uma DESPESA: oferece categorias
+                              // de despesa mesmo com valor positivo (sentinela -1).
+                              amount={t.isReimbursement ? -1 : t.amount}
                               value={t.categoryId}
                               onChange={async (val) => {
                                 const ok = await guardClosedCycle(t);
@@ -539,6 +547,34 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                                 </button>
                               );
                             })()}
+                            {/* Reembolso (receita): abre modal p/ vincular. */}
+                            {t.amount > 0 && (
+                              <button
+                                title={t.isReimbursement ? 'Reembolso — clique para editar/desvincular' : 'Marcar como reembolso (abate uma despesa)'}
+                                onClick={() => setReimbTx(t)}
+                                className={`flex-shrink-0 transition-colors ${
+                                  t.isReimbursement
+                                    ? 'text-accent hover:text-accent/80'
+                                    : 'text-text-secondary/60 hover:text-accent'
+                                }`}
+                              >
+                                <RefreshCcw size={12} />
+                              </button>
+                            )}
+                            {/* Aguardando reembolso (despesa): sinalizador. */}
+                            {t.amount < 0 && onUpdate && (
+                              <button
+                                title={t.awaitingReimbursement ? 'Aguardando reembolso — clique para desmarcar' : 'Marcar: aguardando reembolso (espera receber de volta)'}
+                                onClick={() => onUpdate(t.id, { awaitingReimbursement: !t.awaitingReimbursement })}
+                                className={`flex-shrink-0 transition-colors ${
+                                  t.awaitingReimbursement
+                                    ? 'text-accent hover:text-accent/80'
+                                    : 'text-text-secondary/60 hover:text-accent'
+                                }`}
+                              >
+                                <Clock size={12} />
+                              </button>
+                            )}
                           </div>
                         ) : null}
 
@@ -638,6 +674,16 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
             );
           })}
         </div>
+      )}
+
+      {reimbTx && onUpdate && (
+        <ReimbursementLinkModal
+          transaction={reimbTx}
+          allTransactions={everyTransaction ?? allTransactions}
+          categories={categories}
+          onUpdate={onUpdate}
+          onClose={() => setReimbTx(null)}
+        />
       )}
     </div>
   );
