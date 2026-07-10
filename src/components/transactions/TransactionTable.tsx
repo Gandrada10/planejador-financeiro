@@ -269,23 +269,29 @@ export function TransactionTable({ transactions, categories, projects = [], acco
         />
       )}
 
-      <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-        <table className="w-full min-w-[1131px] text-xs table-fixed">
+      {/* max-h + sticky header: a tabela rola dentro da própria área visível,
+          então a barra de rolagem horizontal fica sempre alcançável no rodapé
+          (antes ela existia, mas só aparecia depois de TODAS as linhas). As
+          colunas comprimem até o piso do colgroup; abaixo do min-w, rola. */}
+      <div className="overflow-auto bg-bg-card border border-border rounded-lg max-h-[calc(100vh-190px)]">
+        <table className="w-full min-w-[1086px] text-xs table-fixed">
           <colgroup>
             <col style={{ width: 28 }} />  {/* dot */}
-            <col style={{ width: 85 }} />  {/* competencia */}
-            <col style={{ width: 85 }} />  {/* data */}
-            <col style={{ width: 170 }} /> {/* descricao */}
-            <col style={{ width: 215 }} /> {/* categoria */}
+            <col style={{ width: 75 }} />  {/* data */}
+            <col style={{ width: 75 }} />  {/* competencia */}
+            <col style={{ width: 185 }} /> {/* descricao */}
+            <col style={{ width: 225 }} /> {/* categoria */}
             <col style={{ width: 100 }} /> {/* valor */}
             <col style={{ width: 60 }} />  {/* parcelas */}
             <col style={{ width: 105 }} /> {/* conta */}
             <col style={{ width: 125 }} /> {/* membro */}
-            <col style={{ width: 130 }} /> {/* projeto */}
+            <col style={{ width: 105 }} /> {/* projeto */}
             <col style={{ width: 28 }} />  {/* delete */}
           </colgroup>
           <thead>
-            <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
+            {/* sticky vai nos th (não funciona em thead/tr); a "borda" de baixo
+                é sombra interna porque borda em th sticky some com border-collapse */}
+            <tr className="text-text-secondary uppercase tracking-wider text-[10px] [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-bg-card [&>th]:shadow-[inset_0_-1px_0_var(--color-border)]">
               <th className="p-2 text-center">
                 <div
                   className={`w-3 h-3 rounded-full border mx-auto cursor-pointer transition-colors ${
@@ -457,55 +463,45 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         </button>
                       );
                     })()}
-                  </div>
-                </td>
-
-                {/* Valor - editable + reembolso badge */}
-                <td
-                  data-tab-cell
-                  className={`p-2 text-right font-bold truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
-                >
-                  <div className="flex items-center justify-end gap-1.5">
-                    <div
-                      onClick={() => startEdit(t.id, 'amount', t.amount < 0
-                        ? '-' + applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
-                        : applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
-                      )}
-                      className="flex-1"
-                    >
-                      {editingCell?.id === t.id && editingCell.field === 'amount' ? (
-                        <input
-                          autoFocus
-                          inputMode="numeric"
-                          value={editValue}
-                          onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
-                          onBlur={commitEdit}
-                          onKeyDown={handleKeyDown}
-                          className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
-                        />
-                      ) : (
-                        formatBRL(t.amount)
-                      )}
-                    </div>
-                    {/* Toggle reembolso: só mostra se é receita (amount > 0) */}
+                    {/* Reembolso: ícone-só, mesmo padrão do raio. Só em receitas. */}
                     {t.amount > 0 && (
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onUpdate(t.id, { isReimbursement: !t.isReimbursement });
-                        }}
-                        className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-semibold transition-colors whitespace-nowrap ${
+                        title={t.isReimbursement ? 'Reembolso (abate despesa) — clique para desmarcar' : 'Marcar como reembolso (abate despesa em vez de contar como receita)'}
+                        onClick={() => onUpdate(t.id, { isReimbursement: !t.isReimbursement })}
+                        className={`flex-shrink-0 transition-colors ${
                           t.isReimbursement
-                            ? 'bg-accent/20 text-accent border border-accent/40'
-                            : 'bg-text-secondary/10 text-text-secondary border border-text-secondary/20 hover:border-accent hover:bg-accent/10 hover:text-accent'
+                            ? 'text-accent hover:text-accent/80'
+                            : 'text-text-secondary/30 hover:text-text-secondary'
                         }`}
-                        title={t.isReimbursement ? 'Marcado como reembolso. Clique para desmarcar.' : 'Marque como reembolso (abate despesa)'}
                       >
-                        <RefreshCcw size={8} className="flex-shrink-0" />
-                        Reemb
+                        <RefreshCcw size={12} />
                       </button>
                     )}
                   </div>
+                </td>
+
+                {/* Valor - editable */}
+                <td
+                  data-tab-cell
+                  className={`p-2 text-right font-bold truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
+                  onClick={() => startEdit(t.id, 'amount', t.amount < 0
+                    ? '-' + applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
+                    : applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
+                  )}
+                >
+                  {editingCell?.id === t.id && editingCell.field === 'amount' ? (
+                    <input
+                      autoFocus
+                      inputMode="numeric"
+                      value={editValue}
+                      onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
+                      onBlur={commitEdit}
+                      onKeyDown={handleKeyDown}
+                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                    />
+                  ) : (
+                    formatBRL(t.amount)
+                  )}
                 </td>
 
                 {/* Parcelas - editable */}
