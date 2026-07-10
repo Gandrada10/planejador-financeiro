@@ -62,6 +62,7 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     isReimbursement: (data.isReimbursement as boolean) || false,
     reimbursementFor: (data.reimbursementFor as string) || null,
     awaitingReimbursement: (data.awaitingReimbursement as boolean) || false,
+    reimbursementPrevCategoryId: (data.reimbursementPrevCategoryId as string) ?? null,
   };
 }
 

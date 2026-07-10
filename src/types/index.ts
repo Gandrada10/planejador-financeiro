@@ -65,6 +65,10 @@ export interface Transaction {
   /** Marca uma DESPESA que você espera receber de volta mas ainda não chegou.
    *  Só sinalizador visual — não altera nenhum total. */
   awaitingReimbursement?: boolean;
+  /** Categoria que a transação tinha ANTES de ser vinculada como reembolso
+   *  (o vínculo sobrescreve a categoria com a da despesa abatida). Restaurada
+   *  ao deixar de ser reembolso, para a transação voltar ao estado original. */
+  reimbursementPrevCategoryId?: string | null;
   /** NÃO persistido (derivado em `useTransactions`). Data usada nos TOTAIS:
    *  para reembolso vinculado é a data da despesa abatida; senão a própria
    *  `date`. Use via `accountingDate(t)`; nunca para exibir/ordenar. */

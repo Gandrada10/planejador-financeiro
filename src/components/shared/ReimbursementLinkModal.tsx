@@ -56,10 +56,15 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
   }, [allTransactions, search, transaction.id, categories]);
 
   function linkTo(expense: Transaction) {
-    // Copia a categoria da despesa para o reembolso abater a categoria certa.
+    // Copia a categoria da despesa para o reembolso abater a categoria certa,
+    // guardando a categoria original (só na 1ª vez) para poder restaurar depois.
+    const prev = transaction.reimbursementFor
+      ? transaction.reimbursementPrevCategoryId ?? null
+      : transaction.categoryId;
     onUpdate(transaction.id, {
       isReimbursement: true,
       reimbursementFor: expense.id,
+      reimbursementPrevCategoryId: prev,
       categoryId: expense.categoryId,
     });
     onClose();
@@ -71,7 +76,15 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
   }
 
   function removeReimbursement() {
-    onUpdate(transaction.id, { isReimbursement: false, reimbursementFor: null });
+    // Volta ao estado original: se era vinculado (categoria sobrescrita pela da
+    // despesa), restaura a categoria de antes. Sem vínculo, não mexe na categoria.
+    const wasLinked = !!transaction.reimbursementFor;
+    onUpdate(transaction.id, {
+      isReimbursement: false,
+      reimbursementFor: null,
+      reimbursementPrevCategoryId: null,
+      ...(wasLinked ? { categoryId: transaction.reimbursementPrevCategoryId ?? null } : {}),
+    });
     onClose();
   }
 
