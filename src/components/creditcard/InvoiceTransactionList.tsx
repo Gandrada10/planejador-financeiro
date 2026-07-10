@@ -506,7 +506,9 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                             <CategoryCombobox
                               className="min-w-0 flex-1"
                               categories={categories}
-                              amount={t.amount}
+                              // Reembolso abate uma DESPESA: oferece categorias
+                              // de despesa mesmo com valor positivo (sentinela -1).
+                              amount={t.isReimbursement ? -1 : t.amount}
                               value={t.categoryId}
                               onChange={async (val) => {
                                 const ok = await guardClosedCycle(t);
@@ -547,7 +549,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], tota
                                 className={`flex-shrink-0 transition-colors ${
                                   t.isReimbursement
                                     ? 'text-accent hover:text-accent/80'
-                                    : 'text-text-secondary/30 hover:text-text-secondary'
+                                    : 'text-text-secondary/60 hover:text-accent'
                                 }`}
                               >
                                 <RefreshCcw size={12} />
