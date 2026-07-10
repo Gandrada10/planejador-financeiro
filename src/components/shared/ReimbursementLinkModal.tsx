@@ -34,12 +34,11 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
     ? allTransactions.find((t) => t.id === transaction.reimbursementFor)
     : null;
 
-  // Despesas candidatas: valores negativos, ordenadas por (1) marcadas como
-  // "aguardando reembolso", (2) proximidade do valor do reembolso, (3) mais
-  // recentes. Busca filtra por descrição/categoria.
+  // Despesas candidatas: valores negativos, em ordem CRONOLÓGICA (mais
+  // recentes primeiro) — só as marcadas como "aguardando reembolso" são
+  // fixadas no topo, por serem alvos declarados. Busca por descrição/categoria.
   const candidates = useMemo(() => {
     const q = search.trim().toLowerCase();
-    const target = Math.abs(transaction.amount);
     return allTransactions
       .filter((t) => t.amount < 0 && t.id !== transaction.id)
       .filter((t) => {
@@ -51,13 +50,10 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
         if (!!b.awaitingReimbursement !== !!a.awaitingReimbursement) {
           return a.awaitingReimbursement ? -1 : 1;
         }
-        const da = Math.abs(Math.abs(a.amount) - target);
-        const db = Math.abs(Math.abs(b.amount) - target);
-        if (Math.abs(da - db) > 0.005) return da - db;
         return b.date.getTime() - a.date.getTime();
       })
-      .slice(0, 40);
-  }, [allTransactions, search, transaction.amount, transaction.id, categories]);
+      .slice(0, 60);
+  }, [allTransactions, search, transaction.id, categories]);
 
   function linkTo(expense: Transaction) {
     // Copia a categoria da despesa para o reembolso abater a categoria certa.
