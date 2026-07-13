@@ -121,7 +121,11 @@ export function TransactionsPage() {
     if (filterMonth !== 'all') {
       list = list.filter((t) => getMonthYear(t.date) === filterMonth);
     }
-    if (filterTitular !== 'all') {
+    if (filterTitular === 'none') {
+      // "Sem membro": a coluna Membro (familyMember) está vazia — exatamente os
+      // lançamentos que ficaram sem membro no import. Casa o "sem categoria".
+      list = list.filter((t) => !(t.familyMember || '').trim());
+    } else if (filterTitular !== 'all') {
       // Match against both fields: titular (raw) and familyMember (canonical).
       // This ensures transactions from older imports (where titular wasn't normalized)
       // still appear when filtering by the canonical member name.
@@ -140,7 +144,10 @@ export function TransactionsPage() {
         t.categoryId === filterCategory || (childIds ? childIds.has(t.categoryId || '') : false)
       );
     }
-    if (filterAccount !== 'all') {
+    if (filterAccount === 'none') {
+      // "Sem conta": campo conta vazio (não foi atribuído a nenhuma conta/cartão).
+      list = list.filter((t) => !(t.account || '').trim());
+    } else if (filterAccount !== 'all') {
       list = list.filter((t) => t.account === filterAccount);
     }
     if (filterInstallment === 'installments') {
@@ -361,6 +368,7 @@ export function TransactionsPage() {
           className={cn(baseFieldClass, isActive.account ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todas as contas</option>
+          <option value="none">Sem conta</option>
           {accountNames.map((a) => (
             <option key={a} value={a}>{a}</option>
           ))}
@@ -394,6 +402,7 @@ export function TransactionsPage() {
           className={cn(baseFieldClass, isActive.titular ? activeFieldClass : inactiveFieldClass)}
         >
           <option value="all">Todos os titulares</option>
+          <option value="none">Sem membro</option>
           {allTitulars.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
@@ -454,6 +463,24 @@ export function TransactionsPage() {
           >
             {filtered.filter((t) => !t.categoryId).length} pendentes categorizacao
             {filterCategory === 'uncategorized' && ' ✕'}
+          </button>
+        )}
+        {filtered.filter((t) => !(t.account || '').trim()).length > 0 && (
+          <button
+            onClick={() => setFilterAccount(filterAccount === 'none' ? 'all' : 'none')}
+            className={`hover:underline ${filterAccount === 'none' ? 'text-amber-400 font-bold' : 'text-amber-400'}`}
+          >
+            {filtered.filter((t) => !(t.account || '').trim()).length} sem conta
+            {filterAccount === 'none' && ' ✕'}
+          </button>
+        )}
+        {filtered.filter((t) => !(t.familyMember || '').trim()).length > 0 && (
+          <button
+            onClick={() => setFilterTitular(filterTitular === 'none' ? 'all' : 'none')}
+            className={`hover:underline ${filterTitular === 'none' ? 'text-amber-400 font-bold' : 'text-amber-400'}`}
+          >
+            {filtered.filter((t) => !(t.familyMember || '').trim()).length} sem membro
+            {filterTitular === 'none' && ' ✕'}
           </button>
         )}
       </div>
