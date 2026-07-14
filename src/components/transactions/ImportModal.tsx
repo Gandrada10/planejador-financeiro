@@ -121,6 +121,48 @@ function matchOfxAccountName(bankId: string | null, candidates: Account[]): stri
   return candidates.length === 1 ? candidates[0].name : '';
 }
 
+/**
+ * Sugere a conta/cartão cadastrada a partir do descritor lido pela IA no
+ * cabeçalho da fatura/extrato (ex.: "Latam Pass Itau Black Mastercard final
+ * 4640"). Pontua cada conta pelos tokens do seu nome/banco que aparecem no
+ * descritor (soma o comprimento dos tokens que casam) e devolve a de maior
+ * pontuação — desde que passe de um mínimo e vença o 2º lugar com folga, para
+ * não sugerir errado quando duas contas compartilham um token (ex.: "itau"
+ * aparece no banco do cartão E no nome da conta corrente). Sem match confiável,
+ * devolve '' e o usuário escolhe manualmente. Irmão do matchOfxAccountName (que
+ * casa pelo BANKID do OFX); este casa pelo texto do cabeçalho da fatura.
+ */
+function matchAccountFromDescriptor(descriptor: string | null | undefined, candidates: Account[]): string {
+  if (!descriptor) return '';
+  const hay = ` ${stripAccents(descriptor.toLowerCase())} `;
+  const scoreTokens = (text: string, weight: number): number => {
+    let s = 0;
+    for (const t of stripAccents(text.toLowerCase()).split(/\s+/).filter((tok) => tok.length >= 3)) {
+      if (hay.includes(t)) s += t.length * weight;
+    }
+    return s;
+  };
+  let best = '';
+  let bestScore = 0;
+  let secondScore = 0;
+  for (const a of candidates) {
+    // Nome pesa o DOBRO do banco: quando duas contas compartilham o banco (ex.: o
+    // cartão tem banco "Itaú Personalite", que também é o NOME da conta corrente),
+    // é o casamento pelo NOME que decide qual sugerir.
+    const score = scoreTokens(a.name, 2) + scoreTokens(a.bank, 1);
+    if (score > bestScore) {
+      secondScore = bestScore;
+      bestScore = score;
+      best = a.name;
+    } else if (score > secondScore) {
+      secondScore = score;
+    }
+  }
+  // Exige um casamento sólido (>= 6 ≈ um token de nome com 3+ letras) e folga
+  // sobre o 2º lugar — em empate (ambíguo) devolve '' e o usuário escolhe.
+  return bestScore >= 6 && bestScore > secondScore ? best : '';
+}
+
 interface Props {
   existingTransactions: Transaction[];
   onImport: (items: ImportItem[]) => Promise<void>;
@@ -171,6 +213,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // Total-a-pagar declarado na fatura (lido pelo parser) — valida o total
   // importado contra a fatura (pega pagamento fantasma / linhas perdidas).
   const [declaredTotal, setDeclaredTotal] = useState<number | null>(null);
+  // Conta/cartão sugerido pela IA a partir do cabeçalho do arquivo (casado com
+  // as contas cadastradas). Só um aviso visível — a conta já entra pré-preenchida
+  // nas linhas; o usuário pode trocar no "Aplicar em lote".
+  const [detectedAccount, setDetectedAccount] = useState('');
   const monthOptions = generateMonthOptions();
   const creditCardAccounts = accounts.filter((a) => a.type === 'cartao');
   // Contas elegíveis pra extrato de conta corrente (OFX): tudo que NÃO é
@@ -279,6 +325,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     setError('');
     setFileName(file.name);
     setDeclaredTotal(null);
+    setDetectedAccount('');
     setAiUsage(null);
     setImportKind('ofx');
     setIsCreditCard(false);
@@ -320,6 +367,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       }
 
       const defaultAccountName = matchOfxAccountName(result.account.bankId, ofxEligibleAccounts);
+      setDetectedAccount(defaultAccountName);
 
       const parsed: ImportRow[] = result.transactions.map((t) => {
         const item: ImportItem = {
@@ -500,6 +548,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     setError('');
     setFileName(file.name);
     setDeclaredTotal(null);
+    setDetectedAccount('');
     setImportKind('ai');
     setOfxMeta(null);
     setAiParsing(true);
@@ -540,11 +589,18 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         }>;
         isCreditCard?: boolean;
         declaredTotal?: number | null;
+        accountDescriptor?: string | null;
         usage: { input_tokens: number; output_tokens: number };
       };
 
       setAiUsage(data.usage);
       setDeclaredTotal(data.declaredTotal ?? null);
+
+      // Sugestão de conta: casa o cabeçalho lido pela IA com as contas
+      // cadastradas. Vira o valor pré-preenchido das linhas (o usuário troca no
+      // "Aplicar em lote" se quiser). Espelha o auto-match do caminho OFX.
+      const suggestedAccount = matchAccountFromDescriptor(data.accountDescriptor, accounts);
+      setDetectedAccount(suggestedAccount);
 
       // Detect credit card: AI flag or heuristic (most transactions have cardNumber)
       const hasCardNumbers = data.transactions.filter((t) => t.cardNumber).length > data.transactions.length / 2;
@@ -576,7 +632,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           description: cleanDescription,
           amount: t.amount,
           categoryId: matchCategory ? matchCategory(cleanDescription) : null,
-          account: accountNames[0] ?? '',
+          account: suggestedAccount || accountNames[0] || '',
           familyMember: matchedMember,
           // Use canonical member name as titular when matched; otherwise normalize to Title Case.
           // This prevents duplicates in the titular filter when the same person's name
@@ -634,10 +690,11 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           setBillingMonth(getMonthYear(latestDate));
         }
 
-        // Auto-select credit card account if only one exists. O pré-preenchimento
-        // de "Vence dia:" acontece no efeito acima (reage a billingCardAccount),
-        // não aqui — cobre igualmente o caso de vários cartões.
-        if (creditCardAccounts.length === 1) {
+        // Conta do lote: prioridade para a SUGESTÃO (cabeçalho da fatura casado
+        // com uma conta cadastrada). Sem sugestão, cai no fallback de "só existe
+        // um cartão". O pré-preenchimento de "Vence dia:" acontece no efeito
+        // acima (reage a billingCardAccount), cobrindo vários cartões.
+        if (!suggestedAccount && creditCardAccounts.length === 1) {
           const ccName = creditCardAccounts[0].name;
           parsed.forEach((p) => { p.account = ccName; });
         }
@@ -1065,6 +1122,17 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   >
                     {ofxMeta.warnings.map((w, i) => <p key={i}>{w}</p>)}
                   </div>
+                </div>
+              )}
+
+              {/* Conta detectada: casamento do cabeçalho do arquivo com uma conta
+                  cadastrada. Já vem pré-preenchida nas linhas; é só um aviso. */}
+              {detectedAccount && (
+                <div className="flex items-center gap-2 text-[11px] bg-accent/5 border border-accent/30 rounded-lg p-2.5">
+                  <CreditCard size={13} className="text-accent shrink-0" />
+                  <span className="text-text-secondary">
+                    Conta detectada pela fatura: <b className="text-text-primary">{detectedAccount}</b> — já apliquei em todas as linhas. Se não for essa, troque em "Aplicar em lote" abaixo.
+                  </span>
                 </div>
               )}
 

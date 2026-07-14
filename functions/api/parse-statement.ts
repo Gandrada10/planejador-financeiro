@@ -110,9 +110,10 @@ Estas linhas NAO sao movimento da fatura atual. No app, a "despesa mensal" e a S
 
 REGRA-META: o conjunto importado deve conter APENAS compras reais (negativas) + estornos/reembolsos reais (positivos), e a soma de todas as linhas importadas tem de bater com a despesa liquida real do mes. Em duvida num valor POSITIVO: ESTORNO/REEMBOLSO/DEVOLUCAO/CASHBACK -> importe; PAGAMENTO/PGTO/SALDO ANTERIOR -> exclua.
 
-Responda APENAS com um JSON object com tres campos:
+Responda APENAS com um JSON object com quatro campos:
 - "isCreditCard": boolean indicando se o extrato e de cartao de credito (fatura de cartao)
 - "declaredTotal": em fatura de cartao, o valor total DECLARADO da fatura atual (procure "TOTAL DESTA FATURA", "TOTAL A PAGAR" ou "VALOR A PAGAR" no cabecalho/resumo), como numero POSITIVO. E um METADADO para conferencia — NAO e uma transacao e NAO entra no array. Se nao encontrar, use null.
+- "accountDescriptor": identificacao da CONTA ou CARTAO no cabecalho do extrato — o nome/bandeira do cartao ou banco e os ultimos digitos, se houver. Exemplos: "Latam Pass Itau Black Mastercard final 4640", "Nubank Mastercard 1234", "Itau conta corrente Personalite". Copie o texto do cabecalho como esta; e usado so para SUGERIR a conta cadastrada, nunca vira transacao. String, ou null se nao houver.
 - "transactions": array com as transacoes (apenas compras reais negativas e estornos reais positivos, conforme as regras acima)
 
 Sem markdown, sem explicacao, sem code blocks.
@@ -125,7 +126,7 @@ Exemplo de EXCLUSAO — dado o trecho de entrada:
 a saida NAO inclui "PAGAMENTO EFETUADO" nem "SALDO ANTERIOR"; INCLUI "ESTORNO COMPRA LOJA X" com amount +120.00 e "AMAZON" com amount -89.90.
 
 Exemplo de formato de saida (dois titulares):
-{"isCreditCard":true,"declaredTotal":239.80,"transactions":[{"date":"2025-01-23","purchaseDate":"2025-01-23","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"},{"date":"2025-01-20","purchaseDate":"2025-01-20","description":"AMAZON","amount":-89.90,"titular":"MARIA SILVA","installmentNumber":null,"totalInstallments":null,"cardNumber":"5678"}]}
+{"isCreditCard":true,"declaredTotal":239.80,"accountDescriptor":"Latam Pass Itau Black Mastercard final 4640","transactions":[{"date":"2025-01-23","purchaseDate":"2025-01-23","description":"MERCADO LIVRE","amount":-149.90,"titular":"JOAO SILVA","installmentNumber":3,"totalInstallments":10,"cardNumber":"1234"},{"date":"2025-01-20","purchaseDate":"2025-01-20","description":"AMAZON","amount":-89.90,"titular":"MARIA SILVA","installmentNumber":null,"totalInstallments":null,"cardNumber":"5678"}]}
 
 Texto do extrato (pode estar desformatado, PDFs frequentemente tem quebras estranhas):
 ${truncatedText}`;
@@ -182,6 +183,7 @@ ${truncatedText}`;
     let transactions: ParsedTransaction[] | null = null;
     let isCreditCard = false;
     let declaredTotal: number | null = null;
+    let accountDescriptor: string | null = null;
     try {
       const parsed = JSON.parse(cleanJson);
       if (Array.isArray(parsed)) {
@@ -190,6 +192,7 @@ ${truncatedText}`;
         transactions = parsed.transactions;
         isCreditCard = !!parsed.isCreditCard;
         declaredTotal = typeof parsed.declaredTotal === 'number' ? parsed.declaredTotal : null;
+        accountDescriptor = typeof parsed.accountDescriptor === 'string' ? parsed.accountDescriptor : null;
       }
     } catch {
       // Try to extract JSON from anywhere in the response
@@ -201,6 +204,7 @@ ${truncatedText}`;
             transactions = parsed.transactions;
             isCreditCard = !!parsed.isCreditCard;
             declaredTotal = typeof parsed.declaredTotal === 'number' ? parsed.declaredTotal : null;
+            accountDescriptor = typeof parsed.accountDescriptor === 'string' ? parsed.accountDescriptor : null;
           }
         } catch {
           // ignore
@@ -266,6 +270,7 @@ ${truncatedText}`;
       transactions,
       isCreditCard,
       declaredTotal,
+      accountDescriptor,
       usage: data.usage,
     }), {
       headers: { 'Content-Type': 'application/json' },
