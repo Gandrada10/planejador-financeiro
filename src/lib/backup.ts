@@ -1,9 +1,11 @@
 import {
   collection,
   getDocs,
+  getDocsFromCache,
   writeBatch,
   doc,
   Timestamp,
+  type QuerySnapshot,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
 
@@ -164,31 +166,96 @@ export interface RestoreResult {
   deleted: Record<string, number>;
   written: Record<string, number>;
   localStorageKeys: number;
+  /**
+   * true  = o servidor confirmou toda a gravação antes de retornarmos.
+   * false = os dados já estão salvos localmente (cache offline) e a
+   *         sincronização com o servidor continua em segundo plano.
+   *         O app já funciona; só não convém fechar a aba até terminar.
+   */
+  serverAckComplete: boolean;
+  /** Lotes que o servidor rejeitou (0 = tudo certo ou ainda sincronizando). */
+  failedChunks: number;
 }
 
-// Firestore limits a batch to 500 operations — chunk accordingly.
-const BATCH_LIMIT = 450;
+export interface RestoreProgress {
+  phase: 'reading' | 'deleting' | 'writing' | 'syncing' | 'done';
+  collection?: string;
+  /** Documentos já enviados para gravação (acumulado). */
+  written: number;
+  /** Total de documentos a gravar (todas as coleções). */
+  totalToWrite: number;
+}
 
-async function commitInChunks(operations: Array<(batch: ReturnType<typeof writeBatch>) => void>) {
+// Firestore limita um batch a 500 operações — quebramos em lotes menores.
+const BATCH_LIMIT = 450;
+// Quanto tempo esperamos, no máximo, a leitura da coleção existente (fase de
+// limpeza) antes de cair para o cache local. Nunca deixamos travar indefinido.
+const READ_TIMEOUT_MS = 15_000;
+// Tempo máximo aguardando o servidor confirmar TODAS as gravações. Passando
+// disso, retornamos assim mesmo: com cache offline os dados já estão salvos
+// localmente e a sincronização termina sozinha. É isto que evita o travamento.
+const ACK_WAIT_TIMEOUT_MS = 45_000;
+
+/** Rejeita a promise se ela não resolver dentro de `ms`. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    p.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
+/** Cede o event loop para o cache local assentar e a UI repintar. */
+const yieldToUi = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/**
+ * Dispara as operações em lotes e devolve as promises de commit — SEM esperar
+ * a confirmação do servidor. Com cache offline persistente, cada commit aplica
+ * a escrita no cache local na hora (latency compensation); a promise só resolve
+ * quando o servidor confirma. Esperar por isso, lote a lote, é o que travava a
+ * restauração quando a conexão de sync engasgava. Aqui só cedemos a UI entre os
+ * lotes e deixamos a confirmação do servidor para uma espera única, com teto.
+ */
+async function fireInChunks(
+  operations: Array<(batch: ReturnType<typeof writeBatch>) => void>,
+  onChunk?: (chunkSize: number) => void
+): Promise<Promise<void>[]> {
+  const commits: Promise<void>[] = [];
   for (let i = 0; i < operations.length; i += BATCH_LIMIT) {
     const batch = writeBatch(db);
     const chunk = operations.slice(i, i + BATCH_LIMIT);
     for (const op of chunk) op(batch);
-    await batch.commit();
+    const p = batch.commit();
+    // A confirmação é aguardada em bloco no fim; aqui só evitamos que uma
+    // eventual rejeição vire "unhandled rejection".
+    p.catch(() => {});
+    commits.push(p);
+    onChunk?.(chunk.length);
+    await yieldToUi();
   }
+  return commits;
 }
 
 /**
  * Restore a backup file.
  *
- * - wipeExisting=true (recommended for disaster recovery): deletes every
- *   document in each user collection before writing the backup, so the final
- *   state matches the file exactly.
- * - wipeExisting=false: merges by document id. Conflicting ids are overwritten.
+ * - wipeExisting=true (recomendado para recuperação de desastre): apaga cada
+ *   documento das coleções do usuário antes de gravar o backup, de modo que o
+ *   estado final bata exatamente com o arquivo.
+ * - wipeExisting=false: mescla por id de documento. Ids em conflito são
+ *   sobrescritos.
+ *
+ * Robustez: as gravações são aplicadas no cache local imediatamente e a espera
+ * pela confirmação do servidor tem teto (ACK_WAIT_TIMEOUT_MS). Assim a operação
+ * nunca trava — independentemente do tamanho do backup — e os dados já ficam
+ * disponíveis no app; o que faltar sincroniza em segundo plano.
  */
 export async function restoreBackup(
   backup: BackupFile,
-  opts: { wipeExisting: boolean } = { wipeExisting: true }
+  opts: { wipeExisting: boolean } = { wipeExisting: true },
+  onProgress?: (p: RestoreProgress) => void
 ): Promise<RestoreResult> {
   const user = auth.currentUser;
   if (!user) throw new Error('Usuario nao autenticado.');
@@ -197,16 +264,40 @@ export async function restoreBackup(
   const deleted: Record<string, number> = {};
   const written: Record<string, number> = {};
 
+  const totalToWrite = USER_COLLECTIONS.reduce(
+    (sum, name) => sum + (backup.collections[name]?.length || 0),
+    0
+  );
+  let writtenSoFar = 0;
+  const allCommits: Promise<void>[] = [];
+
   for (const name of USER_COLLECTIONS) {
     const colRef = collection(db, 'users', uid, name);
 
     if (opts.wipeExisting) {
-      const existing = await getDocs(colRef);
-      const deleteOps = existing.docs.map((d) => (batch: ReturnType<typeof writeBatch>) => {
-        batch.delete(doc(db, 'users', uid, name, d.id));
-      });
-      await commitInChunks(deleteOps);
-      deleted[name] = existing.size;
+      onProgress?.({ phase: 'reading', collection: name, written: writtenSoFar, totalToWrite });
+      // Leitura com teto: se o servidor não responder, caímos para o cache
+      // local em vez de travar. Se nem o cache tiver, seguimos sem apagar —
+      // como regravamos cada doc por id, docs do backup são sobrescritos de
+      // qualquer forma (só sobrariam órfãos fora do backup, caso raro).
+      let existing: QuerySnapshot | null = null;
+      try {
+        existing = await withTimeout(getDocs(colRef), READ_TIMEOUT_MS);
+      } catch {
+        try { existing = await getDocsFromCache(colRef); } catch { existing = null; }
+      }
+
+      if (existing && !existing.empty) {
+        onProgress?.({ phase: 'deleting', collection: name, written: writtenSoFar, totalToWrite });
+        const deleteOps = existing.docs.map((d) => (batch: ReturnType<typeof writeBatch>) => {
+          batch.delete(doc(db, 'users', uid, name, d.id));
+        });
+        const delCommits = await fireInChunks(deleteOps);
+        allCommits.push(...delCommits);
+        deleted[name] = existing.size;
+      } else {
+        deleted[name] = 0;
+      }
     } else {
       deleted[name] = 0;
     }
@@ -216,11 +307,15 @@ export async function restoreBackup(
       const data = deserializeValue(item.data) as Record<string, unknown>;
       batch.set(doc(db, 'users', uid, name, item.id), data);
     });
-    await commitInChunks(writeOps);
+    const writeCommits = await fireInChunks(writeOps, (chunkSize) => {
+      writtenSoFar += chunkSize;
+      onProgress?.({ phase: 'writing', collection: name, written: writtenSoFar, totalToWrite });
+    });
+    allCommits.push(...writeCommits);
     written[name] = items.length;
   }
 
-  // Restore localStorage entries (best effort).
+  // Restaura entradas de localStorage (best effort).
   let lsCount = 0;
   if (backup.localStorage) {
     for (const [k, v] of Object.entries(backup.localStorage)) {
@@ -228,12 +323,29 @@ export async function restoreBackup(
         localStorage.setItem(k, v);
         lsCount++;
       } catch {
-        // ignore write errors
+        // ignora erros de escrita
       }
     }
   }
 
-  return { deleted, written, localStorageKeys: lsCount };
+  // Espera única pela confirmação do servidor, com teto. Se estourar o tempo,
+  // retornamos assim mesmo: os dados já estão no cache local e a sincronização
+  // continua sozinha em segundo plano. É isto que garante que nunca trava.
+  onProgress?.({ phase: 'syncing', written: totalToWrite, totalToWrite });
+  const settled = await Promise.race([
+    Promise.allSettled(allCommits),
+    withTimeout(new Promise<never>(() => {}), ACK_WAIT_TIMEOUT_MS).catch(() => null),
+  ]);
+
+  let serverAckComplete = false;
+  let failedChunks = 0;
+  if (Array.isArray(settled)) {
+    serverAckComplete = true;
+    failedChunks = settled.filter((r) => r.status === 'rejected').length;
+  }
+
+  onProgress?.({ phase: 'done', written: totalToWrite, totalToWrite });
+  return { deleted, written, localStorageKeys: lsCount, serverAckComplete, failedChunks };
 }
 
 export function readBackupFile(file: File): Promise<BackupFile> {

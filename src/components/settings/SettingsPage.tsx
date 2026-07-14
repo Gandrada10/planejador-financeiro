@@ -54,6 +54,7 @@ export function SettingsPage() {
   const [backupMsg, setBackupMsg] = useState<{ type: 'ok' | 'err'; text: string } | null>(null);
   const [pendingBackup, setPendingBackup] = useState<BackupFile | null>(null);
   const [restoreBusy, setRestoreBusy] = useState(false);
+  const [restoreProgress, setRestoreProgress] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   async function handleExportBackup() {
@@ -87,16 +88,29 @@ export function SettingsPage() {
   async function handleConfirmRestore() {
     if (!pendingBackup) return;
     setRestoreBusy(true);
+    setRestoreProgress('Iniciando...');
     setBackupMsg(null);
     try {
-      const result = await restoreBackup(pendingBackup, { wipeExisting: true });
+      const result = await restoreBackup(pendingBackup, { wipeExisting: true }, (p) => {
+        if (p.phase === 'reading') setRestoreProgress(`Lendo dados atuais (${p.collection})...`);
+        else if (p.phase === 'deleting') setRestoreProgress(`Limpando ${p.collection}...`);
+        else if (p.phase === 'writing') setRestoreProgress(`Gravando ${p.written}/${p.totalToWrite} registros...`);
+        else if (p.phase === 'syncing') setRestoreProgress('Sincronizando com o servidor...');
+      });
       const total = Object.values(result.written).reduce((s, n) => s + n, 0);
-      setBackupMsg({ type: 'ok', text: `Restauracao concluida. ${total} registro(s) gravado(s). Recarregue a pagina para ver os dados.` });
+      const base = `Restauração concluída — ${total} registro(s) gravado(s).`;
+      const tail = result.serverAckComplete
+        ? (result.failedChunks > 0
+            ? ` Atenção: ${result.failedChunks} lote(s) não foram aceitos pelo servidor; verifique os dados.`
+            : ' Tudo sincronizado com o servidor.')
+        : ' Os dados já estão salvos no app e a sincronização com o servidor continua em segundo plano — pode usar normalmente, só não feche a aba até o ícone de sync terminar.';
+      setBackupMsg({ type: 'ok', text: `${base}${tail} Recarregue a página para ver os dados.` });
       setPendingBackup(null);
     } catch (err) {
       setBackupMsg({ type: 'err', text: err instanceof Error ? err.message : 'Erro ao restaurar backup.' });
     } finally {
       setRestoreBusy(false);
+      setRestoreProgress(null);
     }
   }
 
@@ -487,6 +501,12 @@ export function SettingsPage() {
                 <X size={13} /> Cancelar
               </button>
             </div>
+            {restoreBusy && restoreProgress && (
+              <p className="text-[10px] text-text-secondary flex items-center gap-1.5 pt-0.5">
+                <RefreshCw size={11} className="animate-spin flex-shrink-0" />
+                {restoreProgress}
+              </p>
+            )}
           </div>
         )}
       </div>
