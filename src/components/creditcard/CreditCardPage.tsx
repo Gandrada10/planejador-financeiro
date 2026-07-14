@@ -47,12 +47,17 @@ export function CreditCardPage() {
   // fatura, só não entra nos totais de despesa/crédito.
   const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
-  // Group by titular (fall back to familyMember for transactions edited
-  // via the Transactions tab where only familyMember is updated)
+  // Agrupa por MEMBRO cadastrado (familyMember) primeiro; cai para `titular`
+  // só em transações legadas sem familyMember. Antes agrupava por `titular`
+  // primeiro — mas o `titular` passa por normalizeTitular na leitura, que
+  // deforma nomes tipo "Guilherme S.C de Andrada" em "Guilherme S.c De
+  // Andrada", criando um grupo que não bate com o membro cadastrado (o
+  // "terceiro membro" fantasma). `familyMember` é gravado com o nome canônico
+  // e é o mesmo que a aba Transações mostra, então é a chave certa.
   const titularGroups = useMemo(() => {
     const map = new Map<string, typeof invoiceTransactions>();
     for (const t of invoiceTransactions) {
-      const key = (t.titular || t.familyMember || '').trim();
+      const key = (t.familyMember || t.titular || '').trim();
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(t);
     }
