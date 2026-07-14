@@ -99,12 +99,13 @@ export function SettingsPage() {
       });
       const total = Object.values(result.written).reduce((s, n) => s + n, 0);
       const base = `Restauração concluída — ${total} registro(s) gravado(s).`;
-      const tail = result.serverAckComplete
-        ? (result.failedChunks > 0
-            ? ` Atenção: ${result.failedChunks} lote(s) não foram aceitos pelo servidor; verifique os dados.`
-            : ' Tudo sincronizado com o servidor.')
-        : ' Os dados já estão salvos no app e a sincronização com o servidor continua em segundo plano — pode usar normalmente, só não feche a aba até o ícone de sync terminar.';
-      setBackupMsg({ type: 'ok', text: `${base}${tail} Recarregue a página para ver os dados.` });
+      if (result.serverAckComplete && result.failedChunks === 0) {
+        setBackupMsg({ type: 'ok', text: `${base} Tudo confirmado no servidor (indicador "Salvo"). Recarregue a página para ver os dados.` });
+      } else if (result.serverAckComplete) {
+        setBackupMsg({ type: 'err', text: `${base} Atenção: ${result.failedChunks} lote(s) não foram aceitos pelo servidor; verifique os dados antes de fechar.` });
+      } else {
+        setBackupMsg({ type: 'err', text: `${base} Os dados já estão salvos NESTE aparelho, mas a sincronização com o servidor ainda não terminou. Mantenha o app aberto e conectado e acompanhe o indicador no menu: só feche ou troque de aparelho quando ele estiver verde ("Salvo").` });
+      }
       setPendingBackup(null);
     } catch (err) {
       setBackupMsg({ type: 'err', text: err instanceof Error ? err.message : 'Erro ao restaurar backup.' });
