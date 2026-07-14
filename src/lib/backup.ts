@@ -5,6 +5,7 @@ import {
   writeBatch,
   doc,
   Timestamp,
+  waitForPendingWrites,
   type QuerySnapshot,
 } from 'firebase/firestore';
 import { db, auth } from './firebase';
@@ -192,9 +193,10 @@ const BATCH_LIMIT = 450;
 // limpeza) antes de cair para o cache local. Nunca deixamos travar indefinido.
 const READ_TIMEOUT_MS = 15_000;
 // Tempo máximo aguardando o servidor confirmar TODAS as gravações. Passando
-// disso, retornamos assim mesmo: com cache offline os dados já estão salvos
-// localmente e a sincronização termina sozinha. É isto que evita o travamento.
-const ACK_WAIT_TIMEOUT_MS = 45_000;
+// disso, retornamos assim mesmo (o indicador de sync avisa que ainda falta) —
+// com cache offline os dados já estão salvos localmente. É o teto que evita o
+// travamento, sem mentir que gravou no servidor quando não gravou.
+const ACK_WAIT_TIMEOUT_MS = 120_000;
 
 /** Rejeita a promise se ela não resolver dentro de `ms`. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
@@ -328,21 +330,29 @@ export async function restoreBackup(
     }
   }
 
-  // Espera única pela confirmação do servidor, com teto. Se estourar o tempo,
-  // retornamos assim mesmo: os dados já estão no cache local e a sincronização
-  // continua sozinha em segundo plano. É isto que garante que nunca trava.
+  // Confirmação REAL de gravação no servidor. waitForPendingWrites só resolve
+  // quando TODAS as escritas pendentes (de todas as coleções) foram
+  // reconhecidas pelo backend — é a garantia que faltava. Com teto de tempo:
+  // se a sincronização travar, não penduramos; os dados já estão no cache local
+  // e retornamos serverAckComplete=false pra avisar com honestidade que ainda
+  // não subiu tudo (o indicador de sync mostra o mesmo).
   onProgress?.({ phase: 'syncing', written: totalToWrite, totalToWrite });
+  let serverAckComplete = false;
+  try {
+    await withTimeout(waitForPendingWrites(db), ACK_WAIT_TIMEOUT_MS);
+    serverAckComplete = true;
+  } catch {
+    serverAckComplete = false;
+  }
+
+  // Conta rejeições já observadas, sem pendurar caso algo ainda esteja em voo.
   const settled = await Promise.race([
     Promise.allSettled(allCommits),
-    withTimeout(new Promise<never>(() => {}), ACK_WAIT_TIMEOUT_MS).catch(() => null),
+    new Promise<null>((r) => setTimeout(() => r(null), 200)),
   ]);
-
-  let serverAckComplete = false;
-  let failedChunks = 0;
-  if (Array.isArray(settled)) {
-    serverAckComplete = true;
-    failedChunks = settled.filter((r) => r.status === 'rejected').length;
-  }
+  const failedChunks = Array.isArray(settled)
+    ? settled.filter((r) => r.status === 'rejected').length
+    : 0;
 
   onProgress?.({ phase: 'done', written: totalToWrite, totalToWrite });
   return { deleted, written, localStorageKeys: lsCount, serverAckComplete, failedChunks };

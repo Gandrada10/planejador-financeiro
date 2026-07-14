@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
 } from 'lucide-react';
 import { cn } from '../lib/utils';
+import { SyncStatus } from './shared/SyncStatus';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -106,6 +107,9 @@ export function Layout() {
             collapsed ? 'p-3 lg:p-2' : 'p-3'
           )}
         >
+          <div className={cn('mb-2', collapsed ? 'lg:flex lg:justify-center' : '')}>
+            <SyncStatus showLabel={!collapsed} className={cn(collapsed && 'lg:justify-center')} />
+          </div>
           <div
             className={cn(
               'text-[10px] text-text-secondary truncate mb-2',
@@ -144,6 +148,7 @@ export function Layout() {
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <span className="text-accent text-xs font-bold tracking-wider">PLANEJADOR</span>
+          <SyncStatus className="ml-auto" />
         </header>
 
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
