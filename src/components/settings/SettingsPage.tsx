@@ -20,7 +20,7 @@ import {
 const ACCOUNT_TYPES: { value: Account['type']; label: string }[] = [
   { value: 'corrente', label: 'Conta Corrente' },
   { value: 'cartao', label: 'Cartao de Credito' },
-  { value: 'beneficio', label: 'Cartao de Beneficio' },
+  { value: 'beneficio', label: 'Vale alimentação/refeição' },
   { value: 'poupanca', label: 'Poupanca' },
   { value: 'investimento', label: 'Investimento' },
   { value: 'outro', label: 'Outro' },
@@ -44,8 +44,11 @@ export function SettingsPage() {
   const [accountDueDay, setAccountDueDay] = useState('');
   const [accountCreditLimit, setAccountCreditLimit] = useState('');
 
-  // Edit card fields
-  const [editingCardId, setEditingCardId] = useState<string | null>(null);
+  // Edit account fields (nome, tipo, banco + campos de cartão)
+  const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editType, setEditType] = useState<Account['type']>('corrente');
+  const [editBank, setEditBank] = useState('');
   const [editDueDay, setEditDueDay] = useState('');
   const [editCreditLimit, setEditCreditLimit] = useState('');
 
@@ -148,21 +151,31 @@ export function SettingsPage() {
     setAccountDueDay(''); setAccountCreditLimit('');
   }
 
-  function startEditCard(a: Account) {
-    setEditingCardId(a.id);
+  function startEditAccount(a: Account) {
+    setEditingAccountId(a.id);
+    setEditName(a.name);
+    setEditType(a.type);
+    setEditBank(a.bank || '');
     setEditDueDay(a.dueDay?.toString() || '');
     // Pré-preenche já mascarado (pt-BR) para casar com a máscara ao-vivo do
     // input — 5000 → "5.000,00". toFixed(2) dá as 2 casas que o mask espera.
     setEditCreditLimit(a.creditLimit != null ? applyMoneyMask(a.creditLimit.toFixed(2)) : '');
   }
 
-  async function saveEditCard(id: string) {
-    await updateAccount(id, {
-      dueDay: editDueDay ? parseInt(editDueDay) : undefined,
+  async function saveEditAccount(id: string) {
+    if (!editName.trim()) return;
+    const data: Partial<Account> = {
+      name: editName.trim(),
+      type: editType,
+      bank: editBank.trim() || undefined,
+    };
+    if (editType === 'cartao') {
+      data.dueDay = editDueDay ? parseInt(editDueDay) : undefined;
       // Campo mascarado; grava só com dígito (parseMoneyInput não sinaliza erro).
-      creditLimit: /\d/.test(editCreditLimit) ? parseMoneyInput(editCreditLimit) : undefined,
-    });
-    setEditingCardId(null);
+      data.creditLimit = /\d/.test(editCreditLimit) ? parseMoneyInput(editCreditLimit) : undefined;
+    }
+    await updateAccount(id, data);
+    setEditingAccountId(null);
   }
 
   if (loading || loadingMembers || loadingAccounts) {
@@ -258,48 +271,54 @@ export function SettingsPage() {
           <div className="space-y-1">
             {accounts.map((a) => (
               <div key={a.id} className="px-3 py-2 bg-bg-secondary rounded text-xs space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <span className="text-text-primary font-bold">{a.name}</span>
-                    <span className="text-[10px] text-text-secondary uppercase">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
-                    {a.bank && <span className="text-text-secondary">({a.bank})</span>}
-                    {a.type === 'cartao' && (
-                      <span className={`text-[10px] ${a.dueDay ? 'text-text-secondary' : 'text-accent'}`}>
-                        Venc. dia {a.dueDay || 'não definido'}
-                      </span>
+                {editingAccountId === a.id ? (
+                  <div className="space-y-2 py-0.5">
+                    <div className="flex gap-2 flex-wrap">
+                      <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
+                        placeholder="Nome" aria-label="Nome da conta" className={`${inputClass} flex-1 min-w-[130px] !py-1 !text-xs`} />
+                      <select value={editType} onChange={(e) => setEditType(e.target.value as Account['type'])}
+                        aria-label="Tipo da conta" className={`${inputClass} w-44 !py-1 !text-xs`}>
+                        {ACCOUNT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                      <input type="text" value={editBank} onChange={(e) => setEditBank(e.target.value)}
+                        placeholder="Banco (opcional)" aria-label="Banco" className={`${inputClass} w-32 !py-1 !text-xs`} />
+                    </div>
+                    {editType === 'cartao' && (
+                      <div className="flex gap-2 flex-wrap">
+                        <input type="number" value={editDueDay} onChange={(e) => setEditDueDay(e.target.value)}
+                          placeholder="Dia venc." min={1} max={28} aria-label="Dia de vencimento" className={`${inputClass} w-28 !py-1 !text-xs`} />
+                        <input type="text" inputMode="decimal" value={editCreditLimit} onChange={(e) => setEditCreditLimit(applyMoneyMask(e.target.value))}
+                          placeholder="Limite (R$)" aria-label="Limite" className={`${inputClass} w-32 !py-1 !text-xs`} />
+                      </div>
                     )}
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => saveEditAccount(a.id)} disabled={!editName.trim()}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-accent text-bg-primary text-[11px] font-bold rounded hover:opacity-90 disabled:opacity-50">
+                        <Check size={13} /> Salvar
+                      </button>
+                      <button onClick={() => setEditingAccountId(null)} className="text-text-secondary hover:text-accent-red p-1" title="Cancelar" aria-label={`Cancelar edição de ${a.name}`}><X size={14} /></button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1">
-                    {a.type === 'cartao' && editingCardId !== a.id && (
-                      <button
-                        onClick={() => startEditCard(a)}
-                        className="text-text-secondary hover:text-accent p-1"
-                        title="Editar dia de vencimento"
-                        aria-label={`Editar dia de vencimento de ${a.name}`}
-                      >
+                ) : (
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3 flex-wrap min-w-0">
+                      <span className="text-text-primary font-bold">{a.name}</span>
+                      <span className="text-[10px] text-text-secondary uppercase">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
+                      {a.bank && <span className="text-text-secondary">({a.bank})</span>}
+                      {a.type === 'cartao' && (
+                        <span className={`text-[10px] ${a.dueDay ? 'text-text-secondary' : 'text-accent'}`}>
+                          Venc. dia {a.dueDay || 'não definido'}
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      <button onClick={() => startEditAccount(a)} className="text-text-secondary hover:text-accent p-1" title="Editar conta" aria-label={`Editar conta ${a.name}`}>
                         <Pencil size={13} />
                       </button>
-                    )}
-                    <button
-                      onClick={() => deleteAccount(a.id)}
-                      className="text-text-secondary hover:text-accent-red p-1"
-                      title="Excluir conta"
-                      aria-label={`Excluir conta ${a.name}`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                </div>
-                {editingCardId === a.id && (
-                  <div className="flex gap-2 flex-wrap items-center pt-1 border-t border-border/40">
-                    <label className="sr-only" htmlFor={`edit-due-day-${a.id}`}>Dia de vencimento</label>
-                    <input id={`edit-due-day-${a.id}`} type="number" value={editDueDay} onChange={(e) => setEditDueDay(e.target.value)}
-                      placeholder="Dia venc." min={1} max={28} className={`${inputClass} w-28 !py-1 !text-xs`} />
-                    <label className="sr-only" htmlFor={`edit-credit-limit-${a.id}`}>Limite (R$)</label>
-                    <input id={`edit-credit-limit-${a.id}`} type="text" inputMode="decimal" value={editCreditLimit} onChange={(e) => setEditCreditLimit(applyMoneyMask(e.target.value))}
-                      placeholder="Limite (R$)" className={`${inputClass} w-32 !py-1 !text-xs`} />
-                    <button onClick={() => saveEditCard(a.id)} className="text-accent-green hover:opacity-80 p-1" title="Salvar" aria-label={`Salvar edição de ${a.name}`}><Check size={14} /></button>
-                    <button onClick={() => setEditingCardId(null)} className="text-text-secondary hover:text-accent-red p-1" title="Cancelar" aria-label={`Cancelar edição de ${a.name}`}><X size={14} /></button>
+                      <button onClick={() => deleteAccount(a.id)} className="text-text-secondary hover:text-accent-red p-1" title="Excluir conta" aria-label={`Excluir conta ${a.name}`}>
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

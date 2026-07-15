@@ -22,6 +22,7 @@
   --color-accent: #5ee0a0;          /* menta — única cor de marca/ação */
   --color-accent-green: #5ee0a0;    /* positivo/receita */
   --color-accent-red: #ff6e5f;      /* negativo/despesa/destrutivo (coral) */
+  --color-select: #8b5cf6;          /* roxo — seleção de lançamento (distinto do verde de conciliado) */
 
   /* Texto (v1 — nomes preservados) */
   --color-text-primary: #f5f4f2;

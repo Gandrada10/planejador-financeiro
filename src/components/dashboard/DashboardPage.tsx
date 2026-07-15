@@ -99,20 +99,35 @@ export function DashboardPage() {
       if (isIncomeAmount(t)) acc.entries += t.amount;
       else acc.exits += t.amount;
     }
-    return Array.from(map.entries()).map(([name, v]) => {
-      const account = accounts.find((a) => a.name === name);
-      const isCard = account?.type === 'cartao';
-      const cycle = isCard && account ? getCycleForCard(account.id, monthYear) : undefined;
-      return {
-        accountName: name,
-        entries: v.entries,
-        exits: v.exits,
-        balance: v.entries + v.exits,
-        color: '',
-        isCard,
-        cycleStatus: cycle?.status ?? (isCard ? 'open' : undefined),
-      };
-    });
+    // Ordem pedida: conta corrente → cartões → vale (benefício) → demais →
+    // "Sem conta" por último. Dentro do mesmo tipo, alfabético.
+    const typeRank = (name: string): number => {
+      const t = accounts.find((a) => a.name === name)?.type;
+      if (t === 'corrente') return 0;
+      if (t === 'cartao') return 1;
+      if (t === 'beneficio') return 2;
+      if (!t) return 4; // "Sem conta" (sem cadastro)
+      return 3; // poupanca/investimento/outro
+    };
+    return Array.from(map.entries())
+      .map(([name, v]) => {
+        const account = accounts.find((a) => a.name === name);
+        const isCard = account?.type === 'cartao';
+        const cycle = isCard && account ? getCycleForCard(account.id, monthYear) : undefined;
+        return {
+          accountName: name,
+          entries: v.entries,
+          exits: v.exits,
+          balance: v.entries + v.exits,
+          color: '',
+          isCard,
+          cycleStatus: cycle?.status ?? (isCard ? 'open' : undefined),
+        };
+      })
+      .sort((a, b) => {
+        const d = typeRank(a.accountName) - typeRank(b.accountName);
+        return d !== 0 ? d : a.accountName.localeCompare(b.accountName, 'pt-BR');
+      });
   }, [monthTransactions, accounts, getCycleForCard, monthYear, excludedIds]);
 
   // Expenses by category (grouped by parent; subcategory breakdowns tracked separately)
