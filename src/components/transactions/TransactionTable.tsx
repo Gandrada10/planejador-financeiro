@@ -300,7 +300,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
               <th className="p-2 text-center">
                 <div
                   className={`w-3 h-3 rounded-full border mx-auto cursor-pointer transition-colors ${
-                    allSelected ? 'bg-accent border-accent' : 'border-border hover:border-accent'
+                    allSelected ? 'bg-select border-select' : 'border-border hover:border-select'
                   }`}
                   onClick={toggleAll}
                   title={allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
@@ -341,12 +341,12 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                     tabIndex={0}
                     role="checkbox"
                     aria-checked={selectedIds.has(t.id)}
-                    className={`w-3.5 h-3.5 rounded-full border mx-auto cursor-pointer transition-colors outline-none focus:ring-2 focus:ring-accent/50 ${
+                    className={`w-3.5 h-3.5 rounded-full border mx-auto cursor-pointer transition-colors outline-none focus:ring-2 focus:ring-select/50 ${
                       selectedIds.has(t.id)
-                        ? 'bg-accent border-accent'
+                        ? 'bg-select border-select'
                         : t.reconciled
                         ? 'bg-accent-green border-accent-green'
-                        : 'border-border hover:border-accent hover:bg-accent/20'
+                        : 'border-border hover:border-select hover:bg-select/20'
                     }`}
                     onClick={() => toggleSelect(t.id)}
                     onKeyDown={(e) => {
