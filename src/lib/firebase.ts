@@ -42,6 +42,15 @@ function createDb(): Firestore {
   try {
     return initializeFirestore(app, {
       localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+      // Conexão robusta: o transporte de streaming (WebChannel) padrão do
+      // Firestore é bloqueado por vários proxies/redes/extensões. Quando isso
+      // acontece, as LEITURAS ainda vêm do cache, mas as ESCRITAS ficam presas
+      // na fila local e NUNCA sobem — o indicador fica "Salvando…" pra sempre e
+      // o trabalho "some" ao recarregar/trocar de aparelho. long-polling usa
+      // requisições HTTP comuns pro mesmo servidor e atravessa esses bloqueios.
+      // Forçado (não só auto-detect) porque o bloqueio aqui é reproduzível e a
+      // pequena latência a mais é irrelevante para um app financeiro pessoal.
+      experimentalForceLongPolling: true,
     });
   } catch {
     // Instância default sem localCache configurado = cache em memória
