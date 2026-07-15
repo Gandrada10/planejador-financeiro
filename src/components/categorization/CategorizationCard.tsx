@@ -264,13 +264,18 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
       {/* Revisão: item já categorizado. Deixa claro a categoria atual e convida
           a trocar (a grade, a busca e o "É X?" continuam funcionando). */}
       {currentCategory && (
-        <div className="flex items-center gap-3 bg-accent/10 border border-accent-dim rounded-card px-4 py-3">
-          <CategoryIcon icon={currentCategory.icon} size={22} style={{ color: currentCategory.color }} />
-          <div className="min-w-0">
-            <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold">Categorizado como</p>
-            <p className="text-body font-bold text-text-primary truncate">{currentCategory.name}</p>
+        <div className="bg-accent/10 border border-accent-dim rounded-card px-4 py-3">
+          <div className="flex items-center gap-3">
+            <CategoryIcon icon={currentCategory.icon} size={22} style={{ color: currentCategory.color }} />
+            <div className="min-w-0">
+              <p className="text-caption uppercase tracking-[0.12em] text-ink-3 font-semibold">Categorizado como</p>
+              <p className="text-body font-bold text-text-primary truncate">{currentCategory.name}</p>
+            </div>
           </div>
-          <span className="ml-auto text-caption font-semibold text-accent whitespace-nowrap">toque p/ trocar</span>
+          {/* Aviso discreto (não é botão): a troca acontece na grade/busca
+              abaixo. Antes era um texto em accent com cara de botão que não
+              fazia nada ao ser tocado — enganava. */}
+          <p className="mt-2 text-caption text-ink-3">Para trocar, escolha outra categoria abaixo.</p>
         </div>
       )}
       {/* Cartão da transação */}
