@@ -1,6 +1,6 @@
-import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
+import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil, RefreshCcw, Clock, Search, X } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask, cn, isIncomeAmount, isExpenseAmount, amountMatchesQuery, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
@@ -46,6 +46,8 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
   const [sortField, setSortField] = useState<'purchaseDate' | 'date'>('purchaseDate');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const [filterPending, setFilterPending] = useState(false);
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
+  const [searchText, setSearchText] = useState('');
   const [showMovePanel, setShowMovePanel] = useState(false);
   const [moveTargetMonth, setMoveTargetMonth] = useState('');
   const [movingIds, setMovingIds] = useState(false);
@@ -65,19 +67,62 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
 
   const allTransactions = useMemo(() => groups.flatMap((g) => g.transactions), [groups]);
 
-  // Filtered groups when pending filter is active
+  // Ids fora-dos-totais ("Transferência") — mesma regra da CreditCardPage, para
+  // recompor o total de cada grupo a partir das linhas VISÍVEIS quando um filtro
+  // está ativo (senão o total do cabeçalho não bateria com o que aparece).
+  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
+
+  // Filtered groups: tipo (receita/despesa) + busca (descrição/valor) + pendentes.
+  // O total do grupo é recalculado sobre o subconjunto visível (excluindo
+  // transferência, como no cálculo original) — sem filtro, dá o mesmo número.
   const displayGroups = useMemo(() => {
-    if (!filterPending) return groups;
+    const q = searchText.trim().toLowerCase();
     return groups
-      .map((g) => ({ ...g, transactions: g.transactions.filter((t) => !t.reconciled) }))
+      .map((g) => {
+        let txs = g.transactions;
+        if (filterType === 'income') txs = txs.filter((t) => isIncomeAmount(t));
+        else if (filterType === 'expense') txs = txs.filter((t) => isExpenseAmount(t));
+        if (q) {
+          txs = txs.filter(
+            (t) =>
+              t.description.toLowerCase().includes(q) ||
+              (t.notes || '').toLowerCase().includes(q) ||
+              amountMatchesQuery(t.amount, searchText)
+          );
+        }
+        if (filterPending) txs = txs.filter((t) => !t.reconciled);
+        const total = txs.filter((t) => countsInTotals(t, excludedIds)).reduce((s, t) => s + t.amount, 0);
+        return { ...g, transactions: txs, total };
+      })
       .filter((g) => g.transactions.length > 0);
-  }, [groups, filterPending]);
+  }, [groups, filterType, searchText, filterPending, excludedIds]);
 
   // Pending count based on what's currently visible (before the pending toggle itself)
   const pendingCount = useMemo(
     () => allTransactions.filter((t) => !t.reconciled).length,
     [allTransactions]
   );
+
+  // Quantos lançamentos aparecem após tipo/busca (ignorando o toggle pendentes,
+  // que tem seu próprio contador) — para mostrar "X de Y" quando filtrado.
+  const filteredCount = useMemo(() => {
+    const q = searchText.trim().toLowerCase();
+    if (filterType === 'all' && !q) return totalTransactions;
+    return allTransactions.filter((t) => {
+      if (filterType === 'income' && !isIncomeAmount(t)) return false;
+      if (filterType === 'expense' && !isExpenseAmount(t)) return false;
+      if (q) {
+        return (
+          t.description.toLowerCase().includes(q) ||
+          (t.notes || '').toLowerCase().includes(q) ||
+          amountMatchesQuery(t.amount, searchText)
+        );
+      }
+      return true;
+    }).length;
+  }, [allTransactions, filterType, searchText, totalTransactions]);
+
+  const filtersActive = filterType !== 'all' || searchText.trim() !== '';
 
   function toggleGroup(titular: string) {
     const next = new Set(collapsed);
@@ -189,7 +234,9 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-bold text-text-primary">{totalTransactions} lancamentos</span>
+          <span className="text-xs font-bold text-text-primary">
+            {filtersActive ? `${filteredCount} de ${totalTransactions}` : totalTransactions} lancamentos
+          </span>
           {pendingCount > 0 && (
             <button
               onClick={() => setFilterPending(!filterPending)}
@@ -255,6 +302,43 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
               </button>
             )}
           </div>
+        )}
+      </div>
+
+      {/* Filtros: tipo (receita/despesa) + busca por descrição/valor */}
+      <div className="px-4 py-2.5 border-b border-border flex items-center gap-2 flex-wrap">
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as 'all' | 'income' | 'expense')}
+          className={cn(
+            'px-2.5 py-1.5 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent',
+            filterType !== 'all' ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-primary'
+          )}
+        >
+          <option value="all">Receitas e despesas</option>
+          <option value="income">Só receitas</option>
+          <option value="expense">Só despesas</option>
+        </select>
+        <div className="relative flex-1 min-w-[180px]">
+          <Search size={13} className={cn('absolute left-2.5 top-2', searchText ? 'text-accent' : 'text-text-secondary')} />
+          <input
+            type="text"
+            value={searchText}
+            onChange={(e) => setSearchText(e.target.value)}
+            placeholder="Buscar por descricao ou valor..."
+            className={cn(
+              'w-full pl-8 pr-3 py-1.5 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent',
+              searchText ? 'border-accent bg-accent/10 text-accent' : 'border-border text-text-primary'
+            )}
+          />
+        </div>
+        {filtersActive && (
+          <button
+            onClick={() => { setFilterType('all'); setSearchText(''); }}
+            className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent"
+          >
+            <X size={12} /> Limpar
+          </button>
         )}
       </div>
 
@@ -333,7 +417,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
 
       {displayGroups.length === 0 ? (
         <div className="p-8 text-center text-text-secondary text-xs">
-          Nenhuma transacao neste periodo
+          {filtersActive ? 'Nenhuma transacao para o filtro atual' : 'Nenhuma transacao neste periodo'}
         </div>
       ) : (
         <div className="divide-y divide-border">

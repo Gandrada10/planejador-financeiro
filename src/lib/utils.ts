@@ -256,6 +256,33 @@ export function accountingDate(t: { date: Date; effectiveDate?: Date }): Date {
 }
 
 /**
+ * Busca por VALOR: casa uma query numérica contra o valor de uma transação.
+ * Semântica "contém" sobre uma forma canônica (sem separador de milhar, vírgula
+ * como decimal), então o usuário digita "150", "8022,48", "8.022,48" ou
+ * "8022.48" e acha o mesmo lançamento, não importa como escreveu os
+ * separadores. A vírgula decimal é RESPEITADA: "150" NÃO casa R$ 1,50, nem
+ * "5000" casa R$ 50,00 — a busca é em reais, não bagunça reais com centavos.
+ * Compara pelo valor ABSOLUTO (o sinal receita/despesa é papel do filtro de
+ * tipo). Query sem nenhum dígito não casa nada (deixa a busca textual agir).
+ */
+export function amountMatchesQuery(amount: number, query: string): boolean {
+  // Canônico do valor: toFixed(2) nunca gera separador de milhar → "8022,48".
+  const canonAmount = Math.abs(amount).toFixed(2).replace('.', ',');
+  // Canônico da query: só dígitos/separadores, normalizado p/ vírgula decimal.
+  let q = query.replace(/[^\d.,]/g, '');
+  if (!/\d/.test(q)) return false;
+  if (q.includes(',')) {
+    // Vírgula presente = decimal (pt-BR); os pontos são milhar → remove-os.
+    q = q.replace(/\./g, '');
+  } else if (q.includes('.')) {
+    // Só ponto(s): decimal quando é um único ponto com 1–2 casas no fim
+    // ("8022.48"); senão é separador de milhar ("8.022", "1.234.567").
+    q = /^\d+\.\d{1,2}$/.test(q) ? q.replace('.', ',') : q.replace(/\./g, '');
+  }
+  return canonAmount.includes(q);
+}
+
+/**
  * Apply Brazilian money mask as user types.
  * Transforms raw keypresses into formatted currency: "12345" → "123,45"
  * Supports negative values for expenses.

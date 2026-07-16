@@ -14,7 +14,7 @@ import { ImportModal } from './ImportModal';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
-import { getMonthYear, getMonthLabel, cn, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { getMonthYear, getMonthLabel, cn, countsInTotals, isIncomeAmount, isExpenseAmount, amountMatchesQuery } from '../../lib/utils';
 import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
@@ -34,6 +34,7 @@ export function TransactionsPage() {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterAccount, setFilterAccount] = useState('all');
   const [filterInstallment, setFilterInstallment] = useState('all');
+  const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterReconciled, setFilterReconciled] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
@@ -160,6 +161,15 @@ export function TransactionsPage() {
     } else if (filterReconciled === 'reconciled') {
       list = list.filter((t) => t.reconciled);
     }
+    // Tipo do lançamento (fluxo): receita vs despesa. Usa os mesmos helpers dos
+    // TOTAIS (isIncomeAmount/isExpenseAmount), então "Só despesas" inclui o
+    // reembolso positivo (contra-despesa) e casa exatamente com o card de
+    // "Despesas" logo abaixo.
+    if (filterType === 'income') {
+      list = list.filter((t) => isIncomeAmount(t));
+    } else if (filterType === 'expense') {
+      list = list.filter((t) => isExpenseAmount(t));
+    }
     if (searchText) {
       const q = searchText.toLowerCase();
       list = list.filter(
@@ -167,11 +177,12 @@ export function TransactionsPage() {
           t.description.toLowerCase().includes(q) ||
           t.account.toLowerCase().includes(q) ||
           t.familyMember.toLowerCase().includes(q) ||
-          (t.titular || '').toLowerCase().includes(q)
+          (t.titular || '').toLowerCase().includes(q) ||
+          amountMatchesQuery(t.amount, searchText)
       );
     }
     return list;
-  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterReconciled, searchText]);
+  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterType, filterReconciled, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -299,6 +310,7 @@ export function TransactionsPage() {
     category: filterCategory !== 'all',
     titular: filterTitular !== 'all',
     installment: filterInstallment !== 'all',
+    type: filterType !== 'all',
     search: searchText.trim() !== '',
   };
   const activeCount =
@@ -310,6 +322,7 @@ export function TransactionsPage() {
     setFilterCategory('all');
     setFilterTitular('all');
     setFilterInstallment('all');
+    setFilterType('all');
     setFilterReconciled('all');
     setSearchText('');
   };
@@ -408,6 +421,15 @@ export function TransactionsPage() {
           ))}
         </select>
         <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value as 'all' | 'income' | 'expense')}
+          className={cn(baseFieldClass, isActive.type ? activeFieldClass : inactiveFieldClass)}
+        >
+          <option value="all">Receitas e despesas</option>
+          <option value="income">Só receitas</option>
+          <option value="expense">Só despesas</option>
+        </select>
+        <select
           value={filterInstallment}
           onChange={(e) => setFilterInstallment(e.target.value)}
           className={cn(baseFieldClass, isActive.installment ? activeFieldClass : inactiveFieldClass)}
@@ -422,7 +444,7 @@ export function TransactionsPage() {
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Buscar por descricao, conta, membro..."
+            placeholder="Buscar por descricao, valor, conta, membro..."
             className={cn('w-full pl-8 pr-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent', isActive.search ? activeFieldClass : inactiveFieldClass)}
           />
         </div>
