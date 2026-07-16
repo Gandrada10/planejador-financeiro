@@ -2,7 +2,8 @@ import { useState, useMemo } from 'react';
 import { FileSpreadsheet, Download } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
-import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { toAccountingEntries } from '../../lib/accounting';
 
 type Interval = 'mensal' | 'anual';
 
@@ -58,14 +59,16 @@ export function CashFlowReport() {
   }, [interval, startPeriod, numPeriods]);
 
   const { rows, saldoAnterior, totalEntradas, totalSaidas } = useMemo(() => {
+    // Fatias contábeis: reembolso alocado entra no período da despesa-alvo.
+    const entries = toAccountingEntries(transactions);
     const firstPeriod = periods[0] ?? startPeriod;
-    const saldoAnterior = transactions
-      .filter((t) => countsInTotals(t, excludedIds) && txPeriodKey(accountingDate(t)) < firstPeriod)
+    const saldoAnterior = entries
+      .filter((t) => countsInTotals(t, excludedIds) && txPeriodKey(t.date) < firstPeriod)
       .reduce((s, t) => s + t.amount, 0);
 
     let runningSaldo = saldoAnterior;
     const rows = periods.map((periodKey) => {
-      const periodTxs = transactions.filter((t) => countsInTotals(t, excludedIds) && txPeriodKey(accountingDate(t)) === periodKey);
+      const periodTxs = entries.filter((t) => countsInTotals(t, excludedIds) && txPeriodKey(t.date) === periodKey);
       const entradas = periodTxs.filter((t) => isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0);
       const saidas = periodTxs.filter((t) => isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
       const resultado = entradas + saidas;

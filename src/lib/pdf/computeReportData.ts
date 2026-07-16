@@ -1,5 +1,6 @@
-import type { Category, Transaction } from '../../types';
-import { getMonthLabel, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../utils';
+import type { Category } from '../../types';
+import { getMonthLabel, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../utils';
+import { toAccountingEntries, type AccountingEntry } from '../accounting';
 import type {
   BudgetProgress,
   CashFlowByAccount,
@@ -102,11 +103,11 @@ function avg(values: number[]): number {
 }
 
 function computeKpis(
-  transactions: Transaction[],
+  entries: AccountingEntry[],
   period: ResolvedPeriod
 ): KpiSummary {
-  const inPeriod = transactions.filter((t) => {
-    const my = getMonthYear(accountingDate(t));
+  const inPeriod = entries.filter((t) => {
+    const my = getMonthYear(t.date);
     return my >= period.startMonth && my <= period.endMonth;
   });
   const totalEntries = sum(inPeriod.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
@@ -116,9 +117,9 @@ function computeKpis(
   // YTD based on end month's year (calendar year-to-date up to end month inclusive)
   const endYear = period.endMonth.slice(0, 4);
   const ytdBalance = sum(
-    transactions
+    entries
       .filter((t) => {
-        const my = getMonthYear(accountingDate(t));
+        const my = getMonthYear(t.date);
         return my.startsWith(endYear) && my <= period.endMonth;
       })
       .map((t) => t.amount)
@@ -130,13 +131,13 @@ function computeKpis(
     last12.push(getMonthYearOffset(period.endMonth, -i));
   }
   const monthsWithData = last12.filter((mo) =>
-    transactions.some((t) => getMonthYear(accountingDate(t)) === mo)
+    entries.some((t) => getMonthYear(t.date) === mo)
   );
   const avg12Months =
     monthsWithData.length > 0
       ? sum(
           monthsWithData.map((mo) =>
-            sum(transactions.filter((t) => getMonthYear(accountingDate(t)) === mo).map((t) => t.amount))
+            sum(entries.filter((t) => getMonthYear(t.date) === mo).map((t) => t.amount))
           )
         ) / monthsWithData.length
       : 0;
@@ -148,18 +149,19 @@ function computeKpis(
     ytdBalance,
     avg12Months,
     savingsRate: totalEntries > 0 ? totalBalance / totalEntries : 0,
-    transactionCount: inPeriod.length,
+    // Fatias de um mesmo reembolso não inflam a contagem de lançamentos.
+    transactionCount: new Set(inPeriod.map((t) => t.txId)).size,
     monthsCount: period.months.length,
   };
 }
 
 function computeDashboardCashFlow(
-  transactions: Transaction[],
+  entries: AccountingEntry[],
   accounts: ReportDeps['accounts'],
   period: ResolvedPeriod
 ): CashFlowByAccount[] {
-  const inPeriod = transactions.filter((t) => {
-    const my = getMonthYear(accountingDate(t));
+  const inPeriod = entries.filter((t) => {
+    const my = getMonthYear(t.date);
     return my >= period.startMonth && my <= period.endMonth;
   });
   const map = new Map<string, { entries: number; exits: number }>();
@@ -185,13 +187,13 @@ function computeDashboardCashFlow(
 }
 
 function computeExpensesByCategory(
-  transactions: Transaction[],
+  entries: AccountingEntry[],
   categories: Category[],
   period: ResolvedPeriod,
   totalExits: number
 ): ExpenseCategoryBreakdown[] {
-  const inPeriod = transactions.filter((t) => {
-    const my = getMonthYear(accountingDate(t));
+  const inPeriod = entries.filter((t) => {
+    const my = getMonthYear(t.date);
     return my >= period.startMonth && my <= period.endMonth && isExpenseAmount(t);
   });
   const map = new Map<string, { amount: number; subs: Map<string, number> }>();
@@ -233,6 +235,7 @@ function computeExpensesByCategory(
 
 function computeBudgetProgress(
   deps: ReportDeps,
+  entries: AccountingEntry[],
   period: ResolvedPeriod
 ): { budgets: BudgetProgress[]; totalLimit: number; totalActual: number } {
   // Budgets are per-month; aggregate limits + actuals across the selected period.
@@ -246,11 +249,11 @@ function computeBudgetProgress(
     }
   }
 
-  for (const t of deps.transactions) {
+  for (const t of entries) {
     if (!isExpenseAmount(t)) continue;
     if (!t.categoryId) continue;
     if (!byCategory.has(t.categoryId)) continue;
-    const my = getMonthYear(accountingDate(t));
+    const my = getMonthYear(t.date);
     if (my < period.startMonth || my > period.endMonth) continue;
     byCategory.get(t.categoryId)!.actual += t.amount; // negative
   }
@@ -274,13 +277,13 @@ function computeBudgetProgress(
   return { budgets, totalLimit, totalActual };
 }
 
-function computeProjects(deps: ReportDeps, period: ResolvedPeriod): ProjectSummary[] {
+function computeProjects(deps: ReportDeps, entries: AccountingEntry[], period: ResolvedPeriod): ProjectSummary[] {
   const active = deps.projects.filter((p) => p.status === 'active');
   return active
     .map((p) => {
-      const ptxs = deps.transactions.filter((t) => {
+      const ptxs = entries.filter((t) => {
         if (t.projectId !== p.id) return false;
-        const my = getMonthYear(accountingDate(t));
+        const my = getMonthYear(t.date);
         return my >= period.startMonth && my <= period.endMonth;
       });
       const spent = sum(ptxs.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
@@ -292,7 +295,7 @@ function computeProjects(deps: ReportDeps, period: ResolvedPeriod): ProjectSumma
         spent,
         income,
         balance: income + spent,
-        count: ptxs.length,
+        count: new Set(ptxs.map((t) => t.txId)).size,
       };
     })
     .filter((p) => p.count > 0);
@@ -300,10 +303,11 @@ function computeProjects(deps: ReportDeps, period: ResolvedPeriod): ProjectSumma
 
 function computeByCategory(
   deps: ReportDeps,
+  entries: AccountingEntry[],
   period: ResolvedPeriod
 ): ReportData['byCategory'] {
-  const inPeriod = deps.transactions.filter((t) => {
-    const my = getMonthYear(accountingDate(t));
+  const inPeriod = entries.filter((t) => {
+    const my = getMonthYear(t.date);
     return my >= period.startMonth && my <= period.endMonth;
   });
   const totalEntries = sum(inPeriod.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
@@ -311,7 +315,7 @@ function computeByCategory(
   const totalBalance = totalEntries + totalExits;
   const totalAbs = Math.abs(totalEntries) + Math.abs(totalExits);
 
-  const catMap = new Map<string, Transaction[]>();
+  const catMap = new Map<string, AccountingEntry[]>();
   for (const t of inPeriod) {
     const key = t.categoryId || '__uncategorized';
     if (!catMap.has(key)) catMap.set(key, []);
@@ -334,7 +338,7 @@ function computeByCategory(
         total: subTotal,
         percentage: totalAbs > 0 ? (Math.abs(subTotal) / totalAbs) * 100 : 0,
         transactions: directTxs
-          .sort((a, b) => a.date.getTime() - b.date.getTime())
+          .sort((a, b) => a.txDate.getTime() - b.txDate.getTime())
           .map(projectTx),
       });
       catMap.delete(root.id);
@@ -350,7 +354,7 @@ function computeByCategory(
         total: subTotal,
         percentage: totalAbs > 0 ? (Math.abs(subTotal) / totalAbs) * 100 : 0,
         transactions: txs
-          .sort((a, b) => a.date.getTime() - b.date.getTime())
+          .sort((a, b) => a.txDate.getTime() - b.txDate.getTime())
           .map(projectTx),
       });
       catMap.delete(sub.id);
@@ -384,7 +388,7 @@ function computeByCategory(
           total,
           percentage: totalAbs > 0 ? (Math.abs(total) / totalAbs) * 100 : 0,
           transactions: txs
-            .sort((a, b) => a.date.getTime() - b.date.getTime())
+            .sort((a, b) => a.txDate.getTime() - b.txDate.getTime())
             .map(projectTx),
         },
       ],
@@ -396,9 +400,11 @@ function computeByCategory(
   return { groups, totalEntries, totalExits, totalBalance };
 }
 
-function projectTx(t: Transaction) {
+function projectTx(t: AccountingEntry) {
   return {
-    date: t.date,
+    // Linha de detalhe mostra a data REAL do lançamento; a ancoragem contábil
+    // (t.date) já agrupou a fatia na categoria/mês certos.
+    date: t.txDate,
     description: t.description,
     amount: t.amount,
     account: t.account,
@@ -409,18 +415,18 @@ function projectTx(t: Transaction) {
 }
 
 function computeCashFlow(
-  transactions: Transaction[],
+  entries: AccountingEntry[],
   period: ResolvedPeriod
 ): ReportData['cashFlow'] {
   const saldoAnterior = sum(
-    transactions
-      .filter((t) => getMonthYear(accountingDate(t)) < period.startMonth)
+    entries
+      .filter((t) => getMonthYear(t.date) < period.startMonth)
       .map((t) => t.amount)
   );
 
   let runningSaldo = saldoAnterior;
   const rows: CashFlowRow[] = period.months.map((monthYear) => {
-    const monthTxs = transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear);
+    const monthTxs = entries.filter((t) => getMonthYear(t.date) === monthYear);
     const entradas = sum(monthTxs.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
     const saidas = sum(monthTxs.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
     const resultado = entradas + saidas;
@@ -445,6 +451,7 @@ function computeCashFlow(
 
 function computeEvolution(
   deps: ReportDeps,
+  entries: AccountingEntry[],
   period: ResolvedPeriod
 ): ReportData['evolution'] {
   const months = period.months;
@@ -452,8 +459,8 @@ function computeEvolution(
 
   // Per-category totals per month
   const monthlyByCat: Record<string, Record<string, number>> = {};
-  for (const t of deps.transactions) {
-    const m = getMonthYear(accountingDate(t));
+  for (const t of entries) {
+    const m = getMonthYear(t.date);
     if (!months.includes(m)) continue;
     const catId = t.categoryId || '__none';
     if (!monthlyByCat[catId]) monthlyByCat[catId] = {};
@@ -473,7 +480,7 @@ function computeEvolution(
     despesas: {} as Record<string, number>,
   };
   for (const m of months) {
-    const monthTxs = deps.transactions.filter((t) => getMonthYear(accountingDate(t)) === m);
+    const monthTxs = entries.filter((t) => getMonthYear(t.date) === m);
     sectionTotals.receitas[m] = sum(monthTxs.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
     sectionTotals.despesas[m] = sum(monthTxs.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
   }
@@ -636,32 +643,34 @@ export function computeReportData(
 ): ReportData {
   const resolved = resolvePeriod(period);
 
-  // Exclusão-de-total centralizada para TODO o PDF: filtra "Transferência" uma
-  // única vez aqui e propaga o conjunto já limpo para todas as funções de
-  // agregação (KPIs, fluxo, breakdown, evolução, projetos, orçamento). Assim o
-  // relatório enviado à Juliana nunca double-conta pagamento de fatura/PIX
-  // interno. As funções internas seguem puras — só recebem menos transações.
+  // Base contábil de TODO o PDF: expande cada transação nas suas fatias
+  // (reembolso alocado ancora no mês E na categoria da despesa-alvo — ver
+  // lib/accounting.ts) e aplica a exclusão-de-total UMA vez, POR FATIA. Rodar
+  // countsInTotals por fatia importa: a categoria da fatia é a herdada do
+  // alvo, então reembolso de despesa "Transferência" sai dos totais junto com
+  // ela. As funções internas seguem puras — só recebem as fatias já limpas.
   const excludedIds = getExcludedFromTotalsIds(deps.categories);
-  const countedTransactions = deps.transactions.filter((t) => countsInTotals(t, excludedIds));
-  const countedDeps: ReportDeps = { ...deps, transactions: countedTransactions };
+  const countedEntries = toAccountingEntries(deps.transactions).filter((e) =>
+    countsInTotals(e, excludedIds)
+  );
 
-  const kpis = computeKpis(countedTransactions, resolved);
+  const kpis = computeKpis(countedEntries, resolved);
   const dashboardCashFlow = computeDashboardCashFlow(
-    countedTransactions,
+    countedEntries,
     deps.accounts,
     resolved
   );
   const expensesByCategory = computeExpensesByCategory(
-    countedTransactions,
+    countedEntries,
     deps.categories,
     resolved,
     kpis.totalExits
   );
-  const { budgets, totalLimit, totalActual } = computeBudgetProgress(countedDeps, resolved);
-  const projects = computeProjects(countedDeps, resolved);
-  const byCategory = computeByCategory(countedDeps, resolved);
-  const cashFlow = computeCashFlow(countedTransactions, resolved);
-  const evolution = computeEvolution(countedDeps, resolved);
+  const { budgets, totalLimit, totalActual } = computeBudgetProgress(deps, countedEntries, resolved);
+  const projects = computeProjects(deps, countedEntries, resolved);
+  const byCategory = computeByCategory(deps, countedEntries, resolved);
+  const cashFlow = computeCashFlow(countedEntries, resolved);
+  const evolution = computeEvolution(deps, countedEntries, resolved);
 
   const partial: Omit<ReportData, 'insights'> = {
     period: resolved,

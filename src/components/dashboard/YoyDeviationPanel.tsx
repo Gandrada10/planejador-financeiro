@@ -8,7 +8,8 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, accountingDate } from '../../lib/utils';
+import { formatBRL, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount } from '../../lib/utils';
+import { toAccountingEntries } from '../../lib/accounting';
 import type { Transaction, Category } from '../../types';
 
 interface Props {
@@ -69,6 +70,8 @@ export function YoyDeviationPanel({
   const data = useMemo(() => {
     // Transferências ficam fora da comparação ano-a-ano (totais e por categoria).
     const excludedIds = getExcludedFromTotalsIds(categories);
+    // Fatias contábeis: reembolso alocado compara no mês/categoria da despesa-alvo.
+    const entries = toAccountingEntries(transactions);
     const [y, m] = monthYear.split('-').map(Number);
     const prevYear = y - 1;
 
@@ -87,9 +90,9 @@ export function YoyDeviationPanel({
     let totalPrevInc = 0;
     let hasPrev = false;
 
-    for (const t of transactions) {
+    for (const t of entries) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const ad = accountingDate(t);
+      const ad = t.date;
       const ty = ad.getFullYear();
       const tm = ad.getMonth() + 1;
       if (tm > m) continue;

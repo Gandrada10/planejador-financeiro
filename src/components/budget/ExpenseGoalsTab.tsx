@@ -14,8 +14,8 @@ import {
   countsInTotals,
   getExcludedFromTotalsIds,
   isExpenseAmount,
-  accountingDate,
 } from '../../lib/utils';
+import { toAccountingEntries } from '../../lib/accounting';
 
 interface BudgetRow {
   budgetId: string;
@@ -86,9 +86,9 @@ export function ExpenseGoalsTab() {
   // Transferências ficam fora do realizado das metas.
   const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
-  // Month transactions (expenses only, absolute values)
+  // Fatias de despesa do mês (reembolso alocado abate no mês/categoria do alvo).
   const monthExpenses = useMemo(
-    () => transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear && isExpenseAmount(t) && countsInTotals(t, excludedIds)),
+    () => toAccountingEntries(transactions).filter((t) => getMonthYear(t.date) === monthYear && isExpenseAmount(t) && countsInTotals(t, excludedIds)),
     [transactions, monthYear, excludedIds]
   );
 

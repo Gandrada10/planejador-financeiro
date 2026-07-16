@@ -10,8 +10,8 @@ import {
   countsInTotals,
   getExcludedFromTotalsIds,
   isExpenseAmount,
-  accountingDate,
 } from '../../lib/utils';
+import { toAccountingEntries } from '../../lib/accounting';
 
 interface EvolutionRow {
   label: string;
@@ -61,11 +61,14 @@ export function GoalsEvolutionTab() {
 
     const result: EvolutionRow[] = [];
 
+    // Fatias de despesa (reembolso alocado abate no mês/categoria do alvo).
+    const entries = toAccountingEntries(transactions);
+
     // For each month: get budgets and actual spending
     const monthData = months.map((my) => {
       const monthBudgets = getBudgetsForMonth(my);
-      const monthTx = transactions.filter(
-        (t) => getMonthYear(accountingDate(t)) === my && isExpenseAmount(t) && countsInTotals(t, excludedIds)
+      const monthTx = entries.filter(
+        (t) => getMonthYear(t.date) === my && isExpenseAmount(t) && countsInTotals(t, excludedIds)
       );
 
       // Total budget for month
@@ -85,21 +88,23 @@ export function GoalsEvolutionTab() {
         // For parent categories, aggregate spending from all subs
         const isParent = !cat.parentId;
 
+        // `-t.amount`: despesa (negativa) vira positivo; reembolso (positivo)
+        // SUBTRAI do realizado — Math.abs somaria o reembolso como se fosse gasto.
         let actual = 0;
         if (isParent) {
           // Sum spending in parent + all subs
           actual += monthTx
             .filter((t) => t.categoryId === b.categoryId)
-            .reduce((s, t) => s + Math.abs(t.amount), 0);
+            .reduce((s, t) => s - t.amount, 0);
           for (const sub of subCategories(b.categoryId)) {
             actual += monthTx
               .filter((t) => t.categoryId === sub.id)
-              .reduce((s, t) => s + Math.abs(t.amount), 0);
+              .reduce((s, t) => s - t.amount, 0);
           }
         } else {
           actual = monthTx
             .filter((t) => t.categoryId === b.categoryId)
-            .reduce((s, t) => s + Math.abs(t.amount), 0);
+            .reduce((s, t) => s - t.amount, 0);
         }
 
         catData.set(b.categoryId, { meta: b.limitAmount, realizado: actual });

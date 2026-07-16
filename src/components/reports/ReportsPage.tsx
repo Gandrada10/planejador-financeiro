@@ -10,8 +10,9 @@ import { CashFlowReport } from './CashFlowReport';
 import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
 import { ExportFullReportModal } from './ExportFullReportModal';
-import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
-import type { Transaction, Category } from '../../types';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { toAccountingEntries, type AccountingEntry } from '../../lib/accounting';
+import type { Category } from '../../types';
 
 type ReportTab = 'categorias' | 'fluxo' | 'evolucao';
 
@@ -30,7 +31,7 @@ interface SubCategoryGroup {
   icon: string;
   total: number;
   percentage: number;
-  transactions: Transaction[];
+  transactions: AccountingEntry[];
 }
 
 export function ReportsPage() {
@@ -55,15 +56,19 @@ export function ReportsPage() {
   // as transferências na lista bruta; aqui é relatório).
   const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
-  const monthTransactions = useMemo(
-    () => transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear),
-    [transactions, monthYear]
+  // Fatias contábeis: reembolso alocado entra no mês/categoria da despesa-alvo
+  // (ver lib/accounting.ts). O relatório soma e agrupa fatias.
+  const entries = useMemo(() => toAccountingEntries(transactions), [transactions]);
+
+  const monthEntries = useMemo(
+    () => entries.filter((t) => getMonthYear(t.date) === monthYear),
+    [entries, monthYear]
   );
 
   // Base do relatório já sem transferências — alimenta totais, breakdown e contagem.
   const filteredTransactions = useMemo(
-    () => monthTransactions.filter((t) => countsInTotals(t, excludedIds)),
-    [monthTransactions, excludedIds]
+    () => monthEntries.filter((t) => countsInTotals(t, excludedIds)),
+    [monthEntries, excludedIds]
   );
 
   const totalEntries = useMemo(
@@ -83,7 +88,7 @@ export function ReportsPage() {
 
   // Group by category → subcategory → transactions
   const grouped = useMemo(() => {
-    const catMap = new Map<string, Transaction[]>();
+    const catMap = new Map<string, AccountingEntry[]>();
 
     for (const t of filteredTransactions) {
       const key = t.categoryId || '__uncategorized';
@@ -108,7 +113,7 @@ export function ReportsPage() {
           icon: root.icon,
           total: subTotal,
           percentage: totalFiltered > 0 ? (Math.abs(subTotal) / totalFiltered) * 100 : 0,
-          transactions: directTxs.sort((a, b) => a.date.getTime() - b.date.getTime()),
+          transactions: directTxs.sort((a, b) => a.txDate.getTime() - b.txDate.getTime()),
         });
         catMap.delete(root.id);
       }
@@ -124,7 +129,7 @@ export function ReportsPage() {
             icon: sub.icon,
             total: subTotal,
             percentage: totalFiltered > 0 ? (Math.abs(subTotal) / totalFiltered) * 100 : 0,
-            transactions: txs.sort((a, b) => a.date.getTime() - b.date.getTime()),
+            transactions: txs.sort((a, b) => a.txDate.getTime() - b.txDate.getTime()),
           });
           catMap.delete(sub.id);
         }
@@ -166,7 +171,7 @@ export function ReportsPage() {
           icon: cat?.icon || 'circle-ellipsis',
           total,
           percentage: totalFiltered > 0 ? (Math.abs(total) / totalFiltered) * 100 : 0,
-          transactions: txs.sort((a, b) => a.date.getTime() - b.date.getTime()),
+          transactions: txs.sort((a, b) => a.txDate.getTime() - b.txDate.getTime()),
         }],
       });
     }
@@ -219,7 +224,7 @@ export function ReportsPage() {
       for (const sub of group.subs) {
         for (const t of sub.transactions) {
           rows.push({
-            'Data': formatDate(t.date),
+            'Data': formatDate(t.txDate),
             'Descricao': t.description,
             'Valor': t.amount,
             'Categoria': group.label,
@@ -285,7 +290,7 @@ export function ReportsPage() {
 
         for (const t of sub.transactions) {
           tableRows.push([
-            formatDate(t.date),
+            formatDate(t.txDate),
             `        ${t.description}`,
             t.account,
             t.titular,
@@ -503,7 +508,7 @@ export function ReportsPage() {
                                     className="w-full flex items-center gap-3 px-4 pr-6 py-1 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
                                   >
                                     <span className="text-text-secondary w-[72px] flex-shrink-0 tabular-nums">
-                                      {formatDate(t.date)}
+                                      {formatDate(t.txDate)}
                                     </span>
                                     <span className="text-text-primary flex-1 min-w-0 truncate">
                                       {t.description}

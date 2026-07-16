@@ -9,7 +9,8 @@ import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
-import { formatBRL, formatDate, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { toAccountingEntries } from '../../lib/accounting';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -26,9 +27,13 @@ export function DashboardPage() {
   // e reutilizado em todos os blocos de agregação abaixo (regra: countsInTotals).
   const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
 
-  const monthTransactions = useMemo(
-    () => transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear),
-    [transactions, monthYear]
+  // Fatias contábeis: reembolso alocado ancora no mês/categoria da despesa-alvo
+  // (ver lib/accounting.ts). Todos os agregados do dashboard somam fatias.
+  const entries = useMemo(() => toAccountingEntries(transactions), [transactions]);
+
+  const monthEntries = useMemo(
+    () => entries.filter((t) => getMonthYear(t.date) === monthYear),
+    [entries, monthYear]
   );
 
   const availableMonths = useMemo(() => {
@@ -37,17 +42,17 @@ export function DashboardPage() {
     return Array.from(set).sort().reverse();
   }, [transactions]);
 
-  const totalEntries = useMemo(() => monthTransactions.filter((t) => countsInTotals(t, excludedIds) && isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0), [monthTransactions, excludedIds]);
-  const totalExits = useMemo(() => monthTransactions.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0), [monthTransactions, excludedIds]);
+  const totalEntries = useMemo(() => monthEntries.filter((t) => countsInTotals(t, excludedIds) && isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0), [monthEntries, excludedIds]);
+  const totalExits = useMemo(() => monthEntries.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0), [monthEntries, excludedIds]);
   const totalBalance = totalEntries + totalExits;
 
   // YTD accumulated result (year of selected month)
   const currentYear = monthYear.split('-')[0];
   const yearBalance = useMemo(() => {
-    return transactions
-      .filter((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)).startsWith(currentYear))
+    return entries
+      .filter((t) => countsInTotals(t, excludedIds) && getMonthYear(t.date).startsWith(currentYear))
       .reduce((s, t) => s + t.amount, 0);
-  }, [transactions, currentYear, excludedIds]);
+  }, [entries, currentYear, excludedIds]);
 
   // Average monthly result over last 12 months (only months with data)
   const avg12months = useMemo(() => {
@@ -57,13 +62,13 @@ export function DashboardPage() {
       const d = new Date(y, m - 1 - i, 1);
       last12.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
-    const withData = last12.filter((mo) => transactions.some((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)) === mo));
+    const withData = last12.filter((mo) => entries.some((t) => countsInTotals(t, excludedIds) && getMonthYear(t.date) === mo));
     if (withData.length === 0) return 0;
     const total = withData.reduce((sum, mo) => {
-      return sum + transactions.filter((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)) === mo).reduce((s, t) => s + t.amount, 0);
+      return sum + entries.filter((t) => countsInTotals(t, excludedIds) && getMonthYear(t.date) === mo).reduce((s, t) => s + t.amount, 0);
     }, 0);
     return total / withData.length;
-  }, [transactions, monthYear, excludedIds]);
+  }, [entries, monthYear, excludedIds]);
 
   // Selected month is "in progress" when it matches the current real month (not yet closed).
   const isMonthInProgress = monthYear === getMonthYear();
@@ -73,25 +78,25 @@ export function DashboardPage() {
   // Active projects with both monthly and all-time spending
   const projectsData = useMemo(() => {
     return activeProjects.map((p) => {
-      const monthTxs = monthTransactions.filter((t) => t.projectId === p.id);
+      const monthTxs = monthEntries.filter((t) => t.projectId === p.id);
       const spentMonth = monthTxs.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
 
-      const allTxs = transactions.filter((t) => t.projectId === p.id);
+      const allTxs = entries.filter((t) => t.projectId === p.id);
       const spentTotal = allTxs.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
 
       return {
         ...p,
         spentMonth,
         spentTotal,
-        countMonth: monthTxs.length,
+        countMonth: new Set(monthTxs.map((t) => t.txId)).size,
       };
     });
-  }, [activeProjects, transactions, monthTransactions, excludedIds]);
+  }, [activeProjects, entries, monthEntries, excludedIds]);
 
   // Cash flow by account
   const cashFlowData = useMemo(() => {
     const map = new Map<string, { entries: number; exits: number }>();
-    for (const t of monthTransactions) {
+    for (const t of monthEntries) {
       if (!countsInTotals(t, excludedIds)) continue;
       const key = t.account || 'Sem conta';
       if (!map.has(key)) map.set(key, { entries: 0, exits: 0 });
@@ -128,12 +133,12 @@ export function DashboardPage() {
         const d = typeRank(a.accountName) - typeRank(b.accountName);
         return d !== 0 ? d : a.accountName.localeCompare(b.accountName, 'pt-BR');
       });
-  }, [monthTransactions, accounts, getCycleForCard, monthYear, excludedIds]);
+  }, [monthEntries, accounts, getCycleForCard, monthYear, excludedIds]);
 
   // Expenses by category (grouped by parent; subcategory breakdowns tracked separately)
   const expensesByCategory = useMemo(() => {
     const map = new Map<string, { amount: number; subs: Map<string, number> }>();
-    for (const t of monthTransactions) {
+    for (const t of monthEntries) {
       if (!isExpenseAmount(t) || !countsInTotals(t, excludedIds)) continue;
       const catId = t.categoryId || '__uncategorized';
       const cat = categories.find((c) => c.id === catId);
@@ -171,7 +176,7 @@ export function DashboardPage() {
         };
       })
       .sort((a, b) => a.amount - b.amount); // most negative first
-  }, [monthTransactions, categories, totalExits, excludedIds]);
+  }, [monthEntries, categories, totalExits, excludedIds]);
 
   // Budget progress - group by parent category, aggregate sub spending
   const budgetData = useMemo(() => {
@@ -179,7 +184,7 @@ export function DashboardPage() {
 
     // Actual spending per category (absolute values)
     const actualByCategory = new Map<string, number>();
-    for (const t of monthTransactions) {
+    for (const t of monthEntries) {
       if (!isExpenseAmount(t) || !countsInTotals(t, excludedIds)) continue;
       const catId = t.categoryId || '__uncategorized';
       // `-t.amount`: para despesa (negativa) é o mesmo que Math.abs; para um
@@ -238,7 +243,7 @@ export function DashboardPage() {
     }
 
     return rows;
-  }, [monthYear, categories, monthTransactions, getBudgetsForMonth, excludedIds]);
+  }, [monthYear, categories, monthEntries, getBudgetsForMonth, excludedIds]);
 
   // Grand totals - only parent-level budgets
   const budgetTotalLimit = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.limit, 0);

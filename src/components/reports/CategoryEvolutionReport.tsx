@@ -3,7 +3,8 @@ import { ChevronDown, ChevronRight, FileSpreadsheet, Download } from 'lucide-rea
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { toAccountingEntries } from '../../lib/accounting';
 import type { Category } from '../../types';
 
 type Interval = 'mensal' | 'anual';
@@ -231,12 +232,15 @@ export function CategoryEvolutionReport() {
     return Array.from({ length: numPeriods }, (_, i) => String(startYear + i));
   }, [interval, startPeriod, numPeriods]);
 
+  // Fatias contábeis: reembolso alocado evolui no período/categoria da despesa-alvo.
+  const entries = useMemo(() => toAccountingEntries(transactions), [transactions]);
+
   const monthlyByCat = useMemo(() => {
     const result: Record<string, Record<string, number>> = {};
     const periodSet = new Set(periods);
-    for (const t of transactions) {
+    for (const t of entries) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const key = txPeriodKey(accountingDate(t));
+      const key = txPeriodKey(t.date);
       if (!periodSet.has(key)) continue;
       const catId = t.categoryId || '__none';
       if (!result[catId]) result[catId] = {};
@@ -244,7 +248,7 @@ export function CategoryEvolutionReport() {
     }
     return result;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, periods, interval, excludedIds]);
+  }, [entries, periods, interval, excludedIds]);
 
   function sumForIds(ids: string[]): Record<string, number> {
     const result: Record<string, number> = {};
@@ -260,16 +264,16 @@ export function CategoryEvolutionReport() {
       receitas[p] = 0;
       despesas[p] = 0;
     }
-    for (const t of transactions) {
+    for (const t of entries) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const key = txPeriodKey(accountingDate(t));
+      const key = txPeriodKey(t.date);
       if (!periodSet.has(key)) continue;
       if (isIncomeAmount(t)) receitas[key] += t.amount;
       else if (isExpenseAmount(t)) despesas[key] += t.amount;
     }
     return { receitas, despesas };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transactions, periods, interval, excludedIds]);
+  }, [entries, periods, interval, excludedIds]);
 
   const { incomeCats, expenseCats } = useMemo(() => {
     const incomeCats: Category[] = [];
