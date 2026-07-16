@@ -12,7 +12,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
-import type { Transaction } from '../types';
+import type { ReimbursementAllocation, Transaction } from '../types';
 import { normalizeTitular } from '../lib/utils';
 
 function getUserTransactionsRef() {
@@ -32,6 +32,33 @@ async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof wr
     for (const item of items.slice(i, i + BATCH_CHUNK)) apply(batch, item);
     await batch.commit();
   }
+}
+
+/**
+ * Alocações do reembolso, com defesa contra docs malformados (item sem
+ * expenseId, valor não-positivo etc. é descartado). LEGADO: uma transação
+ * vinculada antes das alocações existirem tem só `reimbursementFor` — é
+ * normalizada AQUI, em leitura, para uma alocação única de valor cheio, sem
+ * migração de dados. Escritas novas gravam `reimbursementAllocations` e
+ * `reimbursementFor: null`, então o fallback só dispara em docs antigos.
+ */
+function parseReimbursementAllocations(data: Record<string, unknown>): ReimbursementAllocation[] {
+  const raw = data.reimbursementAllocations;
+  const allocations: ReimbursementAllocation[] = [];
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      const a = item as { expenseId?: unknown; amount?: unknown };
+      if (typeof a?.expenseId === 'string' && a.expenseId && typeof a?.amount === 'number' && a.amount > 0) {
+        allocations.push({ expenseId: a.expenseId, amount: a.amount });
+      }
+    }
+  }
+  const amount = (data.amount as number) || 0;
+  const legacyFor = (data.reimbursementFor as string) || null;
+  if (allocations.length === 0 && legacyFor && data.isReimbursement === true && amount > 0) {
+    allocations.push({ expenseId: legacyFor, amount });
+  }
+  return allocations;
 }
 
 function docToTransaction(id: string, data: Record<string, unknown>): Transaction {
@@ -59,6 +86,7 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     provisionalDate: data.provisionalDate ? (data.provisionalDate as Timestamp).toDate() : null,
     fitid: (data.fitid as string) || null,
     isReimbursement: (data.isReimbursement as boolean) || false,
+    reimbursementAllocations: parseReimbursementAllocations(data),
     reimbursementFor: (data.reimbursementFor as string) || null,
     awaitingReimbursement: (data.awaitingReimbursement as boolean) || false,
     reimbursementPrevCategoryId: (data.reimbursementPrevCategoryId as string) ?? null,

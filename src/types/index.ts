@@ -37,6 +37,15 @@ export interface CategoryRule {
   createdAt: Date;
 }
 
+/** Uma fatia de um reembolso destinada a UMA despesa: `amount` (positivo, em
+ *  reais) abate a despesa `expenseId`. Um reembolso pode carregar várias
+ *  fatias (dividir um depósito entre despesas) e uma despesa pode ser alvo de
+ *  fatias de vários reembolsos (reembolso em parcelas) — N↔N. */
+export interface ReimbursementAllocation {
+  expenseId: string;
+  amount: number;
+}
+
 export interface Transaction {
   id: string;
   date: Date;
@@ -57,17 +66,27 @@ export interface Transaction {
    *  líquido refletir o seu custo real. Ver `isIncomeAmount`/`isExpenseAmount`
    *  em `src/lib/utils.ts`. */
   isReimbursement?: boolean;
-  /** Id da DESPESA (transação) que este reembolso abate. Quando presente, os
-   *  TOTAIS atribuem o abatimento ao MÊS DA DESPESA (Opção 1 — ancorar no mês
-   *  da compra), não ao mês em que o dinheiro entrou. A LISTA continua no mês
-   *  real. Ver `accountingDate`/`effectiveDate`. */
+  /** Alocações deste reembolso: quanto abate de CADA despesa (N↔N). Nos
+   *  TOTAIS, cada fatia alocada é atribuída ao MÊS e à CATEGORIA da
+   *  despesa-alvo; o que sobrar não-alocado abate no próprio mês do reembolso.
+   *  Regra centralizada em `toAccountingEntries` (`src/lib/accounting.ts`).
+   *  Invariante do editor: soma das fatias ≤ `amount` (edições de valor
+   *  posteriores podem violá-lo — a UI sinaliza em vermelho, sem write-back). */
+  reimbursementAllocations?: ReimbursementAllocation[];
+  /** LEGADO (pré-alocações): id da única despesa abatida. Normalizado em
+   *  LEITURA para `reimbursementAllocations` com valor cheio (ver
+   *  `docToTransaction`) — sem migração de dados. Escritas novas gravam
+   *  `null` aqui e usam só as alocações. */
   reimbursementFor?: string | null;
   /** Marca uma DESPESA que você espera receber de volta mas ainda não chegou.
-   *  Só sinalizador visual — não altera nenhum total. */
+   *  Sinalizador de intenção: some dos painéis quando a despesa é quitada
+   *  pelas alocações, mas o flag em si não altera nenhum total. */
   awaitingReimbursement?: boolean;
-  /** Categoria que a transação tinha ANTES de ser vinculada como reembolso
-   *  (o vínculo sobrescreve a categoria com a da despesa abatida). Restaurada
-   *  ao deixar de ser reembolso, para a transação voltar ao estado original. */
+  /** LEGADO: categoria de ANTES do vínculo, da época em que vincular
+   *  SOBRESCREVIA a categoria do reembolso (hoje a categoria do alvo é
+   *  herdada dinamicamente nos totais, sem tocar na transação). Só lido para
+   *  restaurar a categoria ao desfazer um vínculo antigo; escritas novas não
+   *  gravam este campo. */
   reimbursementPrevCategoryId?: string | null;
   /** NÃO persistido (derivado em `useTransactions`). Data usada nos TOTAIS:
    *  para reembolso vinculado é a data da despesa abatida; senão a própria
