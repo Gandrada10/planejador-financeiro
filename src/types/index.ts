@@ -73,12 +73,6 @@ export interface Transaction {
    *  para reembolso vinculado é a data da despesa abatida; senão a própria
    *  `date`. Use via `accountingDate(t)`; nunca para exibir/ordenar. */
   effectiveDate?: Date;
-  /**
-   * Legado (integração Pluggy/Open Finance removida): id da transação no
-   * Pluggy, presente apenas em dados históricos no Firestore. Nenhum código
-   * grava ou usa este campo hoje — mantido só para tipar os documentos antigos.
-   */
-  pluggyTransactionId?: string | null;
   tags: string[];
   notes: string;
   importBatch: string | null;
