@@ -180,6 +180,15 @@ export interface CategorizationTransaction {
    * subcoleção) — a UI degrada graciosamente e não mostra o chip.
    */
   account: string | null;
+  /** Flag marcada no celular: "este dinheiro É um reembolso". Só faz sentido
+   *  em ENTRADA (amount > 0) — validado nas rules. Aplicada de volta como
+   *  `isReimbursement: true` (só true→true; a associação às despesas fica com
+   *  o dono no desktop). Sessões antigas não têm o campo → false. */
+  markReimbursement: boolean;
+  /** Flag marcada no celular: "vou pedir reembolso disto". Só em GASTO
+   *  (amount < 0) — validado nas rules. Aplicada de volta como
+   *  `awaitingReimbursement: true` (só true→true). */
+  markAwaiting: boolean;
 }
 
 export interface Project {

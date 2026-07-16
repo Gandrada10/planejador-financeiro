@@ -142,6 +142,9 @@ function docToSessionTransaction(id: string, td: Record<string, unknown>): Categ
     // Sessões criadas antes do chip da conta não têm o campo → null (a UI
     // simplesmente não mostra o chip).
     account: (td.account as string) || null,
+    // Flags de reembolso — sessões antigas não têm os campos → false.
+    markReimbursement: td.markReimbursement === true,
+    markAwaiting: td.markAwaiting === true,
   };
 }
 
@@ -336,6 +339,9 @@ export function useCategorizationSessions() {
         // Conta/cartão de origem — dá contexto no card da esposa (casal com
         // vários cartões). Sessões antigas não têm o campo (UI degrada).
         account: t.account ?? null,
+        // Flags de reembolso marcáveis pelo celular (toggle no card).
+        markReimbursement: false,
+        markAwaiting: false,
         applied: false,
       });
     });
@@ -366,19 +372,35 @@ export function useCategorizationSessions() {
       const txSnap = await getDocs(collection(db, 'categorizationSessions', token, 'transactions'));
       let categorized = 0;
       let total = 0;
-      const pendingDeltas: { ref: (typeof txSnap.docs)[number]['ref']; transactionId: string; categoryId: string; notes: string }[] = [];
+      const pendingDeltas: {
+        ref: (typeof txSnap.docs)[number]['ref'];
+        transactionId: string;
+        categoryId: string | null;
+        notes: string;
+        markReimbursement: boolean;
+        markAwaiting: boolean;
+        amount: number;
+      }[] = [];
 
       for (const txDoc of txSnap.docs) {
         total++;
         const data = txDoc.data();
-        if (!data.categoryId) continue;
-        categorized++;
+        const hasCat = !!data.categoryId;
+        if (hasCat) categorized++;
         if (data.applied) continue; // já aplicada em abertura anterior — pula
+        // Delta = categoria escolhida OU flag de reembolso marcada. Sem o
+        // hasFlags, um item só-marcado (ainda sem categoria) nunca chegaria à
+        // transação real.
+        const hasFlags = data.markReimbursement === true || data.markAwaiting === true;
+        if (!hasCat && !hasFlags) continue;
         pendingDeltas.push({
           ref: txDoc.ref,
           transactionId: data.transactionId as string,
-          categoryId: data.categoryId as string,
+          categoryId: hasCat ? (data.categoryId as string) : null,
           notes: (data.notes as string) || '',
+          markReimbursement: data.markReimbursement === true,
+          markAwaiting: data.markAwaiting === true,
+          amount: (data.amount as number) || 0,
         });
       }
 
@@ -399,10 +421,20 @@ export function useCategorizationSessions() {
       await commitInChunks(
         toApply,
         (batch, p) => {
-          batch.update(doc(db, 'users', uid, 'transactions', p.transactionId), {
-            categoryId: p.categoryId,
-            ...(p.notes ? { notes: p.notes } : {}),
-          });
+          // Flags só escrevem true→true (nunca false): desmarcar depois do
+          // apply não desfaz o dado real — evita sobrescrever trabalho do dono
+          // (que pode já ter feito alocações). O sinal é revalidado aqui por
+          // defesa em profundidade (as rules já bloqueiam sinal errado).
+          const upd: Record<string, unknown> = {};
+          if (p.categoryId) {
+            upd.categoryId = p.categoryId;
+            if (p.notes) upd.notes = p.notes;
+          }
+          if (p.markReimbursement && p.amount > 0) upd.isReimbursement = true;
+          if (p.markAwaiting && p.amount < 0) upd.awaitingReimbursement = true;
+          if (Object.keys(upd).length > 0) {
+            batch.update(doc(db, 'users', uid, 'transactions', p.transactionId), upd);
+          }
           batch.update(p.ref, { applied: true });
         },
         2
@@ -460,8 +492,11 @@ export function useCategorizationSessions() {
     let skipped = 0;
     const errors: string[] = [];
     for (const s of sessions) {
-      // Sessão ativa com trabalho feito: aplica o delta pendente.
-      const activePending = s.status === 'active' && s.categorizedCount > 0;
+      // Sessão ativa com trabalho feito: aplica o delta pendente. O gate por
+      // lastActivityAt cobre sessão onde a esposa SÓ marcou flags de reembolso
+      // (categorizedCount fica 0, mas toda marcação grava lastActivityAt);
+      // reprocessar é barato porque docs aplicados ficam com applied:true.
+      const activePending = s.status === 'active' && (s.categorizedCount > 0 || !!s.lastActivityAt);
       // Sessão JÁ aplicada mas com edição POSTERIOR ao apply: quando quem
       // categoriza volta num item e muda categoria/nota depois de a sessão ter
       // sido fechada (status 'applied'), o novo delta (applied:false) ficava
@@ -620,5 +655,20 @@ export function usePublicCategorizationSession(token: string) {
     [token, pushActivity]
   );
 
-  return { session, transactions, categories, loading, error, categorizeTransaction, uncategorizeTransaction };
+  // Flag de reembolso (toggle do card): "é um reembolso" (entrada) ou "vou
+  // pedir reembolso" (gasto). Não mexe na categorização nem avança o card.
+  // applied:false marca o delta para o dono; pushActivity(0) grava
+  // lastActivityAt — é o que faz o auto-apply do dono processar sessões onde
+  // a esposa SÓ marcou flags (contador de categorizadas continua correto).
+  const setReimbursementMark = useCallback(
+    async (txId: string, field: 'markReimbursement' | 'markAwaiting', value: boolean) => {
+      const txRef = doc(db, 'categorizationSessions', token, 'transactions', txId);
+      await updateDoc(txRef, { [field]: value, applied: false });
+      setTransactions((list) => list.map((t) => (t.id === txId ? { ...t, [field]: value } : t)));
+      pushActivity(0);
+    },
+    [token, pushActivity]
+  );
+
+  return { session, transactions, categories, loading, error, categorizeTransaction, uncategorizeTransaction, setReimbursementMark };
 }

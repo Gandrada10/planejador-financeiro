@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from 'react';
-import { Search, X, MessageSquare, Sparkles, Check, ChevronLeft, ChevronDown } from 'lucide-react';
+import { Search, X, MessageSquare, Sparkles, Check, ChevronLeft, ChevronDown, Clock, RefreshCcw } from 'lucide-react';
 import type { Category, CategorizationTransaction } from '../../types';
 import { formatBRL, formatDate, filterCategoriesByAmount } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
@@ -9,6 +9,10 @@ interface Props {
   categories: Category[];
   quickCategoryIds: string[];
   onCategorize: (categoryId: string, notes: string) => Promise<void>;
+  /** Toggle da flag de reembolso do card (grava na hora, sem avançar o card).
+   *  Gasto → markAwaiting ("vou pedir reembolso"); entrada → markReimbursement
+   *  ("é um reembolso"). */
+  onToggleMark?: (field: 'markReimbursement' | 'markAwaiting', value: boolean) => Promise<void>;
   remaining: number;
   /** Eleva o estado "salvando" (exit ~220ms + write) para o pai, que desabilita
    *  a barra de navegação e evita a corrida de double-tap (tocar categoria +
@@ -40,7 +44,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   });
 }
 
-export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, remaining, onBusyChange }: Props) {
+export function CategorizationCard({ transaction, categories, quickCategoryIds, onCategorize, onToggleMark, remaining, onBusyChange }: Props) {
   // Semeado com a observação já salva: ao revisitar um item categorizado (ou
   // reabrir o mesmo), o texto digitado antes não se perde. O card remonta por
   // key={tx.id} no pai, então isso reinicializa corretamente a cada lançamento.
@@ -64,6 +68,27 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
   const sheetTriggerRef = useRef<HTMLButtonElement>(null);
 
   const isIncome = transaction.amount >= 0;
+
+  // Toggle da flag de reembolso (não interfere na categorização): estado de
+  // escrita PRÓPRIO — não usa `saving` para não travar a grade de categorias.
+  const [markSaving, setMarkSaving] = useState(false);
+  const [markError, setMarkError] = useState<string | null>(null);
+  const markField = isIncome ? ('markReimbursement' as const) : ('markAwaiting' as const);
+  const marked = isIncome ? transaction.markReimbursement : transaction.markAwaiting;
+
+  async function handleToggleMark() {
+    if (!onToggleMark || markSaving) return;
+    haptic();
+    setMarkError(null);
+    setMarkSaving(true);
+    try {
+      await withTimeout(onToggleMark(markField, !marked), SAVE_TIMEOUT_MS);
+    } catch {
+      setMarkError('Não consegui salvar a marcação. Toque para tentar de novo.');
+    } finally {
+      setMarkSaving(false);
+    }
+  }
 
   // Categorias válidas para o sinal do valor (receita vs despesa)
   const eligible = useMemo(
@@ -302,6 +327,33 @@ export function CategorizationCard({ transaction, categories, quickCategoryIds, 
         <p className={`text-kpi font-bold tnum mt-1.5 ${isIncome ? 'text-accent-green' : 'text-accent-red'}`}>
           {formatBRL(transaction.amount)}
         </p>
+
+        {/* Flag de reembolso — toggle discreto: marca/desmarca na hora, SEM
+            avançar o card e SEM exigir categoria. A associação com a despesa
+            fica com o dono, no computador. */}
+        {onToggleMark && (
+          <div className="mt-2.5">
+            <button
+              onClick={handleToggleMark}
+              disabled={markSaving}
+              aria-pressed={marked}
+              className={`min-h-[44px] inline-flex items-center gap-2 px-4 py-2 rounded-full border text-body font-semibold active:scale-[0.98] transition disabled:opacity-50 ${
+                marked
+                  ? 'border-accent bg-accent/15 text-text-primary'
+                  : 'border-border bg-bg-secondary text-text-secondary'
+              }`}
+            >
+              {isIncome
+                ? <RefreshCcw size={15} className={marked ? 'text-accent' : undefined} />
+                : <Clock size={15} className={marked ? 'text-accent' : undefined} />}
+              <span>{isIncome ? 'É um reembolso' : 'Vou pedir reembolso'}</span>
+              {marked && <Check size={15} className="text-accent" />}
+            </button>
+            {markError && (
+              <p role="alert" className="mt-1.5 text-caption text-accent-red leading-snug">{markError}</p>
+            )}
+          </div>
+        )}
 
         {/* Sugestão mágica — 1 toque */}
         {suggestion ? (

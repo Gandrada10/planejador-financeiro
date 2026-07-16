@@ -12,7 +12,7 @@ function firstName(name: string): string {
 
 export function CategorizationPage() {
   const { token } = useParams<{ token: string }>();
-  const { session, transactions, categories, loading, error, categorizeTransaction, uncategorizeTransaction } =
+  const { session, transactions, categories, loading, error, categorizeTransaction, uncategorizeTransaction, setReimbursementMark } =
     usePublicCategorizationSession(token || '');
   const [cursor, setCursor] = useState(0);
   // navIndex sobrepõe o ponteiro de pendências quando o usuário navega à mão
@@ -426,6 +426,7 @@ export function CategorizationPage() {
             categories={categories}
             quickCategoryIds={session.topCategoryIds}
             onCategorize={handleCategorize}
+            onToggleMark={(field, value) => setReimbursementMark(currentTx.id, field, value)}
             onBusyChange={handleBusyChange}
             remaining={uncategorized.length}
           />
