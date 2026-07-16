@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react';
 import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
-import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput, isReimbursementTx } from '../../lib/utils';
+import { reimbursementSummaryByExpense, toCents, unallocatedReimbursementAmount } from '../../lib/accounting';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 import { BatchEditModal } from '../shared/BatchEditModal';
@@ -30,6 +31,53 @@ interface Props {
 
 export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [], allTransactions }: Props) {
   const [reimbTx, setReimbTx] = useState<Transaction | null>(null);
+
+  // Visão reversa dos reembolsos (quanto cada despesa já teve abatido) — para
+  // os chips "R$X de R$Y", o estado "reembolsada" do relógio e o alvo do chip
+  // do reembolso. Sempre sobre a base COMPLETA, não a lista filtrada.
+  const reimbBase = allTransactions ?? transactions;
+  const reimbSummary = useMemo(() => reimbursementSummaryByExpense(reimbBase), [reimbBase]);
+  const reimbBaseById = useMemo(() => new Map(reimbBase.map((x) => [x.id, x])), [reimbBase]);
+
+  /** Chips de reembolso na célula de descrição (despesa abatida OU reembolso alocado). */
+  function reimbChips(t: Transaction): React.ReactNode {
+    const rs = t.amount < 0 ? reimbSummary.get(t.id) : undefined;
+    if (rs) {
+      const totalC = toCents(Math.abs(t.amount));
+      const allocC = toCents(rs.allocated);
+      const cls = allocC > totalC
+        ? 'text-accent-red bg-accent-red/10'
+        : allocC === totalC
+          ? 'text-accent-green bg-accent-green/10'
+          : 'text-amber-400 bg-amber-400/10';
+      const srcList = rs.sources.map((s) => `${s.description} (${formatBRL(s.amount)})`).join(', ');
+      return (
+        <span
+          className={`flex-shrink-0 px-1 rounded text-[10px] tnum leading-4 whitespace-nowrap ${cls}`}
+          title={`Reembolsos abatidos nesta despesa: ${srcList}${allocC > totalC ? ' — EXCEDE o valor da despesa' : ''}`}
+        >
+          ↩ {formatBRL(rs.allocated)} de {formatBRL(Math.abs(t.amount))}
+        </span>
+      );
+    }
+    if (isReimbursementTx(t) && (t.reimbursementAllocations?.length ?? 0) > 0) {
+      const allocs = t.reimbursementAllocations!;
+      const partial = toCents(unallocatedReimbursementAmount(t)) > 0;
+      const label = allocs.length === 1
+        ? (reimbBaseById.get(allocs[0].expenseId)?.description ?? 'despesa apagada')
+        : `${allocs.length} despesas`;
+      return (
+        <button
+          onClick={(e) => { e.stopPropagation(); setReimbTx(t); }}
+          className="flex-shrink-0 px-1 rounded text-[10px] leading-4 max-w-[160px] truncate bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+          title="Este reembolso abate a(s) despesa(s) indicada(s) — clique para editar as alocações"
+        >
+          ↩ abate: {label}{partial ? ' · parcial' : ''}
+        </button>
+      );
+    }
+    return null;
+  }
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
   const [editValue, setEditValue] = useState('');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -423,6 +471,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         note={t.notes || ''}
                         onSave={(note) => onUpdate(t.id, { notes: note })}
                       />
+                      {reimbChips(t)}
                     </div>
                   )}
                 </td>
@@ -475,7 +524,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         abatida — define categoria e ancora no mês da compra. */}
                     {t.amount > 0 && (
                       <button
-                        title={t.isReimbursement ? 'Reembolso — clique para editar/desvincular' : 'Marcar como reembolso (abate uma despesa)'}
+                        title={t.isReimbursement ? 'Reembolso — clique para editar as alocações' : 'Marcar como reembolso (abate uma ou mais despesas)'}
                         onClick={() => setReimbTx(t)}
                         className={`flex-shrink-0 transition-colors ${
                           t.isReimbursement
@@ -486,28 +535,40 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         <RefreshCcw size={12} />
                       </button>
                     )}
-                    {/* Aguardando reembolso (despesa): sinalizador visual, não
-                        altera totais; aparece nos candidatos do modal. */}
-                    {t.amount < 0 && (
-                      <button
-                        title={t.awaitingReimbursement ? 'Aguardando reembolso — clique para desmarcar' : 'Marcar: aguardando reembolso (espera receber de volta)'}
-                        onClick={() => onUpdate(t.id, { awaitingReimbursement: !t.awaitingReimbursement })}
-                        className={`flex-shrink-0 transition-colors ${
-                          t.awaitingReimbursement
-                            ? 'text-accent hover:text-accent/80'
-                            : 'text-text-secondary/60 hover:text-accent'
-                        }`}
-                      >
-                        <Clock size={12} />
-                      </button>
-                    )}
+                    {/* Aguardando reembolso (despesa): sinalizador de intenção.
+                        Quitada pelas alocações → vira check verde (continua
+                        clicável para desmarcar o aguardo). */}
+                    {t.amount < 0 && (() => {
+                      const rs = reimbSummary.get(t.id);
+                      const settled = !!t.awaitingReimbursement && !!rs && toCents(rs.allocated) >= toCents(Math.abs(t.amount));
+                      return (
+                        <button
+                          title={settled
+                            ? `Reembolsada — ${formatBRL(rs!.allocated)} recebidos (clique para desmarcar o aguardo)`
+                            : t.awaitingReimbursement
+                              ? 'Aguardando reembolso — clique para desmarcar'
+                              : 'Marcar: aguardando reembolso (espera receber de volta)'}
+                          onClick={() => onUpdate(t.id, { awaitingReimbursement: !t.awaitingReimbursement })}
+                          className={`flex-shrink-0 transition-colors ${
+                            settled
+                              ? 'text-accent-green hover:text-accent-green/80'
+                              : t.awaitingReimbursement
+                                ? 'text-accent hover:text-accent/80'
+                                : 'text-text-secondary/60 hover:text-accent'
+                          }`}
+                        >
+                          {settled ? <CheckCircle2 size={12} /> : <Clock size={12} />}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </td>
 
                 {/* Valor - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-right font-bold truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
+                  // Reembolso não é receita: cor própria (accent) em vez de verde.
+                  className={`p-2 text-right font-bold truncate overflow-hidden ${isReimbursementTx(t) ? 'text-accent' : t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
                   onClick={() => startEdit(t.id, 'amount', t.amount < 0
                     ? '-' + applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
                     : applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))

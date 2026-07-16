@@ -1,6 +1,7 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil, RefreshCcw, Clock, Search, X } from 'lucide-react';
 import { useState, useMemo } from 'react';
-import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask, cn, isIncomeAmount, isExpenseAmount, amountMatchesQuery, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
+import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask, cn, isIncomeAmount, isExpenseAmount, isReimbursementTx, amountMatchesQuery, countsInTotals, getExcludedFromTotalsIds } from '../../lib/utils';
+import { reimbursementSummaryByExpense, toCents, unallocatedReimbursementAmount } from '../../lib/accounting';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
@@ -66,6 +67,53 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
   }
 
   const allTransactions = useMemo(() => groups.flatMap((g) => g.transactions), [groups]);
+
+  // Visão reversa dos reembolsos (quanto cada despesa já teve abatido) — para
+  // os chips "R$X de R$Y" e o estado "reembolsada". Sempre sobre a base
+  // COMPLETA do sistema quando disponível (everyTransaction), não só a fatura.
+  const reimbBase = everyTransaction ?? allTransactions;
+  const reimbSummary = useMemo(() => reimbursementSummaryByExpense(reimbBase), [reimbBase]);
+  const reimbBaseById = useMemo(() => new Map(reimbBase.map((x) => [x.id, x])), [reimbBase]);
+
+  /** Chip de reembolso da linha (despesa abatida OU reembolso alocado). */
+  function reimbChip(t: Transaction): React.ReactNode {
+    const rs = t.amount < 0 ? reimbSummary.get(t.id) : undefined;
+    if (rs) {
+      const totalC = toCents(Math.abs(t.amount));
+      const allocC = toCents(rs.allocated);
+      const cls = allocC > totalC
+        ? 'text-accent-red bg-accent-red/10'
+        : allocC === totalC
+          ? 'text-accent-green bg-accent-green/10'
+          : 'text-amber-400 bg-amber-400/10';
+      const srcList = rs.sources.map((x) => `${x.description} (${formatBRL(x.amount)})`).join(', ');
+      return (
+        <span
+          className={`flex-shrink-0 px-1 rounded text-[10px] tnum leading-4 whitespace-nowrap ${cls}`}
+          title={`Reembolsos abatidos nesta despesa: ${srcList}${allocC > totalC ? ' — EXCEDE o valor da despesa' : ''}`}
+        >
+          ↩ {formatBRL(rs.allocated)} de {formatBRL(Math.abs(t.amount))}
+        </span>
+      );
+    }
+    if (isReimbursementTx(t) && (t.reimbursementAllocations?.length ?? 0) > 0) {
+      const allocs = t.reimbursementAllocations!;
+      const partial = toCents(unallocatedReimbursementAmount(t)) > 0;
+      const label = allocs.length === 1
+        ? (reimbBaseById.get(allocs[0].expenseId)?.description ?? 'despesa apagada')
+        : `${allocs.length} despesas`;
+      return (
+        <button
+          onClick={(e) => { e.stopPropagation(); setReimbTx(t); }}
+          className="flex-shrink-0 px-1 rounded text-[10px] leading-4 max-w-[140px] truncate bg-accent/10 text-accent hover:bg-accent/20 transition-colors"
+          title="Este reembolso abate a(s) despesa(s) indicada(s) — clique para editar as alocações"
+        >
+          ↩ abate: {label}{partial ? ' · parcial' : ''}
+        </button>
+      );
+    }
+    return null;
+  }
 
   // Ids fora-dos-totais ("Transferência") — mesma regra da CreditCardPage, para
   // recompor o total de cada grupo a partir das linhas VISÍVEIS quando um filtro
@@ -579,6 +627,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                                   note={t.notes || ''}
                                   onSave={(note) => onUpdate && onUpdate(t.id, { notes: note })}
                                 />
+                                {reimbChip(t)}
                               </div>
                               {t.categoryId && (
                                 <p className="text-xs text-text-secondary truncate">
@@ -633,7 +682,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                             {/* Reembolso (receita): abre modal p/ vincular. */}
                             {t.amount > 0 && (
                               <button
-                                title={t.isReimbursement ? 'Reembolso — clique para editar/desvincular' : 'Marcar como reembolso (abate uma despesa)'}
+                                title={t.isReimbursement ? 'Reembolso — clique para editar as alocações' : 'Marcar como reembolso (abate uma ou mais despesas)'}
                                 onClick={() => setReimbTx(t)}
                                 className={`flex-shrink-0 transition-colors ${
                                   t.isReimbursement
@@ -644,27 +693,39 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                                 <RefreshCcw size={12} />
                               </button>
                             )}
-                            {/* Aguardando reembolso (despesa): sinalizador. */}
-                            {t.amount < 0 && onUpdate && (
-                              <button
-                                title={t.awaitingReimbursement ? 'Aguardando reembolso — clique para desmarcar' : 'Marcar: aguardando reembolso (espera receber de volta)'}
-                                onClick={() => onUpdate(t.id, { awaitingReimbursement: !t.awaitingReimbursement })}
-                                className={`flex-shrink-0 transition-colors ${
-                                  t.awaitingReimbursement
-                                    ? 'text-accent hover:text-accent/80'
-                                    : 'text-text-secondary/60 hover:text-accent'
-                                }`}
-                              >
-                                <Clock size={12} />
-                              </button>
-                            )}
+                            {/* Aguardando reembolso (despesa): sinalizador de
+                                intenção; quitada pelas alocações vira check verde
+                                (continua clicável para desmarcar). */}
+                            {t.amount < 0 && onUpdate && (() => {
+                              const rs = reimbSummary.get(t.id);
+                              const settled = !!t.awaitingReimbursement && !!rs && toCents(rs.allocated) >= toCents(Math.abs(t.amount));
+                              return (
+                                <button
+                                  title={settled
+                                    ? `Reembolsada — ${formatBRL(rs!.allocated)} recebidos (clique para desmarcar o aguardo)`
+                                    : t.awaitingReimbursement
+                                      ? 'Aguardando reembolso — clique para desmarcar'
+                                      : 'Marcar: aguardando reembolso (espera receber de volta)'}
+                                  onClick={() => onUpdate(t.id, { awaitingReimbursement: !t.awaitingReimbursement })}
+                                  className={`flex-shrink-0 transition-colors ${
+                                    settled
+                                      ? 'text-accent-green hover:text-accent-green/80'
+                                      : t.awaitingReimbursement
+                                        ? 'text-accent hover:text-accent/80'
+                                        : 'text-text-secondary/60 hover:text-accent'
+                                  }`}
+                                >
+                                  {settled ? <CheckCircle2 size={12} /> : <Clock size={12} />}
+                                </button>
+                              );
+                            })()}
                           </div>
                         ) : null}
 
                         {/* Amount - editable */}
                         <div
                           data-tab-cell
-                          className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
+                          className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${isReimbursementTx(t) ? 'text-accent' : t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
                           // Pré-preenche já no formato mascarado pt-BR: toFixed(2)
                           // garante 2 casas p/ o applyMoneyMask (que lê os dígitos
                           // como centavos) reconstruir certo — -8022.48 → "-8.022,48",
