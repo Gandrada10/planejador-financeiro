@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { Upload, Plus, Search, Send, CheckCircle, X, ChevronDown, History, Clock, RotateCcw } from 'lucide-react';
+import { Upload, Plus, Search, Send, CheckCircle, X, ChevronDown, History, Clock, RotateCcw, RefreshCcw } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -14,7 +14,9 @@ import { ImportModal } from './ImportModal';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
-import { getMonthYear, getMonthLabel, cn, countsInTotals, isIncomeAmount, isExpenseAmount, amountMatchesQuery } from '../../lib/utils';
+import { ReimbursementLinkModal } from '../shared/ReimbursementLinkModal';
+import { getMonthYear, getMonthLabel, formatBRL, formatDate, cn, countsInTotals, isIncomeAmount, isExpenseAmount, isReimbursementTx, amountMatchesQuery } from '../../lib/utils';
+import { reimbursementSummaryByExpense, expenseRemaining, unallocatedReimbursementAmount, toCents } from '../../lib/accounting';
 import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
@@ -36,7 +38,10 @@ export function TransactionsPage() {
   const [filterInstallment, setFilterInstallment] = useState('all');
   const [filterType, setFilterType] = useState<'all' | 'income' | 'expense'>('all');
   const [filterReconciled, setFilterReconciled] = useState('all');
+  const [filterReimb, setFilterReimb] = useState<'all' | 'awaiting' | 'reimbursements' | 'unassociated'>('all');
   const [searchText, setSearchText] = useState('');
+  const [reimbPanelOpen, setReimbPanelOpen] = useState(false);
+  const [reimbTx, setReimbTx] = useState<Transaction | null>(null);
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
   const [showHistoryList, setShowHistoryList] = useState(false);
@@ -117,6 +122,27 @@ export function TransactionsPage() {
     return Array.from(set).filter(Boolean).sort();
   }, [transactions, titularNames, familyMemberNames]);
 
+  // Pendências de reembolso (base COMPLETA, ignora filtros): despesas marcadas
+  // "aguardando" que ainda têm saldo a receber, e reembolsos com valor ainda
+  // não distribuído entre despesas. Alimentam o painel "Reembolsos em aberto"
+  // e o filtro dedicado.
+  const reimbSummary = useMemo(() => reimbursementSummaryByExpense(transactions), [transactions]);
+  const awaitingOpen = useMemo(
+    () =>
+      transactions
+        .filter((t) => t.amount < 0 && t.awaitingReimbursement && expenseRemaining(t, reimbSummary) > 0)
+        .sort((a, b) => b.date.getTime() - a.date.getTime()),
+    [transactions, reimbSummary]
+  );
+  const unassociatedReimbs = useMemo(
+    () =>
+      transactions
+        .filter((t) => isReimbursementTx(t) && toCents(unallocatedReimbursementAmount(t)) > 0)
+        .sort((a, b) => b.date.getTime() - a.date.getTime()),
+    [transactions]
+  );
+  const reimbOpenCount = awaitingOpen.length + unassociatedReimbs.length;
+
   const filtered = useMemo(() => {
     let list = transactions;
     if (filterMonth !== 'all') {
@@ -170,6 +196,16 @@ export function TransactionsPage() {
     } else if (filterType === 'expense') {
       list = list.filter((t) => isExpenseAmount(t));
     }
+    // Filtro de reembolsos: "aguardando" = despesas marcadas; "só reembolsos" =
+    // entradas marcadas como reembolso; "não associados" = reembolsos com valor
+    // ainda não distribuído entre despesas (parcial conta).
+    if (filterReimb === 'awaiting') {
+      list = list.filter((t) => !!t.awaitingReimbursement);
+    } else if (filterReimb === 'reimbursements') {
+      list = list.filter((t) => isReimbursementTx(t));
+    } else if (filterReimb === 'unassociated') {
+      list = list.filter((t) => isReimbursementTx(t) && toCents(unallocatedReimbursementAmount(t)) > 0);
+    }
     if (searchText) {
       const q = searchText.toLowerCase();
       list = list.filter(
@@ -182,7 +218,7 @@ export function TransactionsPage() {
       );
     }
     return list;
-  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterType, filterReconciled, searchText]);
+  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterType, filterReconciled, filterReimb, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -311,6 +347,7 @@ export function TransactionsPage() {
     titular: filterTitular !== 'all',
     installment: filterInstallment !== 'all',
     type: filterType !== 'all',
+    reimb: filterReimb !== 'all',
     search: searchText.trim() !== '',
   };
   const activeCount =
@@ -324,6 +361,7 @@ export function TransactionsPage() {
     setFilterInstallment('all');
     setFilterType('all');
     setFilterReconciled('all');
+    setFilterReimb('all');
     setSearchText('');
   };
 
@@ -437,6 +475,17 @@ export function TransactionsPage() {
           <option value="all">Todos os tipos</option>
           <option value="installments">Parcelados</option>
           <option value="single">Avulsos</option>
+        </select>
+        <select
+          value={filterReimb}
+          onChange={(e) => setFilterReimb(e.target.value as typeof filterReimb)}
+          className={cn(baseFieldClass, isActive.reimb ? activeFieldClass : inactiveFieldClass)}
+          title="Filtrar lançamentos ligados a reembolso"
+        >
+          <option value="all">Reembolsos: todos</option>
+          <option value="awaiting">Aguardando reembolso</option>
+          <option value="reimbursements">Só reembolsos</option>
+          <option value="unassociated">Reembolsos não associados</option>
         </select>
         <div className="relative flex-1 min-w-[140px]">
           <Search size={14} className={cn('absolute left-2.5 top-2.5', isActive.search ? 'text-accent' : 'text-text-secondary')} />
@@ -614,6 +663,109 @@ export function TransactionsPage() {
         </div>
       )}
 
+      {/* Painel "Reembolsos em aberto": pendências dos DOIS lados — despesas
+          aguardando (com saldo a receber) e reembolsos ainda não associados.
+          Some sozinho quando tudo está resolvido; recolhido por padrão. */}
+      {reimbOpenCount > 0 && (
+        <div className="bg-bg-card border border-border rounded-lg">
+          <button
+            onClick={() => setReimbPanelOpen((v) => !v)}
+            className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-bg-secondary/30 transition-colors"
+          >
+            <RefreshCcw size={14} className="text-accent flex-shrink-0" />
+            <span className="text-xs font-bold text-text-primary">Reembolsos em aberto ({reimbOpenCount})</span>
+            <span className="text-[10px] text-text-secondary hidden sm:inline">
+              {awaitingOpen.length > 0 && `${awaitingOpen.length} despesa${awaitingOpen.length !== 1 ? 's' : ''} aguardando`}
+              {awaitingOpen.length > 0 && unassociatedReimbs.length > 0 && ' · '}
+              {unassociatedReimbs.length > 0 && `${unassociatedReimbs.length} reembolso${unassociatedReimbs.length !== 1 ? 's' : ''} para associar`}
+            </span>
+            <ChevronDown size={14} className={cn('ml-auto text-text-secondary transition-transform', reimbPanelOpen && 'rotate-180')} />
+          </button>
+          {reimbPanelOpen && (
+            <div className="border-t border-border grid grid-cols-1 md:grid-cols-2">
+              <div className="md:border-r border-border">
+                <div className="flex items-center justify-between px-4 py-1.5 bg-bg-secondary/50">
+                  <span className="text-[10px] uppercase tracking-wider text-text-secondary">Despesas aguardando reembolso</span>
+                  {awaitingOpen.length > 0 && (
+                    <button
+                      onClick={() => { setFilterReimb('awaiting'); setFilterMonth('all'); }}
+                      className="text-[10px] text-accent hover:underline"
+                    >
+                      ver na tabela
+                    </button>
+                  )}
+                </div>
+                {awaitingOpen.length === 0 ? (
+                  <p className="px-4 py-3 text-[11px] text-text-secondary">Nenhuma.</p>
+                ) : (
+                  awaitingOpen.slice(0, 6).map((t) => {
+                    const rest = expenseRemaining(t, reimbSummary);
+                    const partial = rest < Math.abs(t.amount);
+                    return (
+                      <div key={t.id} className="flex items-center gap-3 px-4 py-2 border-t border-border/20 text-xs">
+                        <span className="text-text-secondary text-[10px] tabular-nums w-[62px] flex-shrink-0">{formatDate(t.date)}</span>
+                        <span className="flex-1 min-w-0 truncate text-text-primary">{t.description}</span>
+                        <span
+                          className={`flex-shrink-0 tabular-nums text-[10px] px-1 rounded ${partial ? 'text-amber-400 bg-amber-400/10' : 'text-text-secondary'}`}
+                          title={partial ? 'Parte já foi reembolsada — falta este valor' : 'Nada recebido ainda'}
+                        >
+                          falta {formatBRL(rest)}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+                {awaitingOpen.length > 6 && (
+                  <p className="px-4 py-2 text-[10px] text-text-secondary border-t border-border/20">
+                    + {awaitingOpen.length - 6} — use "ver na tabela"
+                  </p>
+                )}
+              </div>
+              <div>
+                <div className="flex items-center justify-between px-4 py-1.5 bg-bg-secondary/50">
+                  <span className="text-[10px] uppercase tracking-wider text-text-secondary">Reembolsos para associar</span>
+                  {unassociatedReimbs.length > 0 && (
+                    <button
+                      onClick={() => { setFilterReimb('unassociated'); setFilterMonth('all'); }}
+                      className="text-[10px] text-accent hover:underline"
+                    >
+                      ver na tabela
+                    </button>
+                  )}
+                </div>
+                {unassociatedReimbs.length === 0 ? (
+                  <p className="px-4 py-3 text-[11px] text-text-secondary">Nenhum.</p>
+                ) : (
+                  unassociatedReimbs.slice(0, 6).map((t) => {
+                    const unalloc = Math.max(0, unallocatedReimbursementAmount(t));
+                    const partial = (t.reimbursementAllocations?.length ?? 0) > 0;
+                    return (
+                      <button
+                        key={t.id}
+                        onClick={() => setReimbTx(t)}
+                        className="w-full flex items-center gap-3 px-4 py-2 border-t border-border/20 text-xs text-left hover:bg-bg-secondary/40 transition-colors"
+                        title="Clique para associar às despesas que ele abate"
+                      >
+                        <span className="text-text-secondary text-[10px] tabular-nums w-[62px] flex-shrink-0">{formatDate(t.date)}</span>
+                        <span className="flex-1 min-w-0 truncate text-text-primary">{t.description}</span>
+                        <span className="flex-shrink-0 tabular-nums text-[10px] px-1 rounded text-accent bg-accent/10">
+                          {partial ? `sobra ${formatBRL(unalloc)}` : formatBRL(t.amount)}
+                        </span>
+                      </button>
+                    );
+                  })
+                )}
+                {unassociatedReimbs.length > 6 && (
+                  <p className="px-4 py-2 text-[10px] text-text-secondary border-t border-border/20">
+                    + {unassociatedReimbs.length - 6} — use "ver na tabela"
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <TransactionTable
         transactions={filtered}
         allTransactions={transactions}
@@ -673,6 +825,16 @@ export function TransactionsPage() {
           session={detailSession}
           categories={categories}
           onClose={() => setDetailSession(null)}
+        />
+      )}
+      {/* Editor de alocações aberto a partir do painel de reembolsos. */}
+      {reimbTx && (
+        <ReimbursementLinkModal
+          transaction={reimbTx}
+          allTransactions={transactions}
+          categories={categories}
+          onUpdate={updateTransaction}
+          onClose={() => setReimbTx(null)}
         />
       )}
     </div>
