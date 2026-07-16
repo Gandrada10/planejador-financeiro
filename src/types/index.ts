@@ -88,10 +88,6 @@ export interface Transaction {
    *  restaurar a categoria ao desfazer um vínculo antigo; escritas novas não
    *  gravam este campo. */
   reimbursementPrevCategoryId?: string | null;
-  /** NÃO persistido (derivado em `useTransactions`). Data usada nos TOTAIS:
-   *  para reembolso vinculado é a data da despesa abatida; senão a própria
-   *  `date`. Use via `accountingDate(t)`; nunca para exibir/ordenar. */
-  effectiveDate?: Date;
   tags: string[];
   notes: string;
   importBatch: string | null;

@@ -225,9 +225,11 @@ export function countsInTotals(
  * `+amount` (positivo) a um bucket de despesa (negativo) aproxima do zero.
  *
  * Use SEMPRE estes helpers em vez de `t.amount > 0` / `t.amount < 0` em splits
- * de total — é o único ponto onde a regra do reembolso vive. Compõem com
- * `countsInTotals` (transferências continuam fora de tudo): filtre por
- * `countsInTotals` primeiro, depois classifique por estes.
+ * de total — junto com `lib/accounting.ts` (ancoragem de reembolso alocado no
+ * mês/categoria da despesa-alvo), é onde a regra do reembolso vive. Aceitam
+ * tanto Transaction quanto AccountingEntry. Compõem com `countsInTotals`
+ * (transferências continuam fora de tudo): filtre por `countsInTotals`
+ * primeiro, depois classifique por estes.
  *
  * Valor 0 (ou reembolso com valor não-positivo, incoerente) não entra em
  * nenhum dos dois — mesmo comportamento do split por sinal anterior.
@@ -240,19 +242,6 @@ export function isIncomeAmount(t: { amount: number; isReimbursement?: boolean })
 }
 export function isExpenseAmount(t: { amount: number; isReimbursement?: boolean }): boolean {
   return t.amount < 0 || isReimbursementTx(t);
-}
-
-/**
- * Data contábil de uma transação — a que os TOTAIS por mês devem usar. Para um
- * reembolso vinculado a uma despesa (`reimbursementFor`), o `useTransactions`
- * preenche `effectiveDate` com a data da despesa abatida, ancorando o
- * abatimento no MÊS DA COMPRA (Opção 1). Sem vínculo, é a própria `date`.
- *
- * Use SÓ para agrupar/filtrar total por mês. Para exibir ou ordenar uma
- * transação individual, use sempre `t.date` (a lista mostra o mês real).
- */
-export function accountingDate(t: { date: Date; effectiveDate?: Date }): Date {
-  return t.effectiveDate ?? t.date;
 }
 
 /**

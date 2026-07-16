@@ -15,7 +15,7 @@ interface Props {
 
 // Vincular um reembolso a uma despesa: define a categoria (a do gasto abatido)
 // E ancora o abatimento no mês da despesa (Opção 1). Sem vínculo, o reembolso
-// abate no próprio mês (comportamento simples). Ver `accountingDate`.
+// abate no próprio mês (comportamento simples). Ver `lib/accounting.ts`.
 export function ReimbursementLinkModal({ transaction, allTransactions, categories, onUpdate, onClose }: Props) {
   const [search, setSearch] = useState('');
   const [monthFilter, setMonthFilter] = useState('');
