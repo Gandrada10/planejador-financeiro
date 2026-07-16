@@ -72,7 +72,26 @@ function txSeed() {
     suggestedCategoryId: 'cat-food',
     suggestionReason: 'Regra automatica',
     applied: false,
+    markReimbursement: false,
+    markAwaiting: false,
   };
+}
+
+/** Entrada (amount positivo) — para as flags que dependem do sinal. */
+function incomeTxSeed() {
+  return Object.assign(txSeed(), {
+    transactionId: 't2',
+    description: 'PIX RECEBIDO PLANO SAUDE',
+    amount: 50,
+  });
+}
+
+/** Doc LEGADO: criado antes das flags existirem (sem os dois campos). */
+function legacyTxSeed() {
+  const seed = Object.assign(txSeed(), { transactionId: 't3' });
+  delete seed.markReimbursement;
+  delete seed.markAwaiting;
+  return seed;
 }
 
 before(async () => {
@@ -92,6 +111,8 @@ before(async () => {
     for (const [tok, exp] of [[TOK_VALID, future()], [TOK_EXPIRED, past()]]) {
       await setDoc(doc(db, 'categorizationSessions', tok), sessionSeed(exp));
       await setDoc(doc(db, 'categorizationSessions', tok, 'transactions', 't1'), txSeed());
+      await setDoc(doc(db, 'categorizationSessions', tok, 'transactions', 't2'), incomeTxSeed());
+      await setDoc(doc(db, 'categorizationSessions', tok, 'transactions', 't3'), legacyTxSeed());
       await setDoc(doc(db, 'categorizationSessions', tok, 'categories', 'cat-food'), {
         name: 'Alimentacao', icon: 'utensils', color: '#3987e5', type: 'despesa', parentId: null,
       });
@@ -347,4 +368,77 @@ test('anonimo NAO grava orphaned (fora da allow-list publica)', async () => {
   await assertFails(updateDoc(
     doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't1'),
     { orphaned: true }));
+});
+
+// ---------------------------------------------------------------------------
+// 8. Flags de reembolso na sessao (markReimbursement / markAwaiting):
+//    tipo bool + sinal do amount (gasto ↔ markAwaiting; entrada ↔
+//    markReimbursement) + compat com docs legados sem os campos.
+// ---------------------------------------------------------------------------
+
+test('anonimo marca "vou pedir reembolso" (markAwaiting) num GASTO', async () => {
+  await assertSucceeds(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't1'),
+    { markAwaiting: true, applied: false }));
+});
+
+test('anonimo desmarca markAwaiting (toggle liga/desliga)', async () => {
+  await assertSucceeds(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't1'),
+    { markAwaiting: false, applied: false }));
+});
+
+test('anonimo marca "e um reembolso" (markReimbursement) numa ENTRADA', async () => {
+  await assertSucceeds(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't2'),
+    { markReimbursement: true, applied: false }));
+});
+
+test('anonimo NAO marca markReimbursement em GASTO (sinal errado)', async () => {
+  await assertFails(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't1'),
+    { markReimbursement: true, applied: false }));
+});
+
+test('anonimo NAO marca markAwaiting em ENTRADA (sinal errado)', async () => {
+  await assertFails(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't2'),
+    { markAwaiting: true, applied: false }));
+});
+
+test('anonimo NAO grava flag de tipo invalido (string, numero)', async () => {
+  const t1 = doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't1');
+  const t2 = doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't2');
+  await assertFails(updateDoc(t1, { markAwaiting: 'sim', applied: false }));
+  await assertFails(updateDoc(t2, { markReimbursement: 1, applied: false }));
+});
+
+test('anonimo NAO combina flag com applied:true (nao pula o apply)', async () => {
+  await assertFails(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't1'),
+    { markAwaiting: true, applied: true }));
+});
+
+test('anonimo NAO marca flag em sessao EXPIRADA', async () => {
+  await assertFails(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_EXPIRED, 'transactions', 't1'),
+    { markAwaiting: true, applied: false }));
+});
+
+test('doc LEGADO (sem flags): anonimo ainda categoriza normalmente', async () => {
+  await assertSucceeds(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't3'),
+    { categoryId: 'cat-food', notes: 'legado ok', applied: false }));
+});
+
+test('doc LEGADO: anonimo adiciona a flag num gasto (campo novo no merge)', async () => {
+  await assertSucceeds(updateDoc(
+    doc(anon(), 'categorizationSessions', TOK_VALID, 'transactions', 't3'),
+    { markAwaiting: true, applied: false }));
+});
+
+test('dono grava flags livremente (nao passa pela allow-list publica)', async () => {
+  await assertSucceeds(updateDoc(
+    doc(owner(), 'categorizationSessions', TOK_VALID, 'transactions', 't2'),
+    { markReimbursement: true }));
 });

@@ -85,24 +85,42 @@ service cloud.firestore {
       // applyAllPendingSessions varre sessões 'active' já expiradas).
       // O dono cria/apaga/edita tudo (create/delete presos ao dono da
       // sessão-pai — conta estranha não forja transação em sessão alheia).
-      // O público só grava categoryId/notes validados e applied=false:
+      // O público só grava categoryId/notes/flags validados e applied=false:
       // categorizar/desfazer sempre escreve applied:false no app; applied=true
       // é exclusivo do apply do dono — quem tem o token não consegue fazer o
       // apply pular itens. O dono também marca `applied:true, orphaned:true`
       // nas transações reais já excluídas (C3 — consome o delta órfão);
       // `orphaned` fica FORA da allow-list pública.
+      //
+      // Flags de reembolso (markReimbursement / markAwaiting): validadas por
+      // TIPO e por SINAL — `amount` está fora da allow-list pública (imutável
+      // pelo token), então `resource.data.amount` é confiável: "é reembolso"
+      // só em entrada (amount > 0), "vou pedir reembolso" só em gasto
+      // (amount < 0). O padrão `!('x' in ...)` mantém sessões LEGADAS (docs
+      // criados antes das flags existirem) funcionando: a validação só roda
+      // quando o campo existe no doc MESCLADO. Com o campo já true, o
+      // invariante de sinal se mantém por construção (só entrou com o sinal
+      // certo e o amount não muda).
       match /transactions/{txId} {
         allow read: if isSessionOwner(token) || sessionNotExpired(token);
         allow create, delete: if isSessionOwner(token);
         allow update: if isSessionOwner(token)
-          || (changedOnly(['categoryId', 'notes', 'applied'])
+          || (changedOnly(['categoryId', 'notes', 'applied', 'markReimbursement', 'markAwaiting'])
               && sessionNotExpired(token)
               && (request.resource.data.categoryId == null
                   || (request.resource.data.categoryId is string
                       && request.resource.data.categoryId.size() <= 128))
               && request.resource.data.notes is string
               && request.resource.data.notes.size() <= 500
-              && request.resource.data.applied == false);
+              && request.resource.data.applied == false
+              && (!('markReimbursement' in request.resource.data)
+                  || (request.resource.data.markReimbursement is bool
+                      && (request.resource.data.markReimbursement == false
+                          || resource.data.amount > 0)))
+              && (!('markAwaiting' in request.resource.data)
+                  || (request.resource.data.markAwaiting is bool
+                      && (request.resource.data.markAwaiting == false
+                          || resource.data.amount < 0))));
       }
     }
   }
