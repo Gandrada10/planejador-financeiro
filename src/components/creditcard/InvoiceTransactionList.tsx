@@ -103,26 +103,25 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
     [allTransactions]
   );
 
-  // Quantos lançamentos aparecem após tipo/busca (ignorando o toggle pendentes,
-  // que tem seu próprio contador) — para mostrar "X de Y" quando filtrado.
-  const filteredCount = useMemo(() => {
-    const q = searchText.trim().toLowerCase();
-    if (filterType === 'all' && !q) return totalTransactions;
-    return allTransactions.filter((t) => {
-      if (filterType === 'income' && !isIncomeAmount(t)) return false;
-      if (filterType === 'expense' && !isExpenseAmount(t)) return false;
-      if (q) {
-        return (
-          t.description.toLowerCase().includes(q) ||
-          (t.notes || '').toLowerCase().includes(q) ||
-          amountMatchesQuery(t.amount, searchText)
-        );
-      }
-      return true;
-    }).length;
-  }, [allTransactions, filterType, searchText, totalTransactions]);
+  // Nº de lançamentos realmente visíveis após TODOS os filtros (tipo + busca +
+  // pendentes) — para mostrar "X de Y" quando algo foi filtrado.
+  const visibleCount = useMemo(
+    () => displayGroups.reduce((s, g) => s + g.transactions.length, 0),
+    [displayGroups]
+  );
 
-  const filtersActive = filterType !== 'all' || searchText.trim() !== '';
+  // Quantos filtros estão ativos agora (tipo, busca, pendentes) — governa o
+  // botão "Limpar filtros (N)", que zera todos de uma vez.
+  const activeFilterCount =
+    (filterType !== 'all' ? 1 : 0) +
+    (searchText.trim() !== '' ? 1 : 0) +
+    (filterPending ? 1 : 0);
+
+  function clearAllFilters() {
+    setFilterType('all');
+    setSearchText('');
+    setFilterPending(false);
+  }
 
   function toggleGroup(titular: string) {
     const next = new Set(collapsed);
@@ -235,7 +234,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
       <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <span className="text-xs font-bold text-text-primary">
-            {filtersActive ? `${filteredCount} de ${totalTransactions}` : totalTransactions} lancamentos
+            {visibleCount !== totalTransactions ? `${visibleCount} de ${totalTransactions}` : totalTransactions} lancamentos
           </span>
           {pendingCount > 0 && (
             <button
@@ -332,12 +331,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
             )}
           />
         </div>
-        {filtersActive && (
+        {activeFilterCount > 0 && (
           <button
-            onClick={() => { setFilterType('all'); setSearchText(''); }}
-            className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent"
+            onClick={clearAllFilters}
+            className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent whitespace-nowrap"
           >
-            <X size={12} /> Limpar
+            <X size={12} /> Limpar filtros ({activeFilterCount})
           </button>
         )}
       </div>
@@ -417,7 +416,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
 
       {displayGroups.length === 0 ? (
         <div className="p-8 text-center text-text-secondary text-xs">
-          {filtersActive ? 'Nenhuma transacao para o filtro atual' : 'Nenhuma transacao neste periodo'}
+          {activeFilterCount > 0 ? 'Nenhuma transacao para o filtro atual' : 'Nenhuma transacao neste periodo'}
         </div>
       ) : (
         <div className="divide-y divide-border">
