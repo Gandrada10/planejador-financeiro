@@ -235,6 +235,50 @@ export function YoyDeviationPanel({
       },
     };
 
+    // ----- Custo de vida: despesa média MENSAL (trajetória) -----
+    // Compara a média mensal de despesas do ANO ANTERIOR (cheio) com a do ANO
+    // ATUAL considerando só os meses COMPLETOS (exclui o mês em andamento, para
+    // não diluir a média com um mês parcial). Sinaliza se o custo de vida está
+    // em trajetória de SUBIDA (pior) ou DESCIDA. Divide pelo nº de meses COM
+    // despesa de cada ano — justo quando o histórico começou no meio do ano.
+    // Difere dos 3 cards (que comparam o MESMO período YTD vs YTD): aqui a base
+    // é a média mensal do ano anterior INTEIRO.
+    // NOTA: por ora inclui TODAS as despesas; excluir supérfluos (viagens,
+    // presentes) fica para uma evolução futura ("custo de vida real").
+    const effectiveCurrMax = isMonthInProgress ? m - 1 : m;
+    let clPrevSum = 0;
+    let clCurrSum = 0;
+    const clPrevMonths = new Set<number>();
+    const clCurrMonths = new Set<number>();
+    for (const t of transactions) {
+      if (!countsInTotals(t, excludedIds)) continue;
+      if (isIncomeAmount(t)) continue; // só despesas (reembolso reduz o gasto)
+      const ad = accountingDate(t);
+      const ty = ad.getFullYear();
+      const tm = ad.getMonth() + 1;
+      const expAmt = -t.amount; // despesa como positivo; reembolso (positivo) reduz
+      if (ty === prevYear) {
+        clPrevSum += expAmt;
+        clPrevMonths.add(tm);
+      } else if (ty === y && tm <= effectiveCurrMax) {
+        clCurrSum += expAmt;
+        clCurrMonths.add(tm);
+      }
+    }
+    const clPrevN = clPrevMonths.size;
+    const clCurrN = clCurrMonths.size;
+    const clCurrAvg = clCurrN > 0 ? clCurrSum / clCurrN : 0;
+    const clPrevAvg = clPrevN > 0 ? clPrevSum / clPrevN : 0;
+    const costOfLiving = {
+      currAvg: clCurrAvg,
+      prevAvg: clPrevAvg,
+      currMonths: clCurrN,
+      prevMonths: clPrevN,
+      varianceAbs: clCurrAvg - clPrevAvg,
+      pct: computePct(clCurrAvg, clPrevAvg),
+      hasData: clPrevN > 0 && clCurrN > 0,
+    };
+
     return {
       prevYear,
       hasPrev,
@@ -243,8 +287,9 @@ export function YoyDeviationPanel({
       incomeItems,
       resultadoHelping,
       resultadoHurting,
+      costOfLiving,
     };
-  }, [transactions, categories, monthYear]);
+  }, [transactions, categories, monthYear, isMonthInProgress]);
 
   function toggle(key: string) {
     setExpanded((prev) => {
@@ -320,6 +365,41 @@ export function YoyDeviationPanel({
           onClick={() => handleSummaryClick('resultado')}
           signed
         />
+      </div>
+
+      {/* Custo de vida — despesa média MENSAL (trajetória, base = ano anterior cheio) */}
+      <div className="mx-2 mb-2 rounded-md border border-border bg-bg-secondary/20 px-3 py-2">
+        <div className="flex items-start justify-between gap-2 flex-wrap">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
+              Custo de vida · despesa média mensal
+            </p>
+            <p className="text-[10px] text-text-secondary mt-0.5 tabular-nums">
+              {currentYear}: {formatBRL(data.costOfLiving.currAvg)}/mês
+              {' · '}
+              {data.prevYear}: {data.costOfLiving.prevMonths > 0 ? `${formatBRL(data.costOfLiving.prevAvg)}/mês` : '—'}
+            </p>
+          </div>
+          {data.costOfLiving.hasData ? (() => {
+            const { color, Icon, pctText } = resolveTrend(data.costOfLiving.pct, false, true);
+            return (
+              <div className={`flex items-center gap-2 tabular-nums flex-shrink-0 self-center ${color}`}>
+                <div className="flex items-center gap-1 text-sm font-bold">
+                  <Icon size={13} />
+                  <span>{pctText}</span>
+                </div>
+                <span className="text-[11px] font-medium opacity-80 border-l border-current/20 pl-2">
+                  {data.costOfLiving.varianceAbs > 0 ? '+' : ''}{formatBRL(data.costOfLiving.varianceAbs)}/mês
+                </span>
+              </div>
+            );
+          })() : (
+            <span className="text-[10px] text-text-secondary flex-shrink-0 self-center">sem dados suficientes</span>
+          )}
+        </div>
+        <p className="text-[9px] text-text-secondary/60 mt-1.5 leading-snug">
+          Trajetória do custo de vida: média mensal do ano atual ({data.costOfLiving.currMonths} {data.costOfLiving.currMonths === 1 ? 'mês completo' : 'meses completos'}) vs média mensal do ano anterior inteiro. Inclui todas as despesas — versão futura poderá excluir supérfluos (viagens, presentes).
+        </p>
       </div>
 
       {activeGroup === 'expenses' && canExpandExpenses && (
