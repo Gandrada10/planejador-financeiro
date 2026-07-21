@@ -7,8 +7,9 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { useProjects } from '../../hooks/useProjects';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
+import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { TransactionEditModal } from '../transactions/TransactionEditModal';
-import { formatBRL, formatDate, cn } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthLabel, cn } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 /**
@@ -50,9 +51,53 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
   const { activeProjects } = useProjects();
   const { memberNames } = useFamilyMembers();
   const { titularNames } = useTitularMappings();
+  const { getClosedCycle, reopenCycle } = useBillingCycles();
 
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Transaction | null>(null);
+
+  // Mesmo invariante do resto do app (TransactionTable/InvoiceTransactionList):
+  // editar/excluir uma transação de uma fatura ENCERRADA exige reabri-la antes.
+  // O sininho reaproveita o TransactionEditModal (antes órfão), então precisa do
+  // mesmo pedágio. Notas/`noteAlert` NÃO passam pelo guard — em todo o app a
+  // edição de nota é escrita direta, sem reabrir fatura —, então "Desmarcar"
+  // segue livre; só o modal (valor/data/exclusão) é protegido.
+  function checkClosedCycle(t: Transaction | null): { cycleId: string; label: string } | null {
+    if (!t) return null;
+    const account = accounts.find((a) => a.name === t.account && a.type === 'cartao');
+    if (!account) return null;
+    const closed = getClosedCycle(account.id, t.date, t.billingMonth);
+    if (!closed) return null;
+    return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
+  }
+
+  // window.confirm é síncrono e bloqueia DENTRO do onSave/onDelete, antes de o
+  // modal chamar onClose() — então o prompt aparece com o modal ainda aberto.
+  function guardedSave(id: string, data: Partial<Transaction>) {
+    const closed = checkClosedCycle(editing);
+    if (closed) {
+      const ok = window.confirm(
+        `A fatura "${closed.label}" está encerrada.\n\nDeseja reabri-la para salvar esta edição?`
+      );
+      if (!ok) return;
+      reopenCycle(closed.cycleId).then(() => updateTransaction(id, data));
+      return;
+    }
+    updateTransaction(id, data);
+  }
+
+  function guardedDelete(id: string) {
+    const closed = checkClosedCycle(editing);
+    if (closed) {
+      const ok = window.confirm(
+        `A fatura "${closed.label}" está encerrada.\n\nDeseja reabri-la para excluir esta transação?`
+      );
+      if (!ok) return;
+      reopenCycle(closed.cycleId).then(() => deleteTransaction(id));
+      return;
+    }
+    deleteTransaction(id);
+  }
 
   // Alertas ativos: nota marcada E com texto (nota vazia nunca fica no sininho),
   // mais recentes primeiro.
@@ -201,8 +246,8 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
           accountNames={accountNames}
           titularNames={memberOptions}
           projects={activeProjects}
-          onSave={(id, data) => updateTransaction(id, data)}
-          onDelete={(id) => deleteTransaction(id)}
+          onSave={guardedSave}
+          onDelete={guardedDelete}
           onClose={() => setEditing(null)}
         />
       )}
@@ -218,12 +263,24 @@ interface BellProps {
 /** Gatilho do sininho. Só consome o contexto — nenhuma assinatura extra. */
 export function AlertBell({ collapsed = false, variant = 'sidebar' }: BellProps) {
   const { count, open } = useAlerts();
-  const badge =
-    count > 0 ? (
-      <span className="absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-0.5 flex items-center justify-center rounded-full bg-accent-red text-white text-[9px] font-bold leading-none">
+
+  // Badge de canto sobre o ícone. O `display` vem do chamador (base sem `flex`)
+  // para evitar contagem DUPLICADA: no header é sempre visível; na sidebar só
+  // aparece quando o rótulo (com o pill inline) está escondido — ou seja, no
+  // modo recolhido em telas lg. Assim nunca se vê o número duas vezes.
+  function cornerBadge(displayClass: string) {
+    if (count <= 0) return null;
+    return (
+      <span
+        className={cn(
+          'absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-0.5 items-center justify-center rounded-full bg-accent-red text-white text-[9px] font-bold leading-none',
+          displayClass
+        )}
+      >
         {count > 9 ? '9+' : count}
       </span>
-    ) : null;
+    );
+  }
 
   if (variant === 'header') {
     return (
@@ -237,7 +294,7 @@ export function AlertBell({ collapsed = false, variant = 'sidebar' }: BellProps)
         )}
       >
         <Bell size={18} />
-        {badge}
+        {cornerBadge('flex')}
       </button>
     );
   }
@@ -257,7 +314,8 @@ export function AlertBell({ collapsed = false, variant = 'sidebar' }: BellProps)
     >
       <span className="relative flex-shrink-0">
         <Bell size={16} />
-        {badge}
+        {/* Só quando o rótulo/pill está oculto (recolhido em lg) — senão duplica. */}
+        {cornerBadge(collapsed ? 'hidden lg:flex' : 'hidden')}
       </span>
       <span className={cn('flex items-center gap-2', collapsed && 'lg:hidden')}>
         Alertas
