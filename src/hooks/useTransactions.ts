@@ -52,6 +52,7 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     pluggyTransactionId: (data.pluggyTransactionId as string) || null, // legado, dados históricos
     tags: (data.tags as string[]) || [],
     notes: (data.notes as string) || '',
+    noteAlert: (data.noteAlert as boolean) || false,
     importBatch: (data.importBatch as string) || null,
     reconciled: (data.reconciled as boolean) || false,
     reconciledAt: data.reconciledAt ? (data.reconciledAt as Timestamp).toDate() : null,

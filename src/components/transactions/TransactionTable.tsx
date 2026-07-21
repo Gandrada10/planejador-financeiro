@@ -421,7 +421,8 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       <span className="truncate">{t.description}</span>
                       <NoteTag
                         note={t.notes || ''}
-                        onSave={(note) => onUpdate(t.id, { notes: note })}
+                        alert={t.noteAlert}
+                        onSave={(note, alert) => onUpdate(t.id, { notes: note, noteAlert: alert })}
                       />
                     </div>
                   )}

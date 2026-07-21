@@ -1416,7 +1416,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                           <div className="flex justify-center group">
                             <NoteTag
                               note={item.notes || ''}
-                              onSave={(note) => updateInstallmentConfig(i, { notes: note })}
+                              alert={item.noteAlert}
+                              onSave={(note, alert) => updateInstallmentConfig(i, { notes: note, noteAlert: alert })}
                             />
                           </div>
                         </td>

@@ -81,6 +81,14 @@ export interface Transaction {
   pluggyTransactionId?: string | null;
   tags: string[];
   notes: string;
+  /**
+   * Marca a `notes` como um ALERTA relevante. Quando `true` (e há texto em
+   * `notes`), a nota aparece em VERMELHO no lugar do verde tradicional e o
+   * lançamento entra na lista do sininho de alertas (barra lateral). Sai do
+   * sininho ao desmarcar (voltar a `false`) ou apagar a nota. `undefined`/
+   * ausente = nota comum (verde), sem alerta.
+   */
+  noteAlert?: boolean;
   importBatch: string | null;
   reconciled: boolean;
   reconciledAt: Date | null;
