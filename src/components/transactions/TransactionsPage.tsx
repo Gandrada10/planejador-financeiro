@@ -34,6 +34,10 @@ export function TransactionsPage() {
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterAccount, setFilterAccount] = useState('all');
   const [filterInstallment, setFilterInstallment] = useState('all');
+  // Fluxo: 'all' | 'income' (receitas) | 'expense' (despesas). Usa os mesmos
+  // predicados da linha de totais (isIncomeAmount/isExpenseAmount) para a lista
+  // filtrada bater com os valores de Receitas/Despesas exibidos.
+  const [filterFlow, setFilterFlow] = useState('all');
   const [filterReconciled, setFilterReconciled] = useState('all');
   const [searchText, setSearchText] = useState('');
   const [applyingSession, setApplyingSession] = useState<string | null>(null);
@@ -155,6 +159,11 @@ export function TransactionsPage() {
     } else if (filterInstallment === 'single') {
       list = list.filter((t) => !t.totalInstallments || t.totalInstallments < 2);
     }
+    if (filterFlow === 'income') {
+      list = list.filter((t) => isIncomeAmount(t));
+    } else if (filterFlow === 'expense') {
+      list = list.filter((t) => isExpenseAmount(t));
+    }
     if (filterReconciled === 'pending') {
       list = list.filter((t) => !t.reconciled);
     } else if (filterReconciled === 'reconciled') {
@@ -171,7 +180,7 @@ export function TransactionsPage() {
       );
     }
     return list;
-  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterReconciled, searchText]);
+  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterFlow, filterReconciled, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -299,6 +308,7 @@ export function TransactionsPage() {
     category: filterCategory !== 'all',
     titular: filterTitular !== 'all',
     installment: filterInstallment !== 'all',
+    flow: filterFlow !== 'all',
     search: searchText.trim() !== '',
   };
   const activeCount =
@@ -310,6 +320,7 @@ export function TransactionsPage() {
     setFilterCategory('all');
     setFilterTitular('all');
     setFilterInstallment('all');
+    setFilterFlow('all');
     setFilterReconciled('all');
     setSearchText('');
   };
@@ -406,6 +417,15 @@ export function TransactionsPage() {
           {allTitulars.map((t) => (
             <option key={t} value={t}>{t}</option>
           ))}
+        </select>
+        <select
+          value={filterFlow}
+          onChange={(e) => setFilterFlow(e.target.value)}
+          className={cn(baseFieldClass, isActive.flow ? activeFieldClass : inactiveFieldClass)}
+        >
+          <option value="all">Receitas e despesas</option>
+          <option value="income">Só receitas</option>
+          <option value="expense">Só despesas</option>
         </select>
         <select
           value={filterInstallment}
