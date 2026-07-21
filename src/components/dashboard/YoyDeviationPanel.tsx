@@ -272,6 +272,8 @@ export function YoyDeviationPanel({
     const costOfLiving = {
       currAvg: clCurrAvg,
       prevAvg: clPrevAvg,
+      currSum: clCurrSum,
+      prevSum: clPrevSum,
       currMonths: clCurrN,
       prevMonths: clPrevN,
       varianceAbs: clCurrAvg - clPrevAvg,
@@ -367,23 +369,17 @@ export function YoyDeviationPanel({
         />
       </div>
 
-      {/* Custo de vida — despesa média MENSAL (trajetória, base = ano anterior cheio) */}
+      {/* Custo de vida — despesa média MENSAL (trajetória). Mostra total ÷ meses
+          = média, para o cálculo ser verificável a olho. */}
       <div className="mx-2 mb-2 rounded-md border border-border bg-bg-secondary/20 px-3 py-2">
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
-              Custo de vida · despesa média mensal
-            </p>
-            <p className="text-[10px] text-text-secondary mt-0.5 tabular-nums">
-              {currentYear}: {formatBRL(data.costOfLiving.currAvg)}/mês
-              {' · '}
-              {data.prevYear}: {data.costOfLiving.prevMonths > 0 ? `${formatBRL(data.costOfLiving.prevAvg)}/mês` : '—'}
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <p className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
+            Custo de vida · despesa média mensal
+          </p>
           {data.costOfLiving.hasData ? (() => {
             const { color, Icon, pctText } = resolveTrend(data.costOfLiving.pct, false, true);
             return (
-              <div className={`flex items-center gap-2 tabular-nums flex-shrink-0 self-center ${color}`}>
+              <div className={`flex items-center gap-2 tabular-nums flex-shrink-0 ${color}`}>
                 <div className="flex items-center gap-1 text-sm font-bold">
                   <Icon size={13} />
                   <span>{pctText}</span>
@@ -394,11 +390,35 @@ export function YoyDeviationPanel({
               </div>
             );
           })() : (
-            <span className="text-[10px] text-text-secondary flex-shrink-0 self-center">sem dados suficientes</span>
+            <span className="text-[10px] text-text-secondary flex-shrink-0">sem dados suficientes</span>
           )}
         </div>
+
+        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
+          <div className="flex items-baseline justify-between gap-2 tabular-nums">
+            <span className="text-xs font-bold text-text-primary">
+              {currentYear}: {data.costOfLiving.currMonths > 0 ? `${formatBRL(data.costOfLiving.currAvg)}/mês` : '—'}
+            </span>
+            {data.costOfLiving.currMonths > 0 && (
+              <span className="text-[10px] text-text-secondary">
+                {formatBRL(data.costOfLiving.currSum)} ÷ {data.costOfLiving.currMonths} {data.costOfLiving.currMonths === 1 ? 'mês' : 'meses'}
+              </span>
+            )}
+          </div>
+          <div className="flex items-baseline justify-between gap-2 tabular-nums">
+            <span className="text-xs font-bold text-text-secondary">
+              {data.prevYear}: {data.costOfLiving.prevMonths > 0 ? `${formatBRL(data.costOfLiving.prevAvg)}/mês` : '—'}
+            </span>
+            {data.costOfLiving.prevMonths > 0 && (
+              <span className="text-[10px] text-text-secondary">
+                {formatBRL(data.costOfLiving.prevSum)} ÷ {data.costOfLiving.prevMonths} {data.costOfLiving.prevMonths === 1 ? 'mês' : 'meses'}
+              </span>
+            )}
+          </div>
+        </div>
+
         <p className="text-[9px] text-text-secondary/60 mt-1.5 leading-snug">
-          Trajetória do custo de vida: média mensal do ano atual ({data.costOfLiving.currMonths} {data.costOfLiving.currMonths === 1 ? 'mês completo' : 'meses completos'}) vs média mensal do ano anterior inteiro. Inclui todas as despesas — versão futura poderá excluir supérfluos (viagens, presentes).
+          Média por mês COM despesa de cada ano (o ano atual conta só os meses completos — o mês em andamento fica de fora; o ano anterior usa os meses que têm lançamento). Inclui todas as despesas — versão futura poderá excluir supérfluos (viagens, presentes).
         </p>
       </div>
 
