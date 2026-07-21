@@ -14,6 +14,7 @@ import { ImportModal } from './ImportModal';
 import { ShareCategorizationModal } from './ShareCategorizationModal';
 import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
+import { CategoryFilterCombobox } from '../shared/CategoryFilterCombobox';
 import { getMonthYear, getMonthLabel, cn, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 import type { CategorizationSession, Transaction } from '../../types';
 
@@ -83,26 +84,6 @@ export function TransactionsPage() {
     set.add(getMonthYear());
     return Array.from(set).sort().reverse();
   }, [transactions]);
-
-  const categoryOptions = useMemo(() => {
-    // Build ordered list where subcategories appear under their parent
-    // and are labeled with the full relation "Parent / Sub".
-    const parents = categories.filter((c) => !c.parentId);
-    const opts: { id: string; label: string; isChild: boolean }[] = [];
-    for (const parent of parents) {
-      opts.push({ id: parent.id, label: parent.name, isChild: false });
-      const children = categories.filter((c) => c.parentId === parent.id);
-      for (const child of children) {
-        opts.push({ id: child.id, label: `${parent.name} / ${child.name}`, isChild: true });
-      }
-    }
-    for (const cat of categories) {
-      if (cat.parentId && !parents.some((p) => p.id === cat.parentId)) {
-        opts.push({ id: cat.id, label: cat.name, isChild: true });
-      }
-    }
-    return opts;
-  }, [categories]);
 
   const allTitulars = useMemo(() => {
     // Prefer the canonical family member names; only add raw titular strings
@@ -394,19 +375,12 @@ export function TransactionsPage() {
             <option key={m} value={m}>{getMonthLabel(m)}</option>
           ))}
         </select>
-        <select
+        <CategoryFilterCombobox
+          categories={categories}
           value={filterCategory}
-          onChange={(e) => setFilterCategory(e.target.value)}
-          className={cn(baseFieldClass, isActive.category ? activeFieldClass : inactiveFieldClass)}
-        >
-          <option value="all">Todas as categorias</option>
-          <option value="uncategorized">Sem categoria</option>
-          {categoryOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>
-              {opt.isChild ? `\u00A0\u00A0${opt.label}` : opt.label}
-            </option>
-          ))}
-        </select>
+          onChange={setFilterCategory}
+          className="flex-1 min-w-[140px]"
+        />
         <select
           value={filterTitular}
           onChange={(e) => setFilterTitular(e.target.value)}
