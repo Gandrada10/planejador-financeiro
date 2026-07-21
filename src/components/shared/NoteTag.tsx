@@ -1,15 +1,18 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { StickyNote, Check, Trash2 } from 'lucide-react';
+import { StickyNote, Check, Trash2, AlertTriangle } from 'lucide-react';
 
 interface Props {
   note: string;
-  onSave: (note: string) => void;
+  /** Nota marcada como alerta (vermelha + aparece no sininho). */
+  alert?: boolean;
+  onSave: (note: string, alert: boolean) => void;
 }
 
-export function NoteTag({ note, onSave }: Props) {
+export function NoteTag({ note, alert = false, onSave }: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
+  const [draftAlert, setDraftAlert] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -19,6 +22,7 @@ export function NoteTag({ note, onSave }: Props) {
   useEffect(() => {
     if (open) {
       setDraft(note);
+      setDraftAlert(alert);
       // Position the popover relative to the trigger button
       if (triggerRef.current) {
         const rect = triggerRef.current.getBoundingClientRect();
@@ -28,7 +32,7 @@ export function NoteTag({ note, onSave }: Props) {
       }
       setTimeout(() => textareaRef.current?.focus(), 0);
     }
-  }, [open, note]);
+  }, [open, note, alert]);
 
   useEffect(() => {
     if (!open) return;
@@ -50,12 +54,14 @@ export function NoteTag({ note, onSave }: Props) {
   }, [open]);
 
   function handleSave() {
-    onSave(draft.trim());
+    const text = draft.trim();
+    // Alerta só faz sentido com texto — nota vazia nunca vira alerta.
+    onSave(text, text ? draftAlert : false);
     setOpen(false);
   }
 
   function handleDelete() {
-    onSave('');
+    onSave('', false);
     setOpen(false);
   }
 
@@ -79,6 +85,18 @@ export function NoteTag({ note, onSave }: Props) {
           if (e.key === 'Escape') setOpen(false);
         }}
       />
+      <label className="flex items-center gap-2 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={draftAlert}
+          onChange={(e) => setDraftAlert(e.target.checked)}
+          style={{ accentColor: 'var(--color-accent-red)' }}
+        />
+        <span className={`text-[10px] flex items-center gap-1 ${draftAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
+          <AlertTriangle size={11} className={draftAlert ? 'text-accent-red' : 'text-text-secondary'} />
+          Marcar como alerta (sininho)
+        </span>
+      </label>
       <div className="flex gap-2">
         <button
           onClick={handleSave}
@@ -100,6 +118,8 @@ export function NoteTag({ note, onSave }: Props) {
     document.body
   ) : null;
 
+  const isAlert = hasNote && alert;
+
   return (
     <div className="inline-flex flex-shrink-0" onClick={(e) => e.stopPropagation()}>
       {hasNote ? (
@@ -107,9 +127,14 @@ export function NoteTag({ note, onSave }: Props) {
           ref={triggerRef}
           tabIndex={-1}
           onClick={() => setOpen(!open)}
-          className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold bg-accent/20 text-accent hover:bg-accent/30 transition-colors leading-none"
+          title={isAlert ? 'Nota de alerta' : 'Nota'}
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors leading-none ${
+            isAlert
+              ? 'bg-accent-red/20 text-accent-red hover:bg-accent-red/30'
+              : 'bg-accent/20 text-accent hover:bg-accent/30'
+          }`}
         >
-          <StickyNote size={9} />
+          {isAlert ? <AlertTriangle size={9} /> : <StickyNote size={9} />}
           <span>Nota</span>
         </button>
       ) : (

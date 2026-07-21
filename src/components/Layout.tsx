@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { cn } from '../lib/utils';
 import { SyncStatus } from './shared/SyncStatus';
+import { AlertsProvider, AlertBell } from './shared/AlertsCenter';
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
@@ -45,6 +46,7 @@ export function Layout() {
   }, [collapsed]);
 
   return (
+    <AlertsProvider>
     <div className="min-h-screen flex bg-bg-primary">
       {/* Sidebar */}
       <aside
@@ -79,6 +81,8 @@ export function Layout() {
         </div>
 
         <nav className="flex-1 p-2 space-y-1">
+          <AlertBell collapsed={collapsed} />
+          <div className={cn('h-px bg-border my-1', collapsed ? 'lg:mx-0 mx-1' : 'mx-1')} />
           {navItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
@@ -148,7 +152,10 @@ export function Layout() {
             {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
           </button>
           <span className="text-accent text-xs font-bold tracking-wider">PLANEJADOR</span>
-          <SyncStatus className="ml-auto" />
+          <div className="ml-auto flex items-center gap-3">
+            <AlertBell variant="header" />
+            <SyncStatus />
+          </div>
         </header>
 
         <main className="flex-1 p-4 lg:p-6 overflow-auto">
@@ -156,5 +163,6 @@ export function Layout() {
         </main>
       </div>
     </div>
+    </AlertsProvider>
   );
 }

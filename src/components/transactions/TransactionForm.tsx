@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, AlertTriangle } from 'lucide-react';
 
 import type { Transaction, Category, Account } from '../../types';
 import { getMonthYear, getMonthLabel, filterCategoriesByAmount, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
@@ -33,6 +33,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
   const [familyMember, setFamilyMember] = useState('');
   const [installments, setInstallments] = useState('');
   const [notes, setNotes] = useState('');
+  const [noteAlert, setNoteAlert] = useState(false);
   const [invoiceMonth, setInvoiceMonth] = useState(getMonthYear());
 
   const selectedAccount = useMemo(
@@ -70,6 +71,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
       projectId: null,
       tags: [],
       notes,
+      noteAlert: notes.trim() ? noteAlert : false,
       categoryId: categoryId || null,
       importBatch: null,
       reconciled: false,
@@ -193,6 +195,18 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
           <div>
             <label className={labelClass}>Observacoes</label>
             <input type="text" value={notes} onChange={(e) => setNotes(e.target.value)} className={inputClass} />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={noteAlert}
+                onChange={(e) => setNoteAlert(e.target.checked)}
+                style={{ accentColor: 'var(--color-accent-red)' }}
+              />
+              <span className={`text-[10px] flex items-center gap-1 ${noteAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
+                <AlertTriangle size={11} className={noteAlert ? 'text-accent-red' : 'text-text-secondary'} />
+                Marcar nota como alerta (aparece no sininho)
+              </span>
+            </label>
           </div>
 
           <button

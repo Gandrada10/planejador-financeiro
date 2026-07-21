@@ -494,7 +494,8 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                                 <span className="text-xs text-text-primary truncate">{t.description}</span>
                                 <NoteTag
                                   note={t.notes || ''}
-                                  onSave={(note) => onUpdate && onUpdate(t.id, { notes: note })}
+                                  alert={t.noteAlert}
+                                  onSave={(note, alert) => onUpdate && onUpdate(t.id, { notes: note, noteAlert: alert })}
                                 />
                               </div>
                               {t.categoryId && (

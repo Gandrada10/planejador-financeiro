@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Check, X, Trash2 } from 'lucide-react';
+import { Check, X, Trash2, AlertTriangle } from 'lucide-react';
 
 import type { Transaction, Category, Account, Project } from '../../types';
 import { applyMoneyMask, parseMoneyInput, filterCategoriesByAmount } from '../../lib/utils';
@@ -51,6 +51,7 @@ export function TransactionEditModal({
   );
   const [projectId, setProjectId] = useState(transaction.projectId || '');
   const [notes, setNotes] = useState(transaction.notes || '');
+  const [noteAlert, setNoteAlert] = useState(!!transaction.noteAlert);
   const [isReimbursement, setIsReimbursement] = useState(!!transaction.isReimbursement);
 
   useEffect(() => {
@@ -93,6 +94,8 @@ export function TransactionEditModal({
       // Só faz sentido em valor positivo (receita); em despesa, força false.
       isReimbursement: type === 'receita' ? isReimbursement : false,
       notes,
+      // Alerta só faz sentido com texto — nota vazia nunca fica no sininho.
+      noteAlert: notes.trim() ? noteAlert : false,
     };
 
     onSave(transaction.id, data);
@@ -272,6 +275,18 @@ export function TransactionEditModal({
               rows={2}
               className={`${inputClass} resize-none`}
             />
+            <label className="flex items-center gap-2 mt-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={noteAlert}
+                onChange={(e) => setNoteAlert(e.target.checked)}
+                style={{ accentColor: 'var(--color-accent-red)' }}
+              />
+              <span className={`text-[11px] flex items-center gap-1 ${noteAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
+                <AlertTriangle size={12} className={noteAlert ? 'text-accent-red' : 'text-text-secondary'} />
+                Marcar nota como alerta (aparece no sininho)
+              </span>
+            </label>
           </div>
 
           <div className="flex gap-2 pt-1">
