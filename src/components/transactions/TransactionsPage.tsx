@@ -152,13 +152,22 @@ export function TransactionsPage() {
     }
     if (searchText) {
       const q = searchText.toLowerCase();
-      list = list.filter(
-        (t) =>
+      // Busca por valor: aceita tanto "379,20" (formato pt-BR) quanto "379.20".
+      // Compara contra o valor absoluto em ambos os formatos, para "379" casar
+      // com uma transação de 379,20 (positiva ou negativa).
+      const qNum = q.replace(',', '.');
+      list = list.filter((t) => {
+        const amountStr = Math.abs(t.amount).toFixed(2); // "379.20"
+        const amountBr = amountStr.replace('.', ','); // "379,20"
+        return (
           t.description.toLowerCase().includes(q) ||
           t.account.toLowerCase().includes(q) ||
           t.familyMember.toLowerCase().includes(q) ||
-          (t.titular || '').toLowerCase().includes(q)
-      );
+          (t.titular || '').toLowerCase().includes(q) ||
+          amountStr.includes(qNum) ||
+          amountBr.includes(q)
+        );
+      });
     }
     return list;
   }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterFlow, filterReconciled, searchText]);
@@ -416,7 +425,7 @@ export function TransactionsPage() {
             type="text"
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Buscar por descricao, conta, membro..."
+            placeholder="Buscar por descricao, valor, conta, membro..."
             className={cn('w-full pl-8 pr-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent', isActive.search ? activeFieldClass : inactiveFieldClass)}
           />
         </div>

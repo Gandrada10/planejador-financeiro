@@ -127,7 +127,7 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
           ref={triggerRef}
           tabIndex={-1}
           onClick={() => setOpen(!open)}
-          title={isAlert ? 'Nota de alerta' : 'Nota'}
+          title={isAlert ? `⚠️ ${note}` : note}
           className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors leading-none ${
             isAlert
               ? 'bg-accent-red/20 text-accent-red hover:bg-accent-red/30'
