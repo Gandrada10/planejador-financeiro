@@ -242,7 +242,10 @@ export function DashboardPage() {
   const budgetOver = budgetTotalLimit > 0 && budgetTotalActual > budgetTotalLimit;
 
   return (
-    <div className="space-y-4">
+    // Largura máxima centralizada: sem ela, num monitor de 1900px os cards
+    // esticavam de borda a borda — colunas de ~830px para tabelas que pedem
+    // ~600px, e os cards das pontas colados nas margens da janela.
+    <div className="max-w-[1440px] mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold tracking-tight text-text-primary">Dashboard</h2>
         <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
@@ -306,7 +309,7 @@ export function DashboardPage() {
 
           {/* RIGHT COLUMN: Expenses + Projects + Metas */}
           <div className="space-y-4">
-            <ExpensesByCategoryChart data={expensesByCategory} />
+            <ExpensesByCategoryChart data={expensesByCategory} income={totalEntries} balance={totalBalance} />
 
             {/* Composição estrutural: peso de cada categoria na média de 12 meses */}
             <CategoryMix12mChart
@@ -409,7 +412,7 @@ export function DashboardPage() {
 
 function DashboardSkeleton() {
   return (
-    <div className="space-y-4" aria-busy="true" aria-label="Carregando dashboard">
+    <div className="max-w-[1440px] mx-auto space-y-4" aria-busy="true" aria-label="Carregando dashboard">
       <div className="flex items-center justify-between">
         <div className="h-6 w-32 bg-elevated rounded animate-pulse" />
         <div className="h-8 w-44 bg-elevated rounded animate-pulse" />

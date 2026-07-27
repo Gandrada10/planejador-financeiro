@@ -4,6 +4,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { TOOLTIP_STYLE, CHART_COLORS } from '../../lib/chartTheme';
 import { formatBRL } from '../../lib/utils';
 import { CategoryIcon } from '../shared/CategoryIcon';
+import { CashFlowSankey } from './CashFlowSankey';
 
 interface SubExpense {
   name: string;
@@ -24,9 +25,13 @@ interface CategoryExpense {
 
 interface Props {
   data: CategoryExpense[];
+  /** Receitas e resultado do mês — alimentam a visão "Fluxo" (Sankey). */
+  income: number;
+  balance: number;
 }
 
-export function ExpensesByCategoryChart({ data }: Props) {
+export function ExpensesByCategoryChart({ data, income, balance }: Props) {
+  const [view, setView] = useState<'cats' | 'flow'>('cats');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggleExpand(name: string) {
@@ -53,22 +58,45 @@ export function ExpensesByCategoryChart({ data }: Props) {
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-title font-semibold text-text-primary">Despesas por categoria</h3>
-        {expandableNames.length > 0 && (
-          <button
-            type="button"
-            onClick={toggleAll}
-            className="flex items-center gap-1 text-caption text-text-secondary hover:text-text-primary transition-colors"
-            title={allExpanded ? 'Colapsar todos' : 'Expandir todos'}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="min-w-0">
+          <h3 className="text-title font-semibold text-text-primary">
+            {view === 'cats' ? 'Despesas por categoria' : 'Fluxo do mês'}
+          </h3>
+          {view === 'flow' && (
+            <p className="text-caption text-ink-3 mt-0.5">de onde veio e para onde foi o dinheiro</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          {view === 'cats' && expandableNames.length > 0 && (
+            <button
+              type="button"
+              onClick={toggleAll}
+              className="flex items-center gap-1 text-caption text-text-secondary hover:text-text-primary transition-colors"
+              title={allExpanded ? 'Colapsar todos' : 'Expandir todos'}
+            >
+              {allExpanded ? <ChevronsDownUp size={12} /> : <ChevronsUpDown size={12} />}
+              <span className="hidden sm:inline">{allExpanded ? 'Colapsar todos' : 'Expandir todos'}</span>
+            </button>
+          )}
+          <div
+            className="flex bg-bg-secondary border border-border rounded-control p-0.5 flex-shrink-0"
+            role="group"
+            aria-label="Visão das despesas por categoria"
           >
-            {allExpanded ? <ChevronsDownUp size={12} /> : <ChevronsUpDown size={12} />}
-            <span>{allExpanded ? 'Colapsar todos' : 'Expandir todos'}</span>
-          </button>
-        )}
+            <ViewButton active={view === 'cats'} onClick={() => setView('cats')}>
+              Categorias
+            </ViewButton>
+            <ViewButton active={view === 'flow'} onClick={() => setView('flow')}>
+              Fluxo
+            </ViewButton>
+          </div>
+        </div>
       </div>
 
-      {data.length > 0 ? (
+      {view === 'flow' ? (
+        <CashFlowSankey income={income} balance={balance} categories={data} />
+      ) : data.length > 0 ? (
         <div className="flex flex-col sm:flex-row items-start gap-3">
           <div className="w-[200px] h-[200px] flex-shrink-0 -ml-2">
             <ResponsiveContainer width="100%" height="100%">
@@ -149,5 +177,28 @@ export function ExpensesByCategoryChart({ data }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+function ViewButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`tap px-3 py-1 rounded-[10px] text-caption font-medium transition-colors ${
+        active ? 'bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary active:bg-elevated/60'
+      }`}
+    >
+      {children}
+    </button>
   );
 }
