@@ -115,7 +115,12 @@ export function ExpensesPanel({ transactions, categories, monthYear, costOfLivin
       )}
 
       {lens === 'yoy' ? (
-        <MonthlyExpensesChart transactions={transactions} categories={categories} monthYear={monthYear} />
+        <MonthlyExpensesChart
+          transactions={transactions}
+          categories={categories}
+          monthYear={monthYear}
+          isMonthInProgress={isMonthInProgress}
+        />
       ) : (
         <CostOfLivingChart data={col} />
       )}

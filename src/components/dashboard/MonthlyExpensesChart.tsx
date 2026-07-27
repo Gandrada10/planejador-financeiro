@@ -29,6 +29,8 @@ interface Props {
   transactions: Transaction[];
   categories: Category[];
   monthYear: string;
+  /** Mês selecionado ainda em andamento: fica FORA da média (diluiria para baixo). */
+  isMonthInProgress: boolean;
 }
 
 interface MonthRow {
@@ -52,8 +54,8 @@ interface MonthTickProps {
  * enquanto o ano anterior mostra os 12 — o que ainda vem pela frente fica
  * visível como referência.
  */
-export function MonthlyExpensesChart({ transactions, categories, monthYear }: Props) {
-  const { rows, year, prevYear, currAvg, hasPrev, hasCurr } = useMemo(() => {
+export function MonthlyExpensesChart({ transactions, categories, monthYear, isMonthInProgress }: Props) {
+  const { rows, year, prevYear, currAvg, currAvgMonths, hasPrev, hasCurr } = useMemo(() => {
     const excludedIds = getExcludedFromTotalsIds(categories);
     const [y, m] = monthYear.split('-').map(Number);
     const prev = y - 1;
@@ -80,12 +82,14 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear }: Pr
       prev: prevByMonth[idx] === 0 ? null : prevByMonth[idx],
     }));
 
-    // Média mensal do ano atual sobre os meses COM despesa — mesma convenção
-    // do card de Custo de Vida.
-    const currMonthsWithData = currByMonth.slice(0, m).filter((v) => v !== 0);
+    // Média mensal do ano atual sobre os meses COMPLETOS com despesa — o mês
+    // em andamento fica de fora (com ele dentro, um julho pela metade puxava a
+    // média de R$ 45,5 mil para R$ 42,8 mil). Mesma convenção do custo de vida.
+    const completeMax = isMonthInProgress ? m - 1 : m;
+    const completeMonths = currByMonth.slice(0, completeMax).filter((v) => v !== 0);
     const avg =
-      currMonthsWithData.length > 0
-        ? currMonthsWithData.reduce((s, v) => s + v, 0) / currMonthsWithData.length
+      completeMonths.length > 0
+        ? completeMonths.reduce((s, v) => s + v, 0) / completeMonths.length
         : 0;
 
     return {
@@ -93,10 +97,12 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear }: Pr
       year: y,
       prevYear: prev,
       currAvg: avg,
+      currAvgMonths: completeMonths.length,
+      // O mês parcial ainda conta como "tem dados" — só não entra na média.
       hasPrev: prevByMonth.some((v) => v !== 0),
-      hasCurr: currMonthsWithData.length > 0,
+      hasCurr: currByMonth.slice(0, m).some((v) => v !== 0),
     };
-  }, [transactions, categories, monthYear]);
+  }, [transactions, categories, monthYear, isMonthInProgress]);
 
   const selectedIdx = Number(monthYear.split('-')[1]) - 1;
 
@@ -112,7 +118,8 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear }: Pr
     <div className="space-y-1.5">
       {currAvg > 0 && (
         <p className="text-caption text-ink-3">
-          média de {year}: {formatBRL0(currAvg)}/mês (linha tracejada)
+          média de {year}: {formatBRL0(currAvg)}/mês em {currAvgMonths}{' '}
+          {currAvgMonths === 1 ? 'mês completo' : 'meses completos'} (linha tracejada)
         </p>
       )}
 
