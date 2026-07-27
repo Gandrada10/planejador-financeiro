@@ -1,173 +1,168 @@
-import { useMemo } from 'react';
 import { Info } from 'lucide-react';
 import {
-  formatBRL,
-  formatSignedBRL,
-  countsInTotals,
-  getExcludedFromTotalsIds,
-  isIncomeAmount,
-  accountingDate,
-} from '../../lib/utils';
-import type { Transaction, Category } from '../../types';
-import { resolveTrend } from './yoyShared';
+  ComposedChart,
+  Bar,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ReferenceDot,
+  ResponsiveContainer,
+} from 'recharts';
+import { MONEY, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../lib/chartTheme';
+import { formatBRL, formatBRL0, formatSignedBRL, formatCompactBRL } from '../../lib/utils';
+import type { CostOfLivingData, CostOfLivingPoint } from '../../lib/costOfLiving';
 
 interface Props {
-  transactions: Transaction[];
-  categories: Category[];
-  monthYear: string;
+  data: CostOfLivingData;
   isMonthInProgress: boolean;
 }
 
 /**
- * Custo de vida — despesa média MENSAL (trajetória).
- *
- * Card SEPARADO do "Desvio YoY" de propósito: a base de comparação é outra.
- * Lá são dois recortes YTD idênticos (Jan–Jul vs Jan–Jul); aqui é a média
- * mensal do ano anterior INTEIRO contra a média dos meses COMPLETOS do ano
- * atual (o mês em andamento fica de fora para não diluir a média com um mês
- * parcial). Misturar as duas metodologias sob um título só era a origem da
- * confusão — por isso o subtítulo declara a base de cada ano.
- *
- * NOTA: por ora inclui TODAS as despesas; excluir supérfluos (viagens,
- * presentes) fica para uma evolução futura ("custo de vida real").
+ * Custo de vida como trajetória: número-herói (média móvel de 12 meses) + chip
+ * de tendência, e o gráfico de 24 meses — barras mudas com a despesa de cada
+ * mês, linha da média móvel por cima. A linha responde "está subindo, e em que
+ * ritmo?"; as barras mostram o que a média esconde (picos pontuais).
+ * Cálculo em src/lib/costOfLiving.ts, compartilhado com o tile de sinais vitais.
  */
-export function CostOfLivingPanel({ transactions, categories, monthYear, isMonthInProgress }: Props) {
-  const data = useMemo(() => {
-    const excludedIds = getExcludedFromTotalsIds(categories);
-    const [y, m] = monthYear.split('-').map(Number);
-    const prevYear = y - 1;
+export function CostOfLivingPanel({ data, isMonthInProgress }: Props) {
+  const rising = data.deltaPct !== null && data.deltaPct > 0;
+  const chipTone = rising
+    ? 'bg-negative/10 border-negative/35 text-negative'
+    : 'bg-positive/10 border-positive/35 text-positive';
 
-    // Divide pelo nº de meses COM despesa de cada ano — justo quando o
-    // histórico começou no meio do ano.
-    const effectiveCurrMax = isMonthInProgress ? m - 1 : m;
-    let prevSum = 0;
-    let currSum = 0;
-    const prevMonths = new Set<number>();
-    const currMonths = new Set<number>();
-
-    for (const t of transactions) {
-      if (!countsInTotals(t, excludedIds)) continue;
-      if (isIncomeAmount(t)) continue; // só despesas (reembolso reduz o gasto)
-      const ad = accountingDate(t);
-      const ty = ad.getFullYear();
-      const tm = ad.getMonth() + 1;
-      const expAmt = -t.amount; // despesa como positivo; reembolso (positivo) reduz
-      if (ty === prevYear) {
-        prevSum += expAmt;
-        prevMonths.add(tm);
-      } else if (ty === y && tm <= effectiveCurrMax) {
-        currSum += expAmt;
-        currMonths.add(tm);
-      }
-    }
-
-    const prevN = prevMonths.size;
-    const currN = currMonths.size;
-    const currAvg = currN > 0 ? currSum / currN : 0;
-    const prevAvg = prevN > 0 ? prevSum / prevN : 0;
-
-    return {
-      year: y,
-      prevYear,
-      currAvg,
-      prevAvg,
-      currSum,
-      prevSum,
-      currMonths: currN,
-      prevMonths: prevN,
-      varianceAbs: currAvg - prevAvg,
-      pct: prevAvg === 0 ? null : ((currAvg - prevAvg) / prevAvg) * 100,
-      hasData: prevN > 0 && currN > 0,
-    };
-  }, [transactions, categories, monthYear, isMonthInProgress]);
-
-  // Subir o custo de vida é RUIM → higherIsBetter = false.
-  const trend = resolveTrend(data.pct, false, { hasPrev: data.hasData });
-  const maxAvg = Math.max(data.currAvg, data.prevAvg, 1);
-  // A barra do ano atual carrega a mesma semântica do indicador: subiu = coral.
-  const currBarTone = !data.hasData
-    ? 'bg-text-secondary/40'
-    : data.varianceAbs > 0
-      ? 'bg-negative'
-      : 'bg-positive';
-
-  const rows = [
-    { year: data.year, avg: data.currAvg, sum: data.currSum, months: data.currMonths, strong: true },
-    { year: data.prevYear, avg: data.prevAvg, sum: data.prevSum, months: data.prevMonths, strong: false },
-  ];
-
-  function monthsLabel(n: number, isCurrent: boolean): string {
-    if (n === 0) return 'sem dados';
-    const unit = n === 1 ? 'mês' : 'meses';
-    return isCurrent ? `média de ${n} ${unit} completos` : `média de ${n} ${unit}`;
-  }
+  const lastMaPoint = [...data.points].reverse().find((p) => p.ma !== null);
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="text-title font-semibold text-text-primary flex items-center gap-1.5">
-            Custo de vida · média mensal
-            <span
-              className="text-ink-3 flex-shrink-0 cursor-help"
-              title="Média por mês COM despesa de cada ano. O mês em andamento fica de fora para não diluir a média com um mês parcial. Inclui todas as despesas."
-              aria-label="Média por mês com despesa de cada ano. O mês em andamento fica de fora. Inclui todas as despesas."
-            >
-              <Info size={13} />
-            </span>
-          </p>
-          <p className="text-caption text-ink-3 mt-0.5">
-            {data.year}: {monthsLabel(data.currMonths, true)} · {data.prevYear}:{' '}
-            {monthsLabel(data.prevMonths, false)}
-          </p>
-        </div>
-
-        {data.hasData ? (
-          <div className={`flex items-center gap-2 tnum flex-shrink-0 ${trend.color}`}>
-            <span className="flex items-center gap-1 text-body font-semibold">
-              {trend.hasValue && <trend.Icon size={13} />}
-              {trend.text}
-            </span>
-            <span className="text-caption font-medium opacity-80 border-l border-current/20 pl-2">
-              {formatSignedBRL(data.varianceAbs)}/mês
-            </span>
-          </div>
-        ) : (
-          <span className="text-caption text-ink-3 flex-shrink-0">sem dados suficientes</span>
-        )}
-      </div>
-
-      <div className="space-y-2">
-        {rows.map((row) => (
-          <div
-            key={row.year}
-            title={
-              row.months > 0
-                ? `${formatBRL(row.sum)} ÷ ${row.months} ${row.months === 1 ? 'mês' : 'meses'}`
-                : undefined
-            }
+      <div>
+        <p className="text-title font-semibold text-text-primary flex items-center gap-1.5">
+          Custo de vida
+          <span
+            className="text-ink-3 flex-shrink-0 cursor-help"
+            title="Cada ponto da linha é a média das despesas dos 12 meses anteriores àquele mês. Inclui todas as despesas; transferências ficam de fora."
+            aria-label="Cada ponto da linha é a média das despesas dos 12 meses anteriores àquele mês."
           >
-            <div className="flex items-baseline justify-between gap-2 tnum">
-              <span className={`text-caption ${row.strong ? 'text-text-primary' : 'text-ink-3'}`}>
-                {row.year}
-              </span>
-              <span
-                className={`text-body font-semibold ${
-                  row.strong ? 'text-text-primary' : 'text-text-secondary'
-                }`}
-              >
-                {row.months > 0 ? `${formatBRL(row.avg)}/mês` : '—'}
-              </span>
-            </div>
-            <div className="mt-1 h-1.5 rounded-full bg-elevated overflow-hidden">
-              <div
-                className={`h-full rounded-full ${row.strong ? currBarTone : 'bg-text-secondary/40'}`}
-                style={{ width: `${(row.avg / maxAvg) * 100}%` }}
-              />
-            </div>
-          </div>
-        ))}
+            <Info size={13} />
+          </span>
+        </p>
+        <p className="text-caption text-ink-3 mt-0.5">
+          Média móvel de 12 meses · encerrada em {data.endLabel}
+          {isMonthInProgress && ' · o mês em andamento fica de fora'}
+        </p>
       </div>
+
+      {!data.hasData ? (
+        <p className="text-caption text-ink-3 text-center py-8">Sem despesas no histórico para calcular a média.</p>
+      ) : (
+        <>
+          <div className="flex items-end justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-kpi font-bold tracking-tight tnum leading-none text-text-primary">
+                {formatBRL0(data.endMA!)}
+                <span className="text-body font-medium text-text-secondary tracking-normal">/mês</span>
+              </p>
+              {data.endPartialMonths !== null && (
+                <p className="text-caption text-ink-3 mt-1">
+                  média dos {data.endPartialMonths} {data.endPartialMonths === 1 ? 'mês' : 'meses'} com dados —
+                  a janela cheia de 12 ainda não existe
+                </p>
+              )}
+            </div>
+
+            {data.deltaAbs !== null && data.base !== null ? (
+              <div className="text-right">
+                <span
+                  className={`inline-flex items-center gap-1.5 text-caption font-semibold tnum px-2.5 py-1 rounded-full border ${chipTone}`}
+                >
+                  {formatSignedBRL(data.deltaAbs)} · {data.deltaPct! > 0 ? '+' : ''}
+                  {data.deltaPct!.toFixed(1).replace('.', ',')}%{' '}
+                  {data.base.kind === '12m' ? 'em 12 meses' : `desde ${data.base.label}`}
+                </span>
+                <p className="text-caption text-ink-3 mt-1.5 tnum">
+                  {data.base.kind === '12m' ? 'há 12 meses' : data.base.label}: {formatBRL0(data.base.ma)}/mês
+                  {data.worst && (
+                    <>
+                      {' '}
+                      · pior mês: {data.worst.label} ({formatCompactBRL(data.worst.value)})
+                    </>
+                  )}
+                </p>
+              </div>
+            ) : (
+              data.worst && (
+                <p className="text-caption text-ink-3 tnum">
+                  pior mês: {data.worst.label} ({formatCompactBRL(data.worst.value)})
+                </p>
+              )
+            )}
+          </div>
+
+          <div className="h-[190px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={data.points} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
+                <CartesianGrid {...GRID_STYLE} />
+                <XAxis dataKey="label" {...AXIS_STYLE} interval={2} />
+                <YAxis {...AXIS_STYLE} width={78} tickFormatter={(v) => formatCompactBRL(Number(v))} />
+                <Tooltip
+                  {...TOOLTIP_STYLE}
+                  cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+                  content={<CostTooltip />}
+                />
+                <Bar
+                  dataKey="expense"
+                  name="Despesa do mês"
+                  fill={MONEY.expense}
+                  fillOpacity={0.22}
+                  radius={[3, 3, 0, 0]}
+                  isAnimationActive={false}
+                />
+                <Line
+                  dataKey="ma"
+                  name="Média móvel 12M"
+                  stroke={MONEY.expense}
+                  strokeWidth={2}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  connectNulls={false}
+                  isAnimationActive={false}
+                />
+                {lastMaPoint && (
+                  <ReferenceDot
+                    x={lastMaPoint.label}
+                    y={lastMaPoint.ma!}
+                    r={4}
+                    fill={MONEY.expense}
+                    stroke="#1b1b1e"
+                    strokeWidth={2}
+                  />
+                )}
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CostTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean;
+  payload?: Array<{ payload: CostOfLivingPoint }>;
+}) {
+  if (!active || !payload || payload.length === 0) return null;
+  const p = payload[0].payload;
+  return (
+    <div style={TOOLTIP_STYLE.contentStyle} className="px-3 py-2">
+      <p className="text-caption text-ink-3 mb-1">{p.label}</p>
+      <p className="text-body tnum text-text-primary">Despesa: {formatBRL(p.expense)}</p>
+      <p className="text-body tnum text-text-secondary">
+        Média 12M: {p.ma !== null ? formatBRL(p.ma) : '—'}
+      </p>
     </div>
   );
 }

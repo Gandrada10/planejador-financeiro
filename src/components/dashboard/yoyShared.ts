@@ -77,10 +77,11 @@ export function resolveTrend(
   if (value === null) return { ...muted, text: '—', hasValue: false };
 
   const suffix = unit === 'pp' ? ' p.p.' : '%';
-  const text = `${value > 0 ? '+' : ''}${value.toFixed(1).replace('.', ',')}${suffix}`;
 
-  // Zona morta: variação irrelevante não merece cor nem seta.
-  if (Math.abs(value) < 0.05) return { ...muted, text, hasValue: true };
+  // Zona morta: variação irrelevante não merece cor, seta nem sinal ("-0,0").
+  if (Math.abs(value) < 0.05) return { ...muted, text: `0,0${suffix}`, hasValue: true };
+
+  const text = `${value > 0 ? '+' : ''}${value.toFixed(1).replace('.', ',')}${suffix}`;
 
   const isBetter = higherIsBetter ? value > 0 : value < 0;
   return {

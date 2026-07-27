@@ -10,6 +10,15 @@ export function formatSignedBRL(value: number): string {
   return `${value > 0 ? '+' : ''}${formatBRL(value)}`;
 }
 
+/** Valor sem centavos para números-herói ("R$ 3.412"). Tabelas continuam com centavos. */
+export function formatBRL0(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
 /** Rótulo curto de eixo/ticks: "R$ 40 mil". Nunca usar em célula de valor. */
 export function formatCompactBRL(value: number): string {
   const abs = Math.abs(value);

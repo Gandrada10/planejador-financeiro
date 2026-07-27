@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { FileBarChart } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
@@ -13,6 +14,8 @@ import { CostOfLivingPanel } from './CostOfLivingPanel';
 import { MonthlyExpensesChart } from './MonthlyExpensesChart';
 import { CategoryMix12mChart } from './CategoryMix12mChart';
 import { ProjectsPanel } from './ProjectsPanel';
+import { VitalSigns } from './VitalSigns';
+import { computeCostOfLiving } from '../../lib/costOfLiving';
 import { formatBRL, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
@@ -73,6 +76,13 @@ export function DashboardPage() {
   const isMonthInProgress = monthYear === getMonthYear();
   const selectedMonthIdx = Number(monthYear.split('-')[1]) - 1;
   const periodLabel = `Jan–${MONTH_ABBR[selectedMonthIdx]}`;
+
+  // Custo de vida (média móvel 12M) — compartilhado entre o tile de sinais
+  // vitais e o card de trajetória.
+  const costOfLiving = useMemo(
+    () => computeCostOfLiving(transactions, categories, monthYear, isMonthInProgress),
+    [transactions, categories, monthYear, isMonthInProgress]
+  );
 
   // Cash flow by account
   const cashFlowData = useMemo(() => {
@@ -229,9 +239,11 @@ export function DashboardPage() {
   // Grand totals - only parent-level budgets
   const budgetTotalLimit = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.limit, 0);
   const budgetTotalActual = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.spent, 0);
+  const budgetParents = budgetData.filter((b) => b.isParent);
+  const budgetOverCount = budgetParents.filter((b) => b.spent > b.limit).length;
 
   if (loadingTx) {
-    return <div className="text-accent text-sm animate-pulse">Carregando dashboard...</div>;
+    return <DashboardSkeleton />;
   }
 
   const hasData = transactions.length > 0;
@@ -242,12 +254,27 @@ export function DashboardPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-text-primary">Dashboard</h2>
+        <h2 className="text-lg font-bold tracking-tight text-text-primary">Dashboard</h2>
         <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
       </div>
 
       {hasData ? (
         <div className="space-y-4">
+        {/* Sinais vitais: "como estou?" em 4 números, antes de qualquer tabela */}
+        <VitalSigns
+          transactions={transactions}
+          categories={categories}
+          monthYear={monthYear}
+          monthBalance={totalBalance}
+          costOfLiving={costOfLiving}
+          budget={{
+            limit: budgetTotalLimit,
+            actual: budgetTotalActual,
+            overCount: budgetOverCount,
+            count: budgetParents.length,
+          }}
+        />
+
         {/* Evolução mês a mês em largura total: 24 barras não cabem em meia tela */}
         <MonthlyExpensesChart
           transactions={transactions}
@@ -277,13 +304,8 @@ export function DashboardPage() {
               periodLabel={periodLabel}
             />
 
-            {/* Custo de vida: base de comparação diferente do YoY — card próprio */}
-            <CostOfLivingPanel
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-            />
+            {/* Custo de vida: trajetória da média móvel 12M — card próprio */}
+            <CostOfLivingPanel data={costOfLiving} isMonthInProgress={isMonthInProgress} />
           </div>
 
           {/* RIGHT COLUMN: Expenses + Projects + Metas */}
@@ -306,17 +328,14 @@ export function DashboardPage() {
             />
 
             {/* Metas de despesas */}
-            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Metas de despesas</h3>
-                <span className="text-[10px] text-accent-green">Situacao confirmada</span>
-              </div>
+            <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
+              <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
               {budgetData.length === 0 ? (
-                <p className="text-xs text-text-secondary">Nenhuma meta definida para este mes.</p>
+                <p className="text-caption text-ink-3">Nenhuma meta definida para este mês.</p>
               ) : (
                 <div className="space-y-2">
                   {/* Column headers */}
-                  <div className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 text-[10px] text-text-secondary uppercase tracking-wider">
+                  <div className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 text-caption text-ink-3 uppercase tracking-wider">
                     <span />
                     <span className="text-right">Meta</span>
                     <span className="text-right">Realizado</span>
@@ -332,25 +351,25 @@ export function DashboardPage() {
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <div className="w-0.5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: b.color }} />
-                            <span className={`text-xs truncate ${b.isParent ? 'text-text-primary font-medium' : 'text-text-secondary'}`}>
+                            <span className={`text-body truncate ${b.isParent ? 'text-text-primary font-medium' : 'text-text-secondary'}`}>
                               {b.categoryName}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 pl-2.5">
-                            <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                            <div className="flex-1 h-1.5 bg-elevated rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${over ? 'bg-accent-red' : 'bg-accent'}`}
                                 style={{ width: `${barPct}%` }}
                               />
                             </div>
-                            <span className={`text-[10px] tnum ${over ? 'text-accent-red' : 'text-text-secondary'}`}>
+                            <span className={`text-caption tnum ${over ? 'text-accent-red' : 'text-ink-3'}`}>
                               {pct.toFixed(0)}%
                             </span>
                           </div>
                         </div>
-                        <span className="text-xs tnum text-text-primary text-right">{formatBRL(b.limit)}</span>
-                        <span className={`text-xs tnum text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
-                        <span className="text-xs tnum text-text-secondary text-right">{formatBRL(b.remaining)}</span>
+                        <span className="text-body tnum text-text-primary text-right">{formatBRL(b.limit)}</span>
+                        <span className={`text-body tnum text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
+                        <span className="text-body tnum text-text-secondary text-right">{formatBRL(b.remaining)}</span>
                       </div>
                     );
                   })}
@@ -358,22 +377,22 @@ export function DashboardPage() {
                   {/* Total */}
                   <div className="pt-2 border-t border-border grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 items-center">
                     <div className="space-y-1">
-                      <span className="text-xs font-bold text-text-primary">Total</span>
+                      <span className="text-body font-semibold text-text-primary">Total</span>
                       <div className="flex items-center gap-1.5">
-                        <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                        <div className="flex-1 h-1.5 bg-elevated rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent'}`}
                             style={{ width: `${budgetPct}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] tnum ${budgetOver ? 'text-accent-red' : 'text-text-secondary'}`}>
+                        <span className={`text-caption tnum ${budgetOver ? 'text-accent-red' : 'text-ink-3'}`}>
                           {budgetPct.toFixed(0)}%
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs tnum font-bold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
-                    <span className={`text-xs tnum font-bold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
-                    <span className="text-xs tnum text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
+                    <span className="text-body tnum font-semibold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
+                    <span className={`text-body tnum font-semibold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
+                    <span className="text-body tnum text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
                   </div>
                 </div>
               )}
@@ -382,10 +401,33 @@ export function DashboardPage() {
         </div>
         </div>
       ) : (
-        <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
-          Importe seus extratos para começar a ver dados aqui.
+        <div className="bg-bg-card border border-border rounded-card p-10 text-center space-y-2">
+          <FileBarChart size={24} className="mx-auto text-ink-3" strokeWidth={1.5} />
+          <p className="text-body text-text-primary">Nada por aqui ainda</p>
+          <p className="text-caption text-ink-3">Importe seus extratos em Transações para o dashboard ganhar vida.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Carregando dashboard">
+      <div className="flex items-center justify-between">
+        <div className="h-6 w-32 bg-elevated rounded animate-pulse" />
+        <div className="h-8 w-44 bg-elevated rounded animate-pulse" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-[92px] bg-bg-card border border-border rounded-card animate-pulse" />
+        ))}
+      </div>
+      <div className="h-[260px] bg-bg-card border border-border rounded-card animate-pulse" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="h-[320px] bg-bg-card border border-border rounded-card animate-pulse" />
+        <div className="h-[320px] bg-bg-card border border-border rounded-card animate-pulse" />
+      </div>
     </div>
   );
 }
