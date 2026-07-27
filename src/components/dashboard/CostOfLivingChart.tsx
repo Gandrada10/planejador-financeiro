@@ -9,7 +9,7 @@ import {
   ReferenceDot,
   ResponsiveContainer,
 } from 'recharts';
-import { MONEY, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE } from '../../lib/chartTheme';
+import { MONEY, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, FONT } from '../../lib/chartTheme';
 import { formatBRL, formatCompactBRL } from '../../lib/utils';
 import type { CostOfLivingData, CostOfLivingPoint } from '../../lib/costOfLiving';
 
@@ -72,6 +72,15 @@ export function CostOfLivingChart({ data }: { data: CostOfLivingData }) {
               fill={MONEY.expense}
               stroke="#1b1b1e"
               strokeWidth={2}
+              label={{
+                value: formatCompactBRL(lastMaPoint.ma!),
+                position: 'top',
+                offset: 8,
+                fill: '#f5f4f2',
+                fontSize: 11,
+                fontWeight: 600,
+                fontFamily: FONT,
+              }}
             />
           )}
         </ComposedChart>

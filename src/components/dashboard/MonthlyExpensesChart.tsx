@@ -9,6 +9,7 @@ import {
   Tooltip,
   Legend,
   ReferenceLine,
+  ReferenceDot,
   ResponsiveContainer,
 } from 'recharts';
 import { MONEY, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, FONT } from '../../lib/chartTheme';
@@ -114,6 +115,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
   }, [transactions, categories, monthYear, isMonthInProgress, ma]);
 
   const selectedIdx = Number(monthYear.split('-')[1]) - 1;
+  const lastMa = [...rows].reverse().find((r) => r.ma !== null);
 
   if (!hasCurr && !hasPrev) {
     return (
@@ -220,6 +222,27 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
               connectNulls={false}
               isAnimationActive={false}
             />
+            {/* Rótulo direto na ponta da linha: com o herói do card sendo a
+                despesa do mês, é aqui que o custo de vida se identifica. */}
+            {lastMa && (
+              <ReferenceDot
+                x={lastMa.month}
+                y={lastMa.ma!}
+                r={4}
+                fill={MONEY.expense}
+                stroke="#1b1b1e"
+                strokeWidth={2}
+                label={{
+                  value: formatCompactBRL(lastMa.ma!),
+                  position: 'top',
+                  offset: 8,
+                  fill: '#f5f4f2',
+                  fontSize: 11,
+                  fontWeight: 600,
+                  fontFamily: FONT,
+                }}
+              />
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

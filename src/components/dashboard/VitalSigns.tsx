@@ -26,9 +26,6 @@ interface Props {
   monthBalance: number;
   /** Resultado médio dos últimos 12 meses (o mesmo da tabela de caixa). */
   avg12mResult: number;
-  /** Despesas do mês selecionado (negativo, como vem do DashboardPage). */
-  monthExpenses: number;
-  isMonthInProgress: boolean;
   costOfLiving: CostOfLivingData;
   budget: BudgetSummary;
 }
@@ -46,8 +43,6 @@ export function VitalSigns({
   monthYear,
   monthBalance,
   avg12mResult,
-  monthExpenses,
-  isMonthInProgress,
   costOfLiving,
   budget,
 }: Props) {
@@ -90,15 +85,6 @@ export function VitalSigns({
   }, [transactions, categories, monthYear]);
 
   const col = costOfLiving;
-  const spentMonth = Math.abs(monthExpenses);
-
-  // Despesa do mês vs média móvel 12M. Num mês em andamento a comparação seria
-  // enganosa (mês pela metade sempre parece "abaixo do normal") — vira aviso.
-  const spentDelta =
-    !isMonthInProgress && col.endMA !== null && col.endMA > 0
-      ? ((spentMonth - col.endMA) / col.endMA) * 100
-      : null;
-
   const resultDelta = monthBalance - avg12mResult;
 
   const budgetPct = budget.limit > 0 ? Math.round((budget.actual / budget.limit) * 100) : null;
@@ -137,24 +123,38 @@ export function VitalSigns({
         }
       />
       <Tile
-        label="Despesas do mês"
-        hint="Total de despesas do mês selecionado. O delta compara com a sua média móvel de 12 meses (custo de vida)."
-        value={formatBRL0(spentMonth)}
+        label="Custo de vida · 12 meses"
+        hint={
+          col.endMA !== null
+            ? `Média das despesas dos 12 meses encerrados em ${col.endLabel} — o mês em andamento fica de fora.${
+                col.deltaAbs !== null && col.base !== null
+                  ? ` Aumento de ${formatBRL0(col.deltaAbs)}/mês desde ${col.base.label}, quando era ${formatBRL0(col.base.ma)}/mês.`
+                  : ''
+              }`
+            : 'Média das despesas dos últimos 12 meses.'
+        }
+        value={col.endMA !== null ? formatBRL0(col.endMA) : '—'}
+        valueSuffix={col.endMA !== null ? '/mês' : undefined}
         delta={
-          isMonthInProgress
-            ? { Icon: Minus, tone: 'text-ink-3', text: 'mês em andamento', context: '' }
-            : spentDelta !== null
+          col.deltaPct !== null && col.base !== null
+            ? {
+                Icon: col.deltaPct > 0 ? TrendingUp : col.deltaPct < 0 ? TrendingDown : Minus,
+                // Custo de vida subindo é RUIM.
+                tone:
+                  Math.abs(col.deltaPct) < 0.05
+                    ? 'text-ink-3'
+                    : col.deltaPct > 0
+                      ? 'text-negative'
+                      : 'text-positive',
+                text: `${col.deltaPct > 0 ? '+' : ''}${col.deltaPct.toFixed(1).replace('.', ',')}%`,
+                context: `em ${col.base.spanMonths} meses`,
+              }
+            : col.endPartialMonths !== null
               ? {
-                  Icon: spentDelta > 0 ? TrendingUp : spentDelta < 0 ? TrendingDown : Minus,
-                  // Gastar acima do normal é RUIM.
-                  tone:
-                    Math.abs(spentDelta) < 0.05
-                      ? 'text-ink-3'
-                      : spentDelta > 0
-                        ? 'text-negative'
-                        : 'text-positive',
-                  text: `${spentDelta > 0 ? '+' : ''}${spentDelta.toFixed(1).replace('.', ',')}%`,
-                  context: 'vs média 12M',
+                  Icon: Minus,
+                  tone: 'text-ink-3',
+                  text: `${col.endPartialMonths} ${col.endPartialMonths === 1 ? 'mês' : 'meses'}`,
+                  context: 'de histórico',
                 }
               : undefined
         }

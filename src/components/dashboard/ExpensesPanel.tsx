@@ -13,6 +13,10 @@ interface Props {
   transactions: Transaction[];
   categories: Category[];
   monthYear: string;
+  /** Despesas do mês selecionado (negativo, como vem do DashboardPage). */
+  monthExpenses: number;
+  /** Rótulo do mês selecionado, ex.: "junho de 2026". */
+  monthLabel: string;
   costOfLiving: CostOfLivingData;
   isMonthInProgress: boolean;
 }
@@ -24,7 +28,15 @@ interface Props {
  * alinhados por mês) ou a linha do tempo contínua de 24/36 meses. O
  * número-herói do custo de vida é a manchete e fica fixo no cabeçalho.
  */
-export function ExpensesPanel({ transactions, categories, monthYear, costOfLiving, isMonthInProgress }: Props) {
+export function ExpensesPanel({
+  transactions,
+  categories,
+  monthYear,
+  monthExpenses,
+  monthLabel,
+  costOfLiving,
+  isMonthInProgress,
+}: Props) {
   const [view, setView] = useState<ViewWindow>('year');
 
   const year = Number(monthYear.split('-')[0]);
@@ -54,10 +66,19 @@ export function ExpensesPanel({ transactions, categories, monthYear, costOfLivin
     return arr;
   }, [col, year]);
 
-  const rising = col.deltaPct !== null && col.deltaPct > 0;
-  const chipTone = rising
-    ? 'bg-negative/10 border-negative/35 text-negative'
-    : 'bg-positive/10 border-positive/35 text-positive';
+  const spentMonth = Math.abs(monthExpenses);
+
+  // Despesa do mês vs custo de vida. Num mês em andamento a comparação seria
+  // enganosa (mês pela metade sempre parece "abaixo do normal").
+  const spentDelta =
+    !isMonthInProgress && col.endMA !== null && col.endMA > 0
+      ? ((spentMonth - col.endMA) / col.endMA) * 100
+      : null;
+  // Gastar acima do custo de vida é RUIM.
+  const deltaChipTone =
+    spentDelta !== null && spentDelta > 0
+      ? 'bg-negative/10 border-negative/35 text-negative'
+      : 'bg-positive/10 border-positive/35 text-positive';
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
@@ -85,48 +106,39 @@ export function ExpensesPanel({ transactions, categories, monthYear, costOfLivin
         </div>
       </div>
 
-      {/* Número-herói: custo de vida (média móvel 12M), sempre visível */}
-      {col.hasData && (
-        <div className="flex items-end justify-between gap-3 flex-wrap">
-          <div>
-            <p className="text-kpi font-bold tracking-tight tnum leading-none text-text-primary">
-              {formatBRL0(col.endMA!)}
-              <span className="text-body font-medium text-text-secondary tracking-normal">/mês</span>
-            </p>
-            <p className="text-caption text-ink-3 mt-1 flex items-center gap-1">
-              custo de vida · média móvel 12M · encerrada em {col.endLabel}
-              <span
-                className="cursor-help flex-shrink-0"
-                title="Cada ponto da linha de tendência é a média das despesas dos 12 meses anteriores àquele mês. O mês em andamento fica de fora. Inclui todas as despesas; transferências ficam de fora."
-                aria-label="Cada ponto da linha de tendência é a média das despesas dos 12 meses anteriores àquele mês."
-              >
-                <Info size={12} />
-              </span>
-            </p>
-            {col.endPartialMonths !== null && (
-              <p className="text-caption text-ink-3 mt-0.5">
-                média dos {col.endPartialMonths} {col.endPartialMonths === 1 ? 'mês' : 'meses'} com dados —
-                a janela cheia de 12 ainda não existe
-              </p>
-            )}
-          </div>
-
-          {col.deltaAbs !== null && col.base !== null && (
-            <div className="text-right">
-              <span
-                className={`inline-flex items-center gap-1.5 text-caption font-semibold tnum px-2.5 py-1 rounded-full border ${chipTone}`}
-              >
-                {col.deltaAbs > 0 ? '+' : ''}
-                {formatBRL0(col.deltaAbs)} · {col.deltaPct! > 0 ? '+' : ''}
-                {col.deltaPct!.toFixed(1).replace('.', ',')}% em {col.base.spanMonths} meses
-              </span>
-              <p className="text-caption text-ink-3 mt-1.5 tnum">
-                era {formatBRL0(col.base.ma)}/mês em {col.base.label}
-              </p>
-            </div>
-          )}
+      {/* Número-herói: despesa do MÊS SELECIONADO — o card responde ao seletor
+          de mês, então o número grande tem que responder também. O custo de
+          vida (média móvel) virou sinal vital lá em cima; aqui ele aparece
+          como a linha do gráfico, rotulada na própria ponta. */}
+      <div className="flex items-end justify-between gap-3 flex-wrap">
+        <div>
+          <p className="text-kpi font-bold tracking-tight tnum leading-none text-text-primary">
+            {formatBRL0(spentMonth)}
+          </p>
+          <p className="text-caption text-ink-3 mt-1 flex items-center gap-1">
+            despesas de {monthLabel}
+            <span
+              className="cursor-help flex-shrink-0"
+              title="A linha do gráfico é o custo de vida: em cada mês, a média das despesas dos 12 meses anteriores. O mês em andamento fica de fora dela. Inclui todas as despesas; transferências ficam de fora."
+              aria-label="A linha do gráfico é a média das despesas dos 12 meses anteriores a cada mês."
+            >
+              <Info size={12} />
+            </span>
+          </p>
         </div>
-      )}
+
+        {spentDelta !== null && (
+          <span
+            className={`inline-flex items-center gap-1.5 text-caption font-semibold tnum px-2.5 py-1 rounded-full border ${deltaChipTone}`}
+          >
+            {spentDelta > 0 ? '+' : ''}
+            {spentDelta.toFixed(1).replace('.', ',')}% vs custo de vida ({formatBRL0(col.endMA!)}/mês)
+          </span>
+        )}
+        {spentDelta === null && isMonthInProgress && (
+          <span className="text-caption text-ink-3">mês em andamento</span>
+        )}
+      </div>
 
       {view === 'year' ? (
         <MonthlyExpensesChart

@@ -15,7 +15,7 @@ import { CategoryMix12mChart } from './CategoryMix12mChart';
 import { ProjectsPanel } from './ProjectsPanel';
 import { VitalSigns } from './VitalSigns';
 import { computeCostOfLiving } from '../../lib/costOfLiving';
-import { formatBRL, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { formatBRL, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -266,8 +266,6 @@ export function DashboardPage() {
           monthYear={monthYear}
           monthBalance={totalBalance}
           avg12mResult={avg12months}
-          monthExpenses={totalExits}
-          isMonthInProgress={isMonthInProgress}
           costOfLiving={costOfLiving}
           budget={{
             limit: budgetTotalLimit,
@@ -283,6 +281,8 @@ export function DashboardPage() {
           transactions={transactions}
           categories={categories}
           monthYear={monthYear}
+          monthExpenses={totalExits}
+          monthLabel={getMonthLabel(monthYear)}
           costOfLiving={costOfLiving}
           isMonthInProgress={isMonthInProgress}
         />
