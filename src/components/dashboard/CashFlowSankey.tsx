@@ -73,16 +73,26 @@ function SankeyNodeShape(props: any) {
   );
 }
 
+// Fita com gradiente da cor de origem para a de destino, como no Monarch —
+// o traço chapado translúcido lia como fio solto, não como fluxo de dinheiro.
 function SankeyLinkShape(props: any) {
-  const { sourceX, targetX, sourceY, targetY, sourceControlX, targetControlX, linkWidth, payload } = props;
+  const { sourceX, targetX, sourceY, targetY, sourceControlX, targetControlX, linkWidth, payload, index } = props;
+  const id = `sankey-link-${index}`;
   return (
-    <path
-      d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
-      fill="none"
-      stroke={payload.target.color}
-      strokeWidth={Math.max(linkWidth, 1)}
-      strokeOpacity={0.22}
-    />
+    <Layer>
+      <defs>
+        <linearGradient id={id} gradientUnits="userSpaceOnUse" x1={sourceX} x2={targetX} y1={sourceY} y2={targetY}>
+          <stop offset="0%" stopColor={payload.source.color} stopOpacity={0.45} />
+          <stop offset="100%" stopColor={payload.target.color} stopOpacity={0.45} />
+        </linearGradient>
+      </defs>
+      <path
+        d={`M${sourceX},${sourceY} C${sourceControlX},${sourceY} ${targetControlX},${targetY} ${targetX},${targetY}`}
+        fill="none"
+        stroke={`url(#${id})`}
+        strokeWidth={Math.max(linkWidth, 1)}
+      />
+    </Layer>
   );
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
@@ -162,12 +172,14 @@ export function CashFlowSankey({ income, balance, categories }: Props) {
   }
 
   return (
-    <div className="h-[300px] w-full">
+    // Altura maior + padding menor entre nós = fitas que PREENCHEM o espaço
+    // (a la Monarch), em vez de fios finos boiando em fundo preto.
+    <div className="h-[360px] w-full">
       <ResponsiveContainer width="100%" height="100%">
         <Sankey
           data={{ nodes, links }}
-          nodeWidth={8}
-          nodePadding={14}
+          nodeWidth={10}
+          nodePadding={8}
           margin={{ top: 12, right: 150, bottom: 12, left: 4 }}
           node={SankeyNodeShape}
           link={SankeyLinkShape}

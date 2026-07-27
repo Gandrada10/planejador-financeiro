@@ -31,7 +31,9 @@ interface Props {
 }
 
 export function ExpensesByCategoryChart({ data, income, balance }: Props) {
-  const [view, setView] = useState<'cats' | 'flow'>('cats');
+  // O Fluxo é a visão padrão — é a leitura-resumo do mês; a lista de
+  // categorias com drill-down fica a um toque para quem quer o detalhe.
+  const [view, setView] = useState<'cats' | 'flow'>('flow');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   function toggleExpand(name: string) {
@@ -84,11 +86,11 @@ export function ExpensesByCategoryChart({ data, income, balance }: Props) {
             role="group"
             aria-label="Visão das despesas por categoria"
           >
-            <ViewButton active={view === 'cats'} onClick={() => setView('cats')}>
-              Categorias
-            </ViewButton>
             <ViewButton active={view === 'flow'} onClick={() => setView('flow')}>
               Fluxo
+            </ViewButton>
+            <ViewButton active={view === 'cats'} onClick={() => setView('cats')}>
+              Categorias
             </ViewButton>
           </div>
         </div>
