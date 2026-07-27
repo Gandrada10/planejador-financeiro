@@ -266,8 +266,12 @@ export function DashboardPage() {
           transactions={transactions}
           categories={categories}
           monthYear={monthYear}
+          monthLabel={getMonthLabel(monthYear)}
+          monthIncome={totalEntries}
+          monthExpenses={totalExits}
           monthBalance={totalBalance}
           avg12mResult={avg12months}
+          isMonthInProgress={isMonthInProgress}
           costOfLiving={costOfLiving}
           budget={{
             limit: budgetTotalLimit,
@@ -283,8 +287,6 @@ export function DashboardPage() {
           transactions={transactions}
           categories={categories}
           monthYear={monthYear}
-          monthExpenses={totalExits}
-          monthLabel={getMonthLabel(monthYear)}
           costOfLiving={costOfLiving}
           isMonthInProgress={isMonthInProgress}
         />

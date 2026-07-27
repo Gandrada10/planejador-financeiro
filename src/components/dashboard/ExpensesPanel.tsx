@@ -1,9 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Info } from 'lucide-react';
 import { MonthlyExpensesChart } from './MonthlyExpensesChart';
 import { CostOfLivingChart } from './CostOfLivingChart';
 import { computeCostOfLiving } from '../../lib/costOfLiving';
-import { formatBRL0 } from '../../lib/utils';
 import type { CostOfLivingData } from '../../lib/costOfLiving';
 import type { Transaction, Category } from '../../types';
 
@@ -13,27 +11,25 @@ interface Props {
   transactions: Transaction[];
   categories: Category[];
   monthYear: string;
-  /** Despesas do mês selecionado (negativo, como vem do DashboardPage). */
-  monthExpenses: number;
-  /** Rótulo do mês selecionado, ex.: "junho de 2026". */
-  monthLabel: string;
   costOfLiving: CostOfLivingData;
   isMonthInProgress: boolean;
 }
 
 /**
- * Card único de despesas. A tendência (média móvel de 12M) não é uma "outra
- * visão" — é atributo do gráfico principal, presente em TODAS as janelas. O
- * seletor muda só o recorte de tempo: "Mês a mês" (ano vs ano anterior,
- * alinhados por mês) ou a linha do tempo contínua de 24/36 meses. O
- * número-herói do custo de vida é a manchete e fica fixo no cabeçalho.
+ * Card de despesas — SÓ o gráfico. Todos os números-herói do dashboard vivem na
+ * linha de indicadores acima (VitalSigns); um segundo número grande aqui
+ * partia a hierarquia da tela em duas.
+ *
+ * A tendência (média móvel de 12M) não é uma "outra visão" escondida atrás de
+ * aba — é atributo do gráfico, presente em TODAS as janelas, e se identifica
+ * pelo rótulo na própria ponta da linha. O seletor muda só o recorte de tempo:
+ * "Mês a mês" (ano vs ano anterior, alinhados por mês) ou a linha do tempo
+ * contínua de 24/36 meses.
  */
 export function ExpensesPanel({
   transactions,
   categories,
   monthYear,
-  monthExpenses,
-  monthLabel,
   costOfLiving,
   isMonthInProgress,
 }: Props) {
@@ -66,20 +62,6 @@ export function ExpensesPanel({
     return arr;
   }, [col, year]);
 
-  const spentMonth = Math.abs(monthExpenses);
-
-  // Despesa do mês vs custo de vida. Num mês em andamento a comparação seria
-  // enganosa (mês pela metade sempre parece "abaixo do normal").
-  const spentDelta =
-    !isMonthInProgress && col.endMA !== null && col.endMA > 0
-      ? ((spentMonth - col.endMA) / col.endMA) * 100
-      : null;
-  // Gastar acima do custo de vida é RUIM.
-  const deltaChipTone =
-    spentDelta !== null && spentDelta > 0
-      ? 'bg-negative/10 border-negative/35 text-negative'
-      : 'bg-positive/10 border-positive/35 text-positive';
-
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-3 flex-wrap">
@@ -87,8 +69,8 @@ export function ExpensesPanel({
           <h3 className="text-title font-semibold text-text-primary">Despesas</h3>
           <p className="text-caption text-ink-3 mt-0.5">
             {view === 'year'
-              ? `${year} vs ${prevYear} · linha: média móvel de 12 meses`
-              : `Últimos ${view === 'm24' ? 24 : 36} meses · barras mensais + média móvel de 12 meses`}
+              ? `${year} vs ${prevYear} · linha: custo de vida (média móvel de 12 meses)`
+              : `Últimos ${view === 'm24' ? 24 : 36} meses · linha: custo de vida (média móvel de 12 meses)`}
           </p>
         </div>
 
@@ -104,40 +86,6 @@ export function ExpensesPanel({
             36M
           </LensButton>
         </div>
-      </div>
-
-      {/* Número-herói: despesa do MÊS SELECIONADO — o card responde ao seletor
-          de mês, então o número grande tem que responder também. O custo de
-          vida (média móvel) virou sinal vital lá em cima; aqui ele aparece
-          como a linha do gráfico, rotulada na própria ponta. */}
-      <div className="flex items-end justify-between gap-3 flex-wrap">
-        <div>
-          <p className="text-kpi font-bold tracking-tight tnum leading-none text-text-primary">
-            {formatBRL0(spentMonth)}
-          </p>
-          <p className="text-caption text-ink-3 mt-1 flex items-center gap-1">
-            despesas de {monthLabel}
-            <span
-              className="cursor-help flex-shrink-0"
-              title="A linha do gráfico é o custo de vida: em cada mês, a média das despesas dos 12 meses anteriores. O mês em andamento fica de fora dela. Inclui todas as despesas; transferências ficam de fora."
-              aria-label="A linha do gráfico é a média das despesas dos 12 meses anteriores a cada mês."
-            >
-              <Info size={12} />
-            </span>
-          </p>
-        </div>
-
-        {spentDelta !== null && (
-          <span
-            className={`inline-flex items-center gap-1.5 text-caption font-semibold tnum px-2.5 py-1 rounded-full border ${deltaChipTone}`}
-          >
-            {spentDelta > 0 ? '+' : ''}
-            {spentDelta.toFixed(1).replace('.', ',')}% vs custo de vida ({formatBRL0(col.endMA!)}/mês)
-          </span>
-        )}
-        {spentDelta === null && isMonthInProgress && (
-          <span className="text-caption text-ink-3">mês em andamento</span>
-        )}
       </div>
 
       {view === 'year' ? (
