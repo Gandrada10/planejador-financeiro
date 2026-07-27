@@ -7,7 +7,7 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
-import { CashFlowChart } from './CashFlowChart';
+import { CashFlowTable } from './CashFlowTable';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
 import { ExpensesPanel } from './ExpensesPanel';
@@ -96,16 +96,8 @@ export function DashboardPage() {
       if (isIncomeAmount(t)) acc.entries += t.amount;
       else acc.exits += t.amount;
     }
-    // Ordem pedida: conta corrente → cartões → vale (benefício) → demais →
-    // "Sem conta" por último. Dentro do mesmo tipo, alfabético.
-    const typeRank = (name: string): number => {
-      const t = accounts.find((a) => a.name === name)?.type;
-      if (t === 'corrente') return 0;
-      if (t === 'cartao') return 1;
-      if (t === 'beneficio') return 2;
-      if (!t) return 4; // "Sem conta" (sem cadastro)
-      return 3; // poupanca/investimento/outro
-    };
+    // A ORDEM entre tipos é do CashFlowTable (que agrupa por tipo); aqui só
+    // ordena alfabeticamente dentro de cada grupo.
     return Array.from(map.entries())
       .map(([name, v]) => {
         const account = accounts.find((a) => a.name === name);
@@ -113,18 +105,15 @@ export function DashboardPage() {
         const cycle = isCard && account ? getCycleForCard(account.id, monthYear) : undefined;
         return {
           accountName: name,
+          type: account?.type,
           entries: v.entries,
           exits: v.exits,
           balance: v.entries + v.exits,
-          color: '',
           isCard,
           cycleStatus: cycle?.status ?? (isCard ? 'open' : undefined),
         };
       })
-      .sort((a, b) => {
-        const d = typeRank(a.accountName) - typeRank(b.accountName);
-        return d !== 0 ? d : a.accountName.localeCompare(b.accountName, 'pt-BR');
-      });
+      .sort((a, b) => a.accountName.localeCompare(b.accountName, 'pt-BR'));
   }, [monthTransactions, accounts, getCycleForCard, monthYear, excludedIds]);
 
   // Expenses by category (grouped by parent; subcategory breakdowns tracked separately)
@@ -294,7 +283,7 @@ export function DashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* LEFT COLUMN: Cash flow + KPIs */}
           <div className="space-y-4">
-            <CashFlowChart
+            <CashFlowTable
               data={cashFlowData}
               totalEntries={totalEntries}
               totalExits={totalExits}
