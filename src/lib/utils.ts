@@ -5,6 +5,19 @@ export function formatBRL(value: number): string {
   }).format(value);
 }
 
+/** Valor monetário com sinal explícito no positivo ("+R$ 1.000,00"). */
+export function formatSignedBRL(value: number): string {
+  return `${value > 0 ? '+' : ''}${formatBRL(value)}`;
+}
+
+/** Rótulo curto de eixo/ticks: "R$ 40 mil". Nunca usar em célula de valor. */
+export function formatCompactBRL(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1).replace('.', ',')} mi`;
+  if (abs >= 1_000) return `R$ ${Math.round(value / 1_000)} mil`;
+  return `R$ ${Math.round(value)}`;
+}
+
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('pt-BR').format(date);
 }

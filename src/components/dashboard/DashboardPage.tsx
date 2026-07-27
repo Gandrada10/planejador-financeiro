@@ -9,7 +9,11 @@ import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
-import { formatBRL, formatDate, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { CostOfLivingPanel } from './CostOfLivingPanel';
+import { MonthlyExpensesChart } from './MonthlyExpensesChart';
+import { CategoryMix12mChart } from './CategoryMix12mChart';
+import { ProjectsPanel } from './ProjectsPanel';
+import { formatBRL, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -20,7 +24,7 @@ export function DashboardPage() {
   const { getBudgetsForMonth } = useBudgets();
   const { accounts } = useAccounts();
   const { getCycleForCard } = useBillingCycles();
-  const { activeProjects } = useProjects();
+  const { projects } = useProjects();
 
   // Ids de categorias fora-dos-totais ("Transferência") — pré-computado uma vez
   // e reutilizado em todos os blocos de agregação abaixo (regra: countsInTotals).
@@ -69,24 +73,6 @@ export function DashboardPage() {
   const isMonthInProgress = monthYear === getMonthYear();
   const selectedMonthIdx = Number(monthYear.split('-')[1]) - 1;
   const periodLabel = `Jan–${MONTH_ABBR[selectedMonthIdx]}`;
-
-  // Active projects with both monthly and all-time spending
-  const projectsData = useMemo(() => {
-    return activeProjects.map((p) => {
-      const monthTxs = monthTransactions.filter((t) => t.projectId === p.id);
-      const spentMonth = monthTxs.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
-
-      const allTxs = transactions.filter((t) => t.projectId === p.id);
-      const spentTotal = allTxs.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
-
-      return {
-        ...p,
-        spentMonth,
-        spentTotal,
-        countMonth: monthTxs.length,
-      };
-    });
-  }, [activeProjects, transactions, monthTransactions, excludedIds]);
 
   // Cash flow by account
   const cashFlowData = useMemo(() => {
@@ -261,6 +247,14 @@ export function DashboardPage() {
       </div>
 
       {hasData ? (
+        <div className="space-y-4">
+        {/* Evolução mês a mês em largura total: 24 barras não cabem em meia tela */}
+        <MonthlyExpensesChart
+          transactions={transactions}
+          categories={categories}
+          monthYear={monthYear}
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* LEFT COLUMN: Cash flow + KPIs */}
           <div className="space-y-4">
@@ -282,49 +276,34 @@ export function DashboardPage() {
               isMonthInProgress={isMonthInProgress}
               periodLabel={periodLabel}
             />
+
+            {/* Custo de vida: base de comparação diferente do YoY — card próprio */}
+            <CostOfLivingPanel
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+            />
           </div>
 
           {/* RIGHT COLUMN: Expenses + Projects + Metas */}
           <div className="space-y-4">
             <ExpensesByCategoryChart data={expensesByCategory} />
 
-            {/* Projetos em andamento */}
-            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-              <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Projetos em andamento</h3>
-              {projectsData.length === 0 ? (
-                <p className="text-xs text-text-secondary">Nenhum projeto ativo.</p>
-              ) : (
-                <div className="space-y-2">
-                  {/* Column headers */}
-                  <div className="grid grid-cols-[1fr_repeat(2,_minmax(70px,_90px))] gap-2 text-[10px] text-text-secondary uppercase tracking-wider">
-                    <span />
-                    <span className="text-right">Acumulado</span>
-                    <span className="text-right">Gasto no mês</span>
-                  </div>
+            {/* Composição estrutural: peso de cada categoria na média de 12 meses */}
+            <CategoryMix12mChart
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+            />
 
-                  {projectsData.map((p) => (
-                    <div
-                      key={p.id}
-                      className="grid grid-cols-[1fr_repeat(2,_minmax(70px,_90px))] gap-2 items-center border-l-2 pl-2 py-0.5"
-                      style={{ borderColor: p.color }}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs text-text-primary truncate font-medium">{p.name}</p>
-                        <p className="text-[10px] text-text-secondary mt-0.5">
-                          {p.startDate ? `Início: ${formatDate(p.startDate)}` : 'Sem data de início'}
-                        </p>
-                      </div>
-                      <span className={`text-xs tnum text-right ${p.spentTotal < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
-                        {p.spentTotal < 0 ? formatBRL(p.spentTotal) : '—'}
-                      </span>
-                      <span className={`text-xs tnum text-right ${p.spentMonth < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
-                        {p.countMonth > 0 && p.spentMonth < 0 ? formatBRL(p.spentMonth) : '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Projetos do ano selecionado: em andamento + concluídos */}
+            <ProjectsPanel
+              projects={projects}
+              transactions={transactions}
+              excludedIds={excludedIds}
+              monthYear={monthYear}
+            />
 
             {/* Metas de despesas */}
             <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
@@ -400,6 +379,7 @@ export function DashboardPage() {
               )}
             </div>
           </div>
+        </div>
         </div>
       ) : (
         <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
