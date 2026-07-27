@@ -2,23 +2,32 @@ import { Sankey, Layer, Rectangle, ResponsiveContainer } from 'recharts';
 import { MONEY, OTHER_COLOR, FONT } from '../../lib/chartTheme';
 import { formatBRL0 } from '../../lib/utils';
 
-interface CategorySlice {
+interface SubSlice {
   name: string;
   color: string;
-  /** Negativo, como vem do DashboardPage. */
+  /** Negativo = despesa; positivo = reembolso líquido. */
   amount: number;
 }
+
+export interface CategorySlice extends SubSlice {
+  subs: SubSlice[];
+}
+
+export type FlowLevel = 'parent' | 'sub';
 
 interface Props {
   /** Receitas do mês (positivo). */
   income: number;
   /** Resultado do mês (receitas + despesas, sinal livre). */
   balance: number;
-  /** Despesas por categoria-mãe do mês. */
   categories: CategorySlice[];
+  /** 'sub' abre uma quarta coluna com as subcategorias. */
+  level: FlowLevel;
 }
 
 const TOP_N = 8;
+/** Fatia menor que isto do total não ganha nó próprio — vira "Outras". */
+const MIN_SHARE = 0.015;
 
 interface SankeyNodeDef {
   name: string;
@@ -39,6 +48,8 @@ function SankeyNodeShape(props: any) {
   return (
     <Layer>
       <Rectangle x={x} y={y} width={width} height={height} fill={payload.color} radius={2} />
+      {/* Contorno na cor do card: no nível de subcategoria as fitas cruzam por
+          cima dos rótulos das colunas do meio e os tornavam ilegíveis. */}
       <text
         x={tx}
         y={y + height / 2 + (compact ? 3.5 : -2)}
@@ -47,6 +58,10 @@ function SankeyNodeShape(props: any) {
         fontSize={11}
         fontWeight={600}
         fill="#f5f4f2"
+        stroke="#1b1b1e"
+        strokeWidth={3}
+        strokeLinejoin="round"
+        paintOrder="stroke"
       >
         {payload.name}
         {compact && (
@@ -64,6 +79,10 @@ function SankeyNodeShape(props: any) {
           fontFamily={FONT}
           fontSize={10.5}
           fill="#8f8e89"
+          stroke="#1b1b1e"
+          strokeWidth={3}
+          strokeLinejoin="round"
+          paintOrder="stroke"
         >
           {formatBRL0(payload.value)}
           {payload.share !== null && ` · ${payload.share.toFixed(0)}%`}
@@ -73,8 +92,7 @@ function SankeyNodeShape(props: any) {
   );
 }
 
-// Fita com gradiente da cor de origem para a de destino, como no Monarch —
-// o traço chapado translúcido lia como fio solto, não como fluxo de dinheiro.
+// Fita com gradiente da cor de origem para a de destino, como no Monarch.
 function SankeyLinkShape(props: any) {
   const { sourceX, targetX, sourceY, targetY, sourceControlX, targetControlX, linkWidth, payload, index } = props;
   const id = `sankey-link-${index}`;
@@ -99,41 +117,51 @@ function SankeyLinkShape(props: any) {
 
 /**
  * Fluxo do dinheiro do mês (diagrama de Sankey, à la Monarch Money):
- * fontes → caixa do mês → destinos.
  *
- *   Receitas ─┐                ┌─ Moradia
- *             ├─ Caixa do mês ─┼─ Alimentação …
+ *   Receitas ─┐                ┌─ Moradia ─┬─ Aluguel
+ *             ├─ Caixa do mês ─┤           └─ Condomínio
  *   Reserva ─┘                 └─ Sobra
  *
+ * SINAL: uma categoria com saldo POSITIVO é reembolso líquido — dinheiro que
+ * VOLTOU. Ela entra como fonte, nunca como destino; tratá-la por Math.abs()
+ * a transformaria numa saída e o diagrama deixaria de fechar.
+ *
  * "Da reserva" só aparece em mês deficitário (o que saiu além do que entrou
- * veio de algum lugar); "Sobra" só em mês superavitário. Assim o diagrama
- * SEMPRE fecha: entradas = saídas, sem fluxo negativo — que Sankey não tem
- * como representar.
+ * veio de algum lugar); "Sobra" só em mês superavitário. Com isso entradas =
+ * saídas sempre — Sankey não representa fluxo negativo.
  */
-export function CashFlowSankey({ income, balance, categories }: Props) {
-  const expenses = categories
-    .map((c) => ({ ...c, value: Math.abs(c.amount) }))
-    .filter((c) => c.value > 0);
+export function CashFlowSankey({ income, balance, categories, level }: Props) {
+  // Despesas de verdade (saídas) vs reembolsos líquidos (entradas).
+  const outCats = categories
+    .filter((c) => c.amount < 0)
+    .map((c) => ({ ...c, value: -c.amount }))
+    .sort((a, b) => b.value - a.value);
+  const inCats = categories.filter((c) => c.amount > 0).map((c) => ({ ...c, value: c.amount }));
 
-  const totalExp = expenses.reduce((s, c) => s + c.value, 0);
-  if (totalExp === 0 && income <= 0) {
+  const totalOut = outCats.reduce((s, c) => s + c.value, 0);
+  if (totalOut === 0 && income <= 0) {
     return <p className="text-caption text-ink-3 text-center py-10">Sem movimento neste mês.</p>;
   }
 
-  // Fatias minúsculas viram "Outras" — abaixo de 1,5% o rótulo não cabe.
-  const big = expenses.filter((c, i) => i < TOP_N && c.value / totalExp >= 0.015);
-  const restTotal = totalExp - big.reduce((s, c) => s + c.value, 0);
-
-  const available = income + (balance < 0 ? -balance : 0);
+  const inflow = income + inCats.reduce((s, c) => s + c.value, 0);
+  // inflow − totalOut === balance, por construção.
+  const available = Math.max(inflow, totalOut);
   const shareOf = (v: number) => (available > 0 ? (v / available) * 100 : null);
 
   const nodes: SankeyNodeDef[] = [];
   const links: Array<{ source: number; target: number; value: number }> = [];
   const push = (n: SankeyNodeDef) => nodes.push(n) - 1;
 
+  // ---- Fontes ----
   const sources: Array<{ idx: number; value: number }> = [];
   if (income > 0) {
     sources.push({ idx: push({ name: 'Receitas', color: MONEY.income, share: shareOf(income) }), value: income });
+  }
+  for (const c of inCats) {
+    sources.push({
+      idx: push({ name: c.name, color: c.color || MONEY.income, share: shareOf(c.value) }),
+      value: c.value,
+    });
   }
   if (balance < 0) {
     sources.push({
@@ -145,18 +173,49 @@ export function CashFlowSankey({ income, balance, categories }: Props) {
   const middleIdx = push({ name: 'Caixa do mês', color: MONEY.balance, share: null });
   for (const s of sources) links.push({ source: s.idx, target: middleIdx, value: s.value });
 
+  // ---- Destinos ----
+  const big = outCats.filter((c, i) => i < TOP_N && c.value / totalOut >= MIN_SHARE);
+  const restTotal = totalOut - big.reduce((s, c) => s + c.value, 0);
+
   for (const c of big) {
-    links.push({
-      source: middleIdx,
-      target: push({ name: c.name, color: c.color, share: shareOf(c.value) }),
-      value: c.value,
-    });
+    const parentIdx = push({ name: c.name, color: c.color, share: shareOf(c.value) });
+    links.push({ source: middleIdx, target: parentIdx, value: c.value });
+
+    if (level !== 'sub') continue;
+
+    // Subcategorias: só divide quando os filhos cabem no pai. Se um sub tiver
+    // saldo positivo (reembolso), a soma dos negativos pode passar do total do
+    // pai — nesse caso o pai fica como folha, em vez de distorcer os valores.
+    const subOut = c.subs
+      .filter((s) => s.amount < 0)
+      .map((s) => ({ ...s, value: -s.amount }))
+      .filter((s) => s.value / totalOut >= 0.01)
+      .sort((a, b) => b.value - a.value);
+    const subSum = subOut.reduce((s, x) => s + x.value, 0);
+    if (subOut.length === 0 || subSum > c.value + 0.01) continue;
+
+    for (const s of subOut) {
+      links.push({
+        source: parentIdx,
+        target: push({ name: s.name, color: s.color || c.color, share: shareOf(s.value) }),
+        value: s.value,
+      });
+    }
+    const remainder = c.value - subSum;
+    if (remainder > totalOut * 0.005) {
+      links.push({
+        source: parentIdx,
+        target: push({ name: `${c.name} · outros`, color: c.color, share: shareOf(remainder) }),
+        value: remainder,
+      });
+    }
   }
+
   if (restTotal > 0.005) {
     links.push({
       source: middleIdx,
       target: push({
-        name: `Outras (${expenses.length - big.length})`,
+        name: `Outras (${outCats.length - big.length})`,
         color: OTHER_COLOR,
         share: shareOf(restTotal),
       }),
@@ -171,10 +230,11 @@ export function CashFlowSankey({ income, balance, categories }: Props) {
     });
   }
 
+  // Com a coluna de subcategorias a lista fica mais longa — o card cresce.
+  const height = level === 'sub' ? Math.max(380, nodes.length * 26) : 360;
+
   return (
-    // Altura maior + padding menor entre nós = fitas que PREENCHEM o espaço
-    // (a la Monarch), em vez de fios finos boiando em fundo preto.
-    <div className="h-[360px] w-full">
+    <div className="w-full" style={{ height }}>
       <ResponsiveContainer width="100%" height="100%">
         <Sankey
           data={{ nodes, links }}

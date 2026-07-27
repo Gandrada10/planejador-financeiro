@@ -8,7 +8,7 @@ import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowTable } from './CashFlowTable';
-import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
+import { MonthFlowPanel } from './MonthFlowPanel';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
 import { ExpensesPanel } from './ExpensesPanel';
 import { CategoryMix12mChart } from './CategoryMix12mChart';
@@ -309,7 +309,7 @@ export function DashboardPage() {
 
           {/* RIGHT COLUMN: Expenses + Projects + Metas */}
           <div className="space-y-4">
-            <ExpensesByCategoryChart data={expensesByCategory} income={totalEntries} balance={totalBalance} />
+            <MonthFlowPanel data={expensesByCategory} income={totalEntries} balance={totalBalance} />
 
             {/* Composição estrutural: peso de cada categoria na média de 12 meses */}
             <CategoryMix12mChart
