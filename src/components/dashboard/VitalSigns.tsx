@@ -286,13 +286,21 @@ export function VitalSigns({
   );
 }
 
+/**
+ * No celular são 2 colunas com o TERCEIRO tile ocupando a linha inteira —
+ * empilhar os três deixaria a tela com quase 2000px de rolagem. E o terceiro
+ * de cada grupo é justamente a conclusão (Resultado / Metas), então ganhar
+ * largura é hierarquia, não sobra de layout.
+ */
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
       <p className="text-caption font-semibold uppercase tracking-wider text-ink-3 mb-1.5 px-0.5">
         {label}
       </p>
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">{children}</div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 [&>*:nth-child(3)]:col-span-2 sm:[&>*:nth-child(3)]:col-span-1">
+        {children}
+      </div>
     </div>
   );
 }
@@ -321,13 +329,17 @@ function Tile({
 }) {
   return (
     <div
-      className="bg-bg-card border border-border rounded-card px-4 py-3.5 flex flex-col gap-1.5 min-w-0"
+      className="bg-bg-card border border-border rounded-card px-3 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-1 sm:gap-1.5 min-w-0"
       title={hint}
     >
-      <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 truncate">{label}</span>
-      <span className={`text-kpi font-bold tracking-tight tnum leading-none truncate ${valueTone}`}>
+      {/* Quebra em 2 linhas em vez de truncar: em 2 colunas no celular,
+          "TAXA DE POUPANÇA · ANO" não cabe numa linha e virava "TAXA DE ...". */}
+      <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 leading-tight">{label}</span>
+      {/* 28px é herói de desktop; no celular a mesma medida vira 6 blocos de
+          tela cheia. 21px mantém a hierarquia sem estourar a rolagem. */}
+      <span className={`text-[21px] sm:text-kpi font-bold tracking-tight tnum leading-none truncate ${valueTone}`}>
         {value}
-        {valueSuffix && <span className="text-body font-medium text-text-secondary tracking-normal">{valueSuffix}</span>}
+        {valueSuffix && <span className="text-caption sm:text-body font-medium text-text-secondary tracking-normal">{valueSuffix}</span>}
       </span>
       {delta ? (
         <span className={`flex items-baseline gap-1.5 text-caption font-semibold tnum ${delta.tone} min-w-0`}>

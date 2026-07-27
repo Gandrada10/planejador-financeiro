@@ -4,6 +4,7 @@ import { formatBRL, formatSignedBRL } from '../../lib/utils';
 import {
   YOY_ROW_GRID,
   YOY_PREV_CELL,
+  YOY_DELTA_CELL,
   resolveTrend,
   resolveImpact,
   toneForDelta,
@@ -17,7 +18,7 @@ export function ColumnHeader({ deltaLabel = 'Δ R$' }: { deltaLabel?: string }) 
       <span>Categoria</span>
       <span className="text-right">Atual</span>
       <span className={`${YOY_PREV_CELL} text-right`}>Anterior</span>
-      <span className="text-right">{deltaLabel}</span>
+      <span className={`${YOY_DELTA_CELL} text-right`}>{deltaLabel}</span>
       <span className="text-right">%</span>
     </div>
   );
@@ -93,7 +94,7 @@ export function YoyRow({
 
       <span
         className="text-body tnum text-text-primary text-right"
-        title={`${prevYear}: ${formatBRL(item.prev)}`}
+        title={`${prevYear}: ${formatBRL(item.prev)} · Δ ${formatSignedBRL(delta)}`}
       >
         {formatBRL(item.curr)}
       </span>
@@ -102,7 +103,7 @@ export function YoyRow({
         {formatBRL(item.prev)}
       </span>
 
-      <span className={`text-body tnum font-semibold text-right ${deltaTone}`}>
+      <span className={`${YOY_DELTA_CELL} text-body tnum font-semibold text-right ${deltaTone}`}>
         {formatSignedBRL(delta)}
       </span>
 
@@ -122,7 +123,7 @@ export function YoyRow({
       type="button"
       onClick={onToggle}
       aria-expanded={open}
-      className={`w-full text-left ${YOY_ROW_GRID} ${rowPad} hover:bg-elevated/60 cursor-pointer`}
+      className={`w-full text-left ${YOY_ROW_GRID} ${rowPad} hover:bg-elevated/60 active:bg-elevated cursor-pointer`}
     >
       {content}
     </button>

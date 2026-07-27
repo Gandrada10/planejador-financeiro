@@ -81,6 +81,43 @@ body {
 /* Números alinhados em colunas — assume o papel que a fonte mono tinha */
 .tnum { font-variant-numeric: tabular-nums; }
 
+/* ---------------------------------------------------------------------
+ * iPhone / PWA instalado na tela de início
+ * ------------------------------------------------------------------- */
+
+/* O index.html usa viewport-fit=cover para o app ocupar a tela inteira quando
+ * instalado. Isso coloca conteúdo embaixo do notch/Dynamic Island e da barra
+ * de gestos — estas classes devolvem o respiro. */
+.safe-t { padding-top: env(safe-area-inset-top, 0px); }
+.safe-b { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.safe-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Safari no iOS aumenta a fonte sozinho ao girar para paisagem. */
+html { -webkit-text-size-adjust: 100%; }
+
+/* Faixas que rolam na horizontal (gráficos largos): inércia do iOS e sem
+ * encadear o "bounce" para a página inteira. */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar { display: none; }
+
+/* Alvo de toque mínimo de 44px (HIG da Apple) só onde o ponteiro é grosso —
+ * no desktop os controles seguem compactos. */
+@media (pointer: coarse) {
+  .tap { min-height: 44px; min-width: 44px; }
+}
+
+/* O retângulo cinza do Safari ao tocar; o :active de cada controle já
+ * comunica o toque. */
+* { -webkit-tap-highlight-color: transparent; }
+
 /* Foco visível (acessibilidade — WCAG 1.4.11).
  * Menta SÓLIDA: 11,69:1 no bg-primary, 9,43:1 até no fundo mais claro
  * (elevated) — o accent-dim translúcido compunha 2,15–2,19:1, reprovado.

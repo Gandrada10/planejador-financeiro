@@ -67,7 +67,101 @@ export function CashFlowTable({
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
       <h3 className="text-title font-semibold text-text-primary">Resultados de caixa</h3>
 
-      <div className="overflow-auto">
+      {/* CELULAR: lista empilhada. Quatro colunas de dinheiro em 393px colidem
+          os cabeçalhos e cortam os valores no meio — aqui cada grupo é um
+          bloco com o resultado em destaque e entradas/saídas como detalhe. */}
+      <div className="sm:hidden divide-y divide-border/40 -my-1">
+        {groups.map((g) => {
+          const single = g.rows.length === 1 ? g.rows[0] : null;
+          return (
+            <div key={g.label} className="py-2.5 space-y-1">
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="text-caption uppercase tracking-wider text-ink-3 font-semibold truncate">
+                  {g.label}
+                </span>
+                <span
+                  className={`text-body tnum font-semibold flex-shrink-0 ${
+                    g.balance >= 0 ? 'text-accent-green' : 'text-accent-red'
+                  }`}
+                >
+                  {formatBRL(g.balance)}
+                </span>
+              </div>
+
+              {/* A quebra entradas/saídas só informa quando existem as duas: num
+                  cartão (entradas = 0) ela repetiria o resultado já mostrado. */}
+              {(() => {
+                const showSplit = g.entries !== 0 && g.exits !== 0;
+                const name = single && single.accountName !== g.label ? single.accountName : '';
+                if (!showSplit && !name) return null;
+                return (
+                  <div className="flex items-baseline justify-between gap-2 text-caption tnum">
+                    <span className="text-text-secondary truncate">
+                      {name}
+                      {single?.isCard && <CycleChip status={single.cycleStatus} />}
+                    </span>
+                    {showSplit && (
+                      <span className="flex-shrink-0">
+                        <span className="text-accent-green">{formatBRL(g.entries)}</span>
+                        <span className="text-ink-3"> · </span>
+                        <span className="text-accent-red">{formatBRL(g.exits)}</span>
+                      </span>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {!single &&
+                g.rows.map((d) => (
+                  <div
+                    key={d.accountName}
+                    className="flex items-baseline justify-between gap-2 pl-3 text-caption"
+                  >
+                    <span className="text-text-secondary truncate">
+                      {d.accountName}
+                      {d.isCard && <CycleChip status={d.cycleStatus} />}
+                    </span>
+                    <span
+                      className={`tnum flex-shrink-0 ${
+                        d.balance >= 0 ? 'text-accent-green/80' : 'text-accent-red/80'
+                      }`}
+                    >
+                      {formatBRL(d.balance)}
+                    </span>
+                  </div>
+                ))}
+            </div>
+          );
+        })}
+
+        <div className="py-2.5 space-y-1">
+          <div className="flex items-baseline justify-between gap-2">
+            <span className="text-body font-semibold text-text-primary">Total (mês)</span>
+            <span
+              className={`text-body tnum font-semibold ${
+                totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'
+              }`}
+            >
+              {formatBRL(totalBalance)}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 text-caption tnum text-ink-3">
+            <span>Acumulado {currentYear}</span>
+            <span className={yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}>
+              {formatBRL(yearBalance)}
+            </span>
+          </div>
+          <div className="flex items-baseline justify-between gap-2 text-caption tnum text-ink-3">
+            <span>Média mensal (12M)</span>
+            <span className={avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}>
+              {formatBRL(avg12months)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* DESKTOP/TABLET: a tabela de 4 colunas */}
+      <div className="hidden sm:block overflow-auto">
         <table className="w-full text-body table-fixed">
           <colgroup>
             <col />

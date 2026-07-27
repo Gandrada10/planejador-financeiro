@@ -32,10 +32,11 @@ export function CostOfLivingChart({ data }: { data: CostOfLivingData }) {
   }
 
   return (
-    // Janelas longas (36M) rolam horizontalmente em vez de espremer as barras:
-    // o min-width dá ~34px por mês e o scroll só aparece quando não cabe.
-    <div className="w-full overflow-x-auto">
-      <div className="h-[220px]" style={{ minWidth: `${data.points.length * 34}px` }}>
+    // Janelas longas (24/36M) rolam horizontalmente em vez de espremer as
+    // barras: o min-width dá ~34px por mês e o scroll só aparece quando não
+    // cabe — no celular sempre, no desktop só no 36M.
+    <div className="scroll-x">
+      <div className="h-[200px] sm:h-[220px]" style={{ minWidth: `${data.points.length * 34}px` }}>
       <ResponsiveContainer width="100%" height="100%">
         <ComposedChart data={data.points} margin={{ top: 8, right: 12, left: 0, bottom: 0 }}>
           <CartesianGrid {...GRID_STYLE} />

@@ -134,7 +134,11 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
         </p>
       )}
 
-      <div className="h-[220px] w-full">
+      {/* 24 barras (2 séries × 12 meses) em 393px viram um pente. Um piso de
+          largura por mês faz a faixa rolar na horizontal no celular em vez de
+          espremer — no desktop o min-width nunca é atingido. */}
+      <div className="scroll-x">
+        <div className="h-[200px] sm:h-[220px] min-w-[560px] sm:min-w-0">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={2}>
             <CartesianGrid {...GRID_STYLE} />
@@ -245,6 +249,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
             )}
           </ComposedChart>
         </ResponsiveContainer>
+        </div>
       </div>
     </div>
   );

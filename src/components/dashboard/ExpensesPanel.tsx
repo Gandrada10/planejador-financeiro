@@ -63,8 +63,8 @@ export function ExpensesPanel({
   }, [col, year]);
 
   return (
-    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
+    <div className="bg-bg-card border border-border rounded-card p-3 sm:p-4 space-y-3">
+      <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="min-w-0">
           <h3 className="text-title font-semibold text-text-primary">Despesas</h3>
           <p className="text-caption text-ink-3 mt-0.5">
@@ -117,8 +117,8 @@ function LensButton({
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`px-3 py-1 rounded-[10px] text-caption font-medium transition-colors ${
-        active ? 'bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary'
+      className={`tap px-3 py-1 rounded-[10px] text-caption font-medium transition-colors ${
+        active ? 'bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary active:bg-elevated/60'
       }`}
     >
       {children}

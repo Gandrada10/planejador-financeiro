@@ -51,7 +51,7 @@ export function Layout() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed inset-y-0 left-0 z-40 bg-bg-secondary border-r border-border flex flex-col transition-[width,transform] lg:translate-x-0 lg:static w-48',
+          'fixed inset-y-0 left-0 z-40 bg-bg-secondary border-r border-border flex flex-col transition-[width,transform] lg:translate-x-0 lg:static w-56 lg:w-48 safe-t safe-b overflow-y-auto',
           sidebarOpen ? 'translate-x-0' : '-translate-x-full',
           collapsed && 'lg:w-14'
         )}
@@ -91,15 +91,15 @@ export function Layout() {
               title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-3 py-2 text-xs rounded transition-colors',
+                  'tap flex items-center gap-3 py-2 text-body rounded-control transition-colors',
                   collapsed ? 'px-3 lg:px-0 lg:justify-center' : 'px-3',
                   isActive
                     ? 'bg-accent/10 text-accent border-l-2 border-accent'
-                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-card'
+                    : 'text-text-secondary hover:text-text-primary hover:bg-bg-card active:bg-bg-card'
                 )
               }
             >
-              <Icon size={16} className="flex-shrink-0" />
+              <Icon size={18} className="flex-shrink-0" />
               <span className={cn(collapsed && 'lg:hidden')}>{label}</span>
             </NavLink>
           ))}
@@ -147,18 +147,26 @@ export function Layout() {
 
       {/* Main */}
       <div className="flex-1 flex flex-col min-h-screen min-w-0">
-        <header className="h-12 bg-bg-secondary border-b border-border flex items-center px-4 gap-3 lg:hidden">
-          <button onClick={() => setSidebarOpen(!sidebarOpen)} aria-label="Abrir menu">
-            {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
-          </button>
-          <span className="text-accent text-xs font-bold tracking-wider">PLANEJADOR</span>
-          <div className="ml-auto flex items-center gap-3">
-            <AlertBell variant="header" />
-            <SyncStatus />
+        {/* Sticky + safe-t: com o app instalado na tela de início, o topo fica
+            embaixo do notch/Dynamic Island se não reservarmos o espaço. */}
+        <header className="sticky top-0 z-20 bg-bg-secondary/95 backdrop-blur border-b border-border lg:hidden safe-t safe-x">
+          <div className="h-12 flex items-center px-2 gap-1">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              aria-label={sidebarOpen ? 'Fechar menu' : 'Abrir menu'}
+              className="tap flex items-center justify-center text-text-primary rounded-control active:bg-elevated transition-colors"
+            >
+              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            <span className="text-accent text-caption font-bold tracking-wider">PLANEJADOR</span>
+            <div className="ml-auto flex items-center gap-1 pr-1">
+              <AlertBell variant="header" />
+              <SyncStatus />
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-6 overflow-auto">
+        <main className="flex-1 p-4 lg:p-6 overflow-auto safe-x safe-b">
           <Outlet />
         </main>
       </div>

@@ -15,8 +15,13 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
  */
 export const YOY_ROW_GRID =
   'grid items-center gap-x-2 ' +
-  'grid-cols-[14px_minmax(0,1fr)_96px_104px_68px] ' +
+  // Celular: 4 colunas de dinheiro não cabem em 393px — fica nome + atual + Δ.
+  'grid-cols-[14px_minmax(0,1fr)_88px_76px] ' +
+  '@min-[26rem]:grid-cols-[14px_minmax(0,1fr)_96px_104px_68px] ' +
   '@min-[34rem]:grid-cols-[14px_minmax(0,1fr)_96px_96px_104px_68px]';
+
+/** Coluna Δ R$: some no celular (o % conta a mesma história em menos espaço). */
+export const YOY_DELTA_CELL = 'hidden @min-[26rem]:block';
 
 /** Célula "Anterior": só existe a partir de 34rem de largura do card. */
 export const YOY_PREV_CELL = 'hidden @min-[34rem]:block';

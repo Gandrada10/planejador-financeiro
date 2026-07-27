@@ -6,6 +6,7 @@ import { ColumnHeader, YoyRow } from './YoyRow';
 import {
   YOY_ROW_GRID,
   YOY_PREV_CELL,
+  YOY_DELTA_CELL,
   resolveTrend,
   toneForDelta,
   type YoyItem,
@@ -408,7 +409,9 @@ function SummaryRow({
 
       <span
         className="text-body tnum font-semibold text-text-primary text-right"
-        title={`${prevYear}: ${hasPrev ? formatBRL(total.prev) : '—'}`}
+        title={`${prevYear}: ${hasPrev ? formatBRL(total.prev) : '—'}${
+          hasPrev ? ` · Δ ${formatSignedBRL(total.varianceAbs)}` : ''
+        }`}
       >
         {formatBRL(total.curr)}
       </span>
@@ -418,7 +421,7 @@ function SummaryRow({
       </span>
 
       <span
-        className={`text-body tnum font-semibold text-right ${
+        className={`${YOY_DELTA_CELL} text-body tnum font-semibold text-right ${
           hasPrev ? toneForDelta(total.varianceAbs, higherIsBetter) : 'text-ink-3'
         }`}
       >
