@@ -2,18 +2,14 @@ import { useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
 import {
   formatBRL0,
-  getMonthYear,
   countsInTotals,
   getExcludedFromTotalsIds,
   isIncomeAmount,
   isExpenseAmount,
   accountingDate,
-  getMonthYearOffset,
 } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 import type { CostOfLivingData } from '../../lib/costOfLiving';
-
-const MONTH_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 interface BudgetSummary {
   limit: number;
@@ -28,6 +24,11 @@ interface Props {
   monthYear: string;
   /** Resultado do mês selecionado (já computado pelo DashboardPage). */
   monthBalance: number;
+  /** Resultado médio dos últimos 12 meses (o mesmo da tabela de caixa). */
+  avg12mResult: number;
+  /** Despesas do mês selecionado (negativo, como vem do DashboardPage). */
+  monthExpenses: number;
+  isMonthInProgress: boolean;
   costOfLiving: CostOfLivingData;
   budget: BudgetSummary;
 }
@@ -35,38 +36,39 @@ interface Props {
 /**
  * Linha de sinais vitais: o dashboard responde "como estou?" em quatro números
  * antes de qualquer tabela. Cada tile é rótulo → número-herói → delta com seta
- * E sinal (nunca só cor). Ver docs/MELHORIAS-VISUAIS.md §3.2/§5.
+ * E sinal (nunca só cor). Comparações usam a média 12M como base — "vs mês
+ * anterior" era ruidoso demais (13º, fatura anual e reembolso distorcem).
+ * Ver docs/MELHORIAS-VISUAIS.md §3.2/§5.
  */
-export function VitalSigns({ transactions, categories, monthYear, monthBalance, costOfLiving, budget }: Props) {
+export function VitalSigns({
+  transactions,
+  categories,
+  monthYear,
+  monthBalance,
+  avg12mResult,
+  monthExpenses,
+  isMonthInProgress,
+  costOfLiving,
+  budget,
+}: Props) {
   const data = useMemo(() => {
     const excludedIds = getExcludedFromTotalsIds(categories);
     const [y, m] = monthYear.split('-').map(Number);
     const prevYear = y - 1;
-    const prevMonthKey = getMonthYearOffset(monthYear, -1);
 
-    let prevMonthBalance = 0;
-    let prevMonthTxCount = 0;
     let currInc = 0;
     let currExp = 0;
     let prevInc = 0;
     let prevExp = 0;
 
+    // Taxa de poupança YTD: Jan..m do ano do seletor vs mesmo período anterior.
     for (const t of transactions) {
       if (!countsInTotals(t, excludedIds)) continue;
       const ad = accountingDate(t);
-      const key = getMonthYear(ad);
-
-      if (key === prevMonthKey) {
-        prevMonthBalance += t.amount;
-        prevMonthTxCount++;
-      }
-
-      // Taxa de poupança YTD: Jan..m do ano do seletor vs mesmo período anterior.
       const ty = ad.getFullYear();
       const tm = ad.getMonth() + 1;
       if (tm > m) continue;
-      const income = isIncomeAmount(t);
-      const inc = income ? t.amount : 0;
+      const inc = isIncomeAmount(t) ? t.amount : 0;
       const exp = isExpenseAmount(t) ? -t.amount : 0;
       if (ty === y) {
         currInc += inc;
@@ -81,9 +83,6 @@ export function VitalSigns({ transactions, categories, monthYear, monthBalance, 
     const prevRate = prevInc > 0 ? (prevInc - prevExp) / prevInc : null;
 
     return {
-      prevMonthBalance,
-      prevMonthTxCount,
-      prevMonthAbbr: MONTH_ABBR[Number(prevMonthKey.split('-')[1]) - 1],
       currRate,
       savingsDeltaPp: currRate !== null && prevRate !== null ? (currRate - prevRate) * 100 : null,
       prevYear,
@@ -91,37 +90,36 @@ export function VitalSigns({ transactions, categories, monthYear, monthBalance, 
   }, [transactions, categories, monthYear]);
 
   const col = costOfLiving;
-  const colDeltaText =
-    col.deltaPct !== null && col.base !== null
-      ? `${col.deltaPct > 0 ? '+' : ''}${col.deltaPct.toFixed(1).replace('.', ',')}% ${
-          col.base.kind === '12m' ? 'em 12 meses' : `desde ${col.base.label}`
-        }`
-      : col.endPartialMonths !== null
-        ? `média de ${col.endPartialMonths} ${col.endPartialMonths === 1 ? 'mês' : 'meses'}`
-        : 'histórico curto';
+  const spentMonth = Math.abs(monthExpenses);
+
+  // Despesa do mês vs média móvel 12M. Num mês em andamento a comparação seria
+  // enganosa (mês pela metade sempre parece "abaixo do normal") — vira aviso.
+  const spentDelta =
+    !isMonthInProgress && col.endMA !== null && col.endMA > 0
+      ? ((spentMonth - col.endMA) / col.endMA) * 100
+      : null;
+
+  const resultDelta = monthBalance - avg12mResult;
 
   const budgetPct = budget.limit > 0 ? Math.round((budget.actual / budget.limit) * 100) : null;
-  const resultDelta = data.prevMonthTxCount > 0 ? monthBalance - data.prevMonthBalance : null;
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
       <Tile
         label="Resultado do mês"
+        hint="Receitas menos despesas do mês selecionado. O delta compara com o seu resultado médio dos últimos 12 meses."
         value={`${monthBalance > 0 ? '+' : ''}${formatBRL0(monthBalance)}`}
         valueTone={monthBalance >= 0 ? 'text-positive' : 'text-negative'}
-        delta={
-          resultDelta !== null
-            ? {
-                Icon: resultDelta > 0 ? TrendingUp : resultDelta < 0 ? TrendingDown : Minus,
-                tone: resultDelta >= 0 ? 'text-positive' : 'text-negative',
-                text: `${resultDelta > 0 ? '+' : ''}${formatBRL0(resultDelta)}`,
-                context: `vs ${data.prevMonthAbbr}`,
-              }
-            : undefined
-        }
+        delta={{
+          Icon: resultDelta > 0 ? TrendingUp : resultDelta < 0 ? TrendingDown : Minus,
+          tone: Math.abs(resultDelta) < 1 ? 'text-ink-3' : resultDelta > 0 ? 'text-positive' : 'text-negative',
+          text: `${resultDelta > 0 ? '+' : ''}${formatBRL0(resultDelta)}`,
+          context: 'vs média 12M',
+        }}
       />
       <Tile
         label="Taxa de poupança · ano"
+        hint="Resultado ÷ receitas, acumulados de janeiro até o mês selecionado. Negativa: no ano, você gastou mais do que ganhou (ex.: −24% = saíram R$ 124 para cada R$ 100 que entraram)."
         value={data.currRate !== null ? `${(data.currRate * 100).toFixed(1).replace('.', ',')}%` : '—'}
         delta={
           data.savingsDeltaPp !== null
@@ -139,29 +137,31 @@ export function VitalSigns({ transactions, categories, monthYear, monthBalance, 
         }
       />
       <Tile
-        label="Custo de vida · 12 meses"
-        value={col.endMA !== null ? formatBRL0(col.endMA) : '—'}
-        valueSuffix={col.endMA !== null ? '/mês' : undefined}
+        label="Despesas do mês"
+        hint="Total de despesas do mês selecionado. O delta compara com a sua média móvel de 12 meses (custo de vida)."
+        value={formatBRL0(spentMonth)}
         delta={
-          col.endMA !== null
-            ? {
-                Icon:
-                  col.deltaPct === null ? Minus : col.deltaPct > 0 ? TrendingUp : TrendingDown,
-                // Custo de vida subindo é RUIM.
-                tone:
-                  col.deltaPct === null
-                    ? 'text-ink-3'
-                    : col.deltaPct > 0
-                      ? 'text-negative'
-                      : 'text-positive',
-                text: colDeltaText,
-                context: '',
-              }
-            : undefined
+          isMonthInProgress
+            ? { Icon: Minus, tone: 'text-ink-3', text: 'mês em andamento', context: '' }
+            : spentDelta !== null
+              ? {
+                  Icon: spentDelta > 0 ? TrendingUp : spentDelta < 0 ? TrendingDown : Minus,
+                  // Gastar acima do normal é RUIM.
+                  tone:
+                    Math.abs(spentDelta) < 0.05
+                      ? 'text-ink-3'
+                      : spentDelta > 0
+                        ? 'text-negative'
+                        : 'text-positive',
+                  text: `${spentDelta > 0 ? '+' : ''}${spentDelta.toFixed(1).replace('.', ',')}%`,
+                  context: 'vs média 12M',
+                }
+              : undefined
         }
       />
       <Tile
         label="Metas do mês"
+        hint="Quanto do total das metas de despesa já foi consumido no mês."
         value={budgetPct !== null ? `${budgetPct}%` : '—'}
         delta={
           budgetPct !== null
@@ -194,19 +194,24 @@ interface TileDelta {
 
 function Tile({
   label,
+  hint,
   value,
   valueSuffix,
   valueTone = 'text-text-primary',
   delta,
 }: {
   label: string;
+  hint?: string;
   value: string;
   valueSuffix?: string;
   valueTone?: string;
   delta?: TileDelta;
 }) {
   return (
-    <div className="bg-bg-card border border-border rounded-card px-4 py-3.5 flex flex-col gap-1.5 min-w-0">
+    <div
+      className="bg-bg-card border border-border rounded-card px-4 py-3.5 flex flex-col gap-1.5 min-w-0"
+      title={hint}
+    >
       <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 truncate">{label}</span>
       <span className={`text-kpi font-bold tracking-tight tnum leading-none truncate ${valueTone}`}>
         {value}

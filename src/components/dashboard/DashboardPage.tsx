@@ -265,6 +265,9 @@ export function DashboardPage() {
           categories={categories}
           monthYear={monthYear}
           monthBalance={totalBalance}
+          avg12mResult={avg12months}
+          monthExpenses={totalExits}
+          isMonthInProgress={isMonthInProgress}
           costOfLiving={costOfLiving}
           budget={{
             limit: budgetTotalLimit,

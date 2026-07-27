@@ -30,12 +30,12 @@ export interface CostOfLivingData {
   /**
    * Base de comparação da tendência: a mesma média móvel 12 meses atrás
    * ('12m') ou, sem histórico para isso, o primeiro ponto cheio da série
-   * ('since' + label). null = histórico curto demais para tendência.
+   * ('since' + label). spanMonths = distância em meses até o fim da série —
+   * é o "em N meses" exibido no chip. null = histórico curto para tendência.
    */
-  base: { ma: number; kind: '12m' | 'since'; label: string } | null;
+  base: { ma: number; kind: '12m' | 'since'; label: string; spanMonths: number } | null;
   deltaAbs: number | null;
   deltaPct: number | null;
-  worst: { label: string; value: number } | null;
   hasData: boolean;
 }
 
@@ -87,7 +87,6 @@ export function computeCostOfLiving(
     base: null,
     deltaAbs: null,
     deltaPct: null,
-    worst: null,
     hasData: false,
   };
   if (!firstDataKey || firstDataKey > endKey) return empty;
@@ -133,29 +132,33 @@ export function computeCostOfLiving(
 
   // Base da tendência: mesma média 12 meses atrás; sem isso, o primeiro ponto
   // cheio da série visível (também uma janela de 12 — comparação honesta).
+  const monthsBetween = (fromKey: string, toKey: string): number => {
+    const [fy, fm] = fromKey.split('-').map(Number);
+    const [ty, tm] = toKey.split('-').map(Number);
+    return (ty - fy) * 12 + (tm - fm);
+  };
+
   let base: CostOfLivingData['base'] = null;
   if (endPartialMonths === null) {
     const yearAgoKey = getMonthYearOffset(endKey, -12);
     const yearAgoMA = maAt(yearAgoKey);
     if (yearAgoMA !== null) {
-      base = { ma: yearAgoMA, kind: '12m', label: monthLabel(yearAgoKey) };
+      base = { ma: yearAgoMA, kind: '12m', label: monthLabel(yearAgoKey), spanMonths: 12 };
     } else {
       const firstFull = points.find((p) => p.ma !== null);
       if (firstFull && firstFull.key !== endKey && firstFull.ma !== null) {
-        base = { ma: firstFull.ma, kind: 'since', label: firstFull.label };
+        base = {
+          ma: firstFull.ma,
+          kind: 'since',
+          label: firstFull.label,
+          spanMonths: monthsBetween(firstFull.key, endKey),
+        };
       }
     }
   }
 
   const deltaAbs = endMA !== null && base !== null ? endMA - base.ma : null;
   const deltaPct = deltaAbs !== null && base !== null && base.ma > 0 ? (deltaAbs / base.ma) * 100 : null;
-
-  let worst: CostOfLivingData['worst'] = null;
-  for (const p of points) {
-    if (p.expense > 0 && (worst === null || p.expense > worst.value)) {
-      worst = { label: p.label, value: p.expense };
-    }
-  }
 
   return {
     points,
@@ -166,7 +169,6 @@ export function computeCostOfLiving(
     base,
     deltaAbs,
     deltaPct,
-    worst,
     hasData: endMA !== null,
   };
 }

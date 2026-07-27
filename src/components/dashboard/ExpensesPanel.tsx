@@ -3,7 +3,7 @@ import { Info } from 'lucide-react';
 import { MonthlyExpensesChart } from './MonthlyExpensesChart';
 import { CostOfLivingChart } from './CostOfLivingChart';
 import { computeCostOfLiving } from '../../lib/costOfLiving';
-import { formatBRL0, formatSignedBRL, formatCompactBRL } from '../../lib/utils';
+import { formatBRL0 } from '../../lib/utils';
 import type { CostOfLivingData } from '../../lib/costOfLiving';
 import type { Transaction, Category } from '../../types';
 
@@ -111,31 +111,19 @@ export function ExpensesPanel({ transactions, categories, monthYear, costOfLivin
             )}
           </div>
 
-          {col.deltaAbs !== null && col.base !== null ? (
+          {col.deltaAbs !== null && col.base !== null && (
             <div className="text-right">
               <span
                 className={`inline-flex items-center gap-1.5 text-caption font-semibold tnum px-2.5 py-1 rounded-full border ${chipTone}`}
               >
-                {formatSignedBRL(col.deltaAbs)} · {col.deltaPct! > 0 ? '+' : ''}
-                {col.deltaPct!.toFixed(1).replace('.', ',')}%{' '}
-                {col.base.kind === '12m' ? 'em 12 meses' : `desde ${col.base.label}`}
+                {col.deltaAbs > 0 ? '+' : ''}
+                {formatBRL0(col.deltaAbs)} · {col.deltaPct! > 0 ? '+' : ''}
+                {col.deltaPct!.toFixed(1).replace('.', ',')}% em {col.base.spanMonths} meses
               </span>
               <p className="text-caption text-ink-3 mt-1.5 tnum">
-                {col.base.kind === '12m' ? 'há 12 meses' : col.base.label}: {formatBRL0(col.base.ma)}/mês
-                {colView.worst && (
-                  <>
-                    {' '}
-                    · pior mês: {colView.worst.label} ({formatCompactBRL(colView.worst.value)})
-                  </>
-                )}
+                era {formatBRL0(col.base.ma)}/mês em {col.base.label}
               </p>
             </div>
-          ) : (
-            colView.worst && (
-              <p className="text-caption text-ink-3 tnum">
-                pior mês: {colView.worst.label} ({formatCompactBRL(colView.worst.value)})
-              </p>
-            )
           )}
         </div>
       )}
