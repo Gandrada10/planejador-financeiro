@@ -163,7 +163,10 @@ export function VitalSigns({
   const monthTitle = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
   return (
-    <div className="space-y-3">
+    // Em telas largas os dois grupos ficam LADO A LADO (3 + 3 = 6 tiles na
+    // mesma linha), cada um com seu rótulo — em 1900px, seis tiles em duas
+    // fileiras viravam cartões de ~560px com um número pequeno boiando dentro.
+    <div className="flex flex-col gap-3 2xl:grid 2xl:grid-cols-2 2xl:gap-x-5">
       <Group label={monthTitle}>
         <Tile
           label="Receitas do mês"
@@ -335,9 +338,9 @@ function Tile({
       {/* Quebra em 2 linhas em vez de truncar: em 2 colunas no celular,
           "TAXA DE POUPANÇA · ANO" não cabe numa linha e virava "TAXA DE ...". */}
       <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 leading-tight">{label}</span>
-      {/* 28px é herói de desktop; no celular a mesma medida vira 6 blocos de
-          tela cheia. 21px mantém a hierarquia sem estourar a rolagem. */}
-      <span className={`text-[21px] sm:text-kpi font-bold tracking-tight tnum leading-none truncate ${valueTone}`}>
+      {/* 21px no celular, 24px no desktop. O token text-kpi (28px) é para UM
+          número-herói por tela — repetido em seis tiles ficava desproporcional. */}
+      <span className={`text-[21px] sm:text-[24px] font-bold tracking-tight tnum leading-none truncate ${valueTone}`}>
         {value}
         {valueSuffix && <span className="text-caption sm:text-body font-medium text-text-secondary tracking-normal">{valueSuffix}</span>}
       </span>
