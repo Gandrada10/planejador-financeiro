@@ -13,6 +13,7 @@ import {
 import { MONEY, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, FONT } from '../../lib/chartTheme';
 import {
   formatBRL,
+  formatBRL0,
   formatSignedBRL,
   formatCompactBRL,
   countsInTotals,
@@ -101,26 +102,19 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear }: Pr
 
   if (!hasCurr && !hasPrev) {
     return (
-      <div className="bg-bg-card border border-border rounded-card p-4">
-        <h3 className="text-title font-semibold text-text-primary">Despesas mês a mês</h3>
-        <p className="text-caption text-ink-3 mt-4 text-center py-8">
-          Sem despesas em {year} ou {prevYear}.
-        </p>
-      </div>
+      <p className="text-caption text-ink-3 text-center py-8">
+        Sem despesas em {year} ou {prevYear}.
+      </p>
     );
   }
 
   return (
-    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
-      <div className="flex items-start justify-between gap-3 flex-wrap">
-        <div className="min-w-0">
-          <h3 className="text-title font-semibold text-text-primary">Despesas mês a mês</h3>
-          <p className="text-caption text-ink-3 mt-0.5">
-            {year} vs {prevYear}
-            {currAvg > 0 && <> · média de {year}: {formatBRL(currAvg)}/mês</>}
-          </p>
-        </div>
-      </div>
+    <div className="space-y-1.5">
+      {currAvg > 0 && (
+        <p className="text-caption text-ink-3">
+          média de {year}: {formatBRL0(currAvg)}/mês (linha tracejada)
+        </p>
+      )}
 
       <div className="h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">

@@ -10,8 +10,7 @@ import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowChart } from './CashFlowChart';
 import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
-import { CostOfLivingPanel } from './CostOfLivingPanel';
-import { MonthlyExpensesChart } from './MonthlyExpensesChart';
+import { ExpensesPanel } from './ExpensesPanel';
 import { CategoryMix12mChart } from './CategoryMix12mChart';
 import { ProjectsPanel } from './ProjectsPanel';
 import { VitalSigns } from './VitalSigns';
@@ -275,11 +274,14 @@ export function DashboardPage() {
           }}
         />
 
-        {/* Evolução mês a mês em largura total: 24 barras não cabem em meia tela */}
-        <MonthlyExpensesChart
+        {/* Despesas em largura total: lentes "mês a mês" e "tendência 24M" num
+            card só, com o custo de vida como número-herói fixo */}
+        <ExpensesPanel
           transactions={transactions}
           categories={categories}
           monthYear={monthYear}
+          costOfLiving={costOfLiving}
+          isMonthInProgress={isMonthInProgress}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -304,8 +306,6 @@ export function DashboardPage() {
               periodLabel={periodLabel}
             />
 
-            {/* Custo de vida: trajetória da média móvel 12M — card próprio */}
-            <CostOfLivingPanel data={costOfLiving} isMonthInProgress={isMonthInProgress} />
           </div>
 
           {/* RIGHT COLUMN: Expenses + Projects + Metas */}
