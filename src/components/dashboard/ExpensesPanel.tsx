@@ -1,12 +1,13 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Info } from 'lucide-react';
 import { MonthlyExpensesChart } from './MonthlyExpensesChart';
 import { CostOfLivingChart } from './CostOfLivingChart';
+import { computeCostOfLiving } from '../../lib/costOfLiving';
 import { formatBRL0, formatSignedBRL, formatCompactBRL } from '../../lib/utils';
 import type { CostOfLivingData } from '../../lib/costOfLiving';
 import type { Transaction, Category } from '../../types';
 
-type Lens = 'yoy' | 'trend';
+type ViewWindow = 'year' | 'm24' | 'm36';
 
 interface Props {
   transactions: Transaction[];
@@ -17,18 +18,42 @@ interface Props {
 }
 
 /**
- * Card único de despesas: as duas lentes temporais (mês a mês vs ano anterior;
- * trajetória da média móvel 24M) plotam a MESMA série, então dividem um card
- * com seletor em vez de dois cards que obrigavam a cruzar gráficos de cabeça.
- * O número-herói do custo de vida é a manchete e fica fixo no cabeçalho,
- * independente da lente escolhida.
+ * Card único de despesas. A tendência (média móvel de 12M) não é uma "outra
+ * visão" — é atributo do gráfico principal, presente em TODAS as janelas. O
+ * seletor muda só o recorte de tempo: "Mês a mês" (ano vs ano anterior,
+ * alinhados por mês) ou a linha do tempo contínua de 24/36 meses. O
+ * número-herói do custo de vida é a manchete e fica fixo no cabeçalho.
  */
 export function ExpensesPanel({ transactions, categories, monthYear, costOfLiving, isMonthInProgress }: Props) {
-  const [lens, setLens] = useState<Lens>('yoy');
+  const [view, setView] = useState<ViewWindow>('year');
 
   const year = Number(monthYear.split('-')[0]);
   const prevYear = year - 1;
   const col = costOfLiving;
+
+  // A janela de 36 meses só é computada quando selecionada.
+  const col36 = useMemo(
+    () =>
+      view === 'm36'
+        ? computeCostOfLiving(transactions, categories, monthYear, isMonthInProgress, 36)
+        : null,
+    [view, transactions, categories, monthYear, isMonthInProgress]
+  );
+  // Dados da janela ativa. O herói usa sempre `col`: endMA/base são ancorados
+  // no fim da série e não mudam com a janela — só `worst` muda.
+  const colView = col36 ?? col;
+
+  // Média móvel avaliada em cada mês do ano selecionado — a linha de tendência
+  // sobre as barras da visão "Mês a mês".
+  const maForYear = useMemo(() => {
+    const arr: Array<number | null> = new Array(12).fill(null);
+    for (const p of col.points) {
+      const [py, pm] = p.key.split('-').map(Number);
+      if (py === year) arr[pm - 1] = p.ma;
+    }
+    return arr;
+  }, [col, year]);
+
   const rising = col.deltaPct !== null && col.deltaPct > 0;
   const chipTone = rising
     ? 'bg-negative/10 border-negative/35 text-negative'
@@ -40,21 +65,22 @@ export function ExpensesPanel({ transactions, categories, monthYear, costOfLivin
         <div className="min-w-0">
           <h3 className="text-title font-semibold text-text-primary">Despesas</h3>
           <p className="text-caption text-ink-3 mt-0.5">
-            {lens === 'yoy'
-              ? `${year} vs ${prevYear}`
-              : `Média móvel de 12 meses · encerrada em ${col.endLabel}${
-                  isMonthInProgress ? ' · o mês em andamento fica de fora' : ''
-                }`}
+            {view === 'year'
+              ? `${year} vs ${prevYear} · linha: média móvel de 12 meses`
+              : `Últimos ${view === 'm24' ? 24 : 36} meses · barras mensais + média móvel de 12 meses`}
           </p>
         </div>
 
-        {/* Seletor de lente */}
-        <div className="flex bg-bg-secondary border border-border rounded-control p-0.5 flex-shrink-0" role="group" aria-label="Lente do gráfico de despesas">
-          <LensButton active={lens === 'yoy'} onClick={() => setLens('yoy')}>
+        {/* Seletor de janela de tempo — a tendência está presente em todas */}
+        <div className="flex bg-bg-secondary border border-border rounded-control p-0.5 flex-shrink-0" role="group" aria-label="Janela de tempo do gráfico de despesas">
+          <LensButton active={view === 'year'} onClick={() => setView('year')}>
             Mês a mês
           </LensButton>
-          <LensButton active={lens === 'trend'} onClick={() => setLens('trend')}>
-            Tendência 24M
+          <LensButton active={view === 'm24'} onClick={() => setView('m24')}>
+            24M
+          </LensButton>
+          <LensButton active={view === 'm36'} onClick={() => setView('m36')}>
+            36M
           </LensButton>
         </div>
       </div>
@@ -68,11 +94,11 @@ export function ExpensesPanel({ transactions, categories, monthYear, costOfLivin
               <span className="text-body font-medium text-text-secondary tracking-normal">/mês</span>
             </p>
             <p className="text-caption text-ink-3 mt-1 flex items-center gap-1">
-              custo de vida · média móvel 12M
+              custo de vida · média móvel 12M · encerrada em {col.endLabel}
               <span
                 className="cursor-help flex-shrink-0"
-                title="Cada ponto da linha (lente Tendência) é a média das despesas dos 12 meses anteriores àquele mês. Inclui todas as despesas; transferências ficam de fora."
-                aria-label="Cada ponto da linha é a média das despesas dos 12 meses anteriores àquele mês."
+                title="Cada ponto da linha de tendência é a média das despesas dos 12 meses anteriores àquele mês. O mês em andamento fica de fora. Inclui todas as despesas; transferências ficam de fora."
+                aria-label="Cada ponto da linha de tendência é a média das despesas dos 12 meses anteriores àquele mês."
               >
                 <Info size={12} />
               </span>
@@ -96,33 +122,34 @@ export function ExpensesPanel({ transactions, categories, monthYear, costOfLivin
               </span>
               <p className="text-caption text-ink-3 mt-1.5 tnum">
                 {col.base.kind === '12m' ? 'há 12 meses' : col.base.label}: {formatBRL0(col.base.ma)}/mês
-                {col.worst && (
+                {colView.worst && (
                   <>
                     {' '}
-                    · pior mês: {col.worst.label} ({formatCompactBRL(col.worst.value)})
+                    · pior mês: {colView.worst.label} ({formatCompactBRL(colView.worst.value)})
                   </>
                 )}
               </p>
             </div>
           ) : (
-            col.worst && (
+            colView.worst && (
               <p className="text-caption text-ink-3 tnum">
-                pior mês: {col.worst.label} ({formatCompactBRL(col.worst.value)})
+                pior mês: {colView.worst.label} ({formatCompactBRL(colView.worst.value)})
               </p>
             )
           )}
         </div>
       )}
 
-      {lens === 'yoy' ? (
+      {view === 'year' ? (
         <MonthlyExpensesChart
           transactions={transactions}
           categories={categories}
           monthYear={monthYear}
           isMonthInProgress={isMonthInProgress}
+          ma={maForYear}
         />
       ) : (
-        <CostOfLivingChart data={col} />
+        <CostOfLivingChart data={colView} />
       )}
     </div>
   );

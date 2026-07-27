@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import {
-  BarChart,
+  ComposedChart,
   Bar,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -31,6 +32,12 @@ interface Props {
   monthYear: string;
   /** Mês selecionado ainda em andamento: fica FORA da média (diluiria para baixo). */
   isMonthInProgress: boolean;
+  /**
+   * Média móvel de 12M avaliada em cada mês do ano selecionado (12 posições,
+   * null onde a janela não fecha ou o mês ainda não chegou). Vira a linha de
+   * tendência sobre as barras.
+   */
+  ma: Array<number | null>;
 }
 
 interface MonthRow {
@@ -38,6 +45,7 @@ interface MonthRow {
   monthIdx: number;
   curr: number | null;
   prev: number | null;
+  ma: number | null;
 }
 
 /** Props do tick customizado do eixo X (o mês selecionado ganha destaque). */
@@ -54,7 +62,7 @@ interface MonthTickProps {
  * enquanto o ano anterior mostra os 12 — o que ainda vem pela frente fica
  * visível como referência.
  */
-export function MonthlyExpensesChart({ transactions, categories, monthYear, isMonthInProgress }: Props) {
+export function MonthlyExpensesChart({ transactions, categories, monthYear, isMonthInProgress, ma }: Props) {
   const { rows, year, prevYear, currAvg, currAvgMonths, hasPrev, hasCurr } = useMemo(() => {
     const excludedIds = getExcludedFromTotalsIds(categories);
     const [y, m] = monthYear.split('-').map(Number);
@@ -80,6 +88,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
       monthIdx: idx,
       curr: idx < m ? currByMonth[idx] : null,
       prev: prevByMonth[idx] === 0 ? null : prevByMonth[idx],
+      ma: ma[idx] ?? null,
     }));
 
     // Média mensal do ano atual sobre os meses COMPLETOS com despesa — o mês
@@ -102,7 +111,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
       hasPrev: prevByMonth.some((v) => v !== 0),
       hasCurr: currByMonth.slice(0, m).some((v) => v !== 0),
     };
-  }, [transactions, categories, monthYear, isMonthInProgress]);
+  }, [transactions, categories, monthYear, isMonthInProgress, ma]);
 
   const selectedIdx = Number(monthYear.split('-')[1]) - 1;
 
@@ -125,7 +134,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
 
       <div className="h-[220px] w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={2}>
+          <ComposedChart data={rows} margin={{ top: 8, right: 8, left: 0, bottom: 0 }} barGap={2}>
             <CartesianGrid {...GRID_STYLE} />
             <XAxis
               dataKey="month"
@@ -153,7 +162,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
               cursor={{ fill: 'rgba(255,255,255,0.04)' }}
               content={<ExpensesTooltip year={year} prevYear={prevYear} />}
             />
-            {hasPrev && (
+            {(hasPrev || rows.some((r) => r.ma !== null)) && (
               <Legend
                 verticalAlign="top"
                 align="right"
@@ -189,7 +198,29 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
               radius={[4, 4, 0, 0]}
               isAnimationActive={false}
             />
-          </BarChart>
+            {/* Casing na cor do card por baixo da linha: sem ele, a linha coral
+                some onde cruza as barras coral sólidas do ano atual. */}
+            <Line
+              dataKey="ma"
+              stroke="#1b1b1e"
+              strokeWidth={5}
+              dot={false}
+              activeDot={false}
+              connectNulls={false}
+              isAnimationActive={false}
+              legendType="none"
+            />
+            <Line
+              dataKey="ma"
+              name="Média móvel 12M"
+              stroke={MONEY.expense}
+              strokeWidth={2}
+              dot={false}
+              activeDot={{ r: 4 }}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>
@@ -227,6 +258,9 @@ function ExpensesTooltip({
       <p className="text-body tnum text-text-secondary">
         {prevYear}: {prev !== null ? formatBRL(prev) : '—'}
       </p>
+      {row.ma !== null && (
+        <p className="text-body tnum text-text-secondary">Média 12M: {formatBRL(row.ma)}</p>
+      )}
       {delta !== null && (
         <p
           className={`text-caption tnum mt-1 pt-1 border-t border-border ${
