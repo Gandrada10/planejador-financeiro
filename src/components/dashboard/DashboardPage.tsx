@@ -15,12 +15,13 @@ import { CategoryMix12mChart } from './CategoryMix12mChart';
 import { ProjectsPanel } from './ProjectsPanel';
 import { VitalSigns } from './VitalSigns';
 import { computeCostOfLiving } from '../../lib/costOfLiving';
-import { formatBRL, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { formatBRL, getMonthYear, getClosedMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function DashboardPage() {
-  const [monthYear, setMonthYear] = useState(getMonthYear());
+  // Abre no último mês FECHADO: o mês corrente tem números pela metade.
+  const [monthYear, setMonthYear] = useState(getClosedMonthYear());
   const { transactions, loading: loadingTx } = useTransactions();
   const { categories } = useCategories();
   const { getBudgetsForMonth } = useBudgets();
@@ -40,6 +41,7 @@ export function DashboardPage() {
   const availableMonths = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));
     set.add(getMonthYear());
+    set.add(getClosedMonthYear()); // garante o mês de abertura na lista
     return Array.from(set).sort().reverse();
   }, [transactions]);
 

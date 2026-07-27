@@ -47,6 +47,15 @@ export function getMonthYearOffset(monthYear: string, offset: number): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
+/**
+ * Último mês FECHADO (o anterior ao corrente). É o padrão de abertura das
+ * telas: o mês em andamento tem números pela metade, que enganam qualquer
+ * comparação — quem quiser vê-lo avança um mês no seletor.
+ */
+export function getClosedMonthYear(): string {
+  return getMonthYearOffset(getMonthYear(), -1);
+}
+
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
   return classes.filter(Boolean).join(' ');
 }
