@@ -123,17 +123,18 @@ function SankeyLinkShape(props: any) {
 /**
  * Fluxo do dinheiro do mês (diagrama de Sankey, à la Monarch Money):
  *
- *   Receitas ─┐                ┌─ Moradia ─┬─ Aluguel
- *             ├─ Caixa do mês ─┤           └─ Condomínio
- *   Reserva ─┘                 └─ Sobra
+ *   Receitas ─┐                ┌─ Resultado líquido
+ *             ├─ Caixa do mês ─┼─ Moradia ─┬─ Aluguel
+ *   Reserva ─┘                 │           └─ Condomínio
+ *                              └─ Alimentação …
  *
  * SINAL: uma categoria com saldo POSITIVO é reembolso líquido — dinheiro que
  * VOLTOU. Ela entra como fonte, nunca como destino; tratá-la por Math.abs()
  * a transformaria numa saída e o diagrama deixaria de fechar.
  *
  * "Da reserva" só aparece em mês deficitário (o que saiu além do que entrou
- * veio de algum lugar); "Sobra" só em mês superavitário. Com isso entradas =
- * saídas sempre — Sankey não representa fluxo negativo.
+ * veio de algum lugar); "Resultado líquido" só em mês superavitário. Com isso
+ * entradas = saídas sempre — Sankey não representa fluxo negativo.
  */
 export function CashFlowSankey({ income, balance, categories, level }: Props) {
   // Despesas de verdade (saídas) vs reembolsos líquidos (entradas).
@@ -179,6 +180,17 @@ export function CashFlowSankey({ income, balance, categories, level }: Props) {
   for (const s of sources) links.push({ source: s.idx, target: middleIdx, value: s.value });
 
   // ---- Destinos ----
+  // O RESULTADO LÍQUIDO vem primeiro (nó e link antes das categorias): é o
+  // numero que importa do mês, e a ordem de inserção define a posição vertical
+  // no layout do Sankey — assim ele fica no topo, como no Monarch.
+  if (balance > 0) {
+    links.push({
+      source: middleIdx,
+      target: push({ name: 'Resultado líquido', color: MONEY.income, share: shareOf(balance) }),
+      value: balance,
+    });
+  }
+
   const big = outCats.filter((c) => c.value / totalOut >= MIN_SHARE);
   const restTotal = totalOut - big.reduce((s, c) => s + c.value, 0);
 
@@ -227,13 +239,6 @@ export function CashFlowSankey({ income, balance, categories, level }: Props) {
       value: restTotal,
     });
   }
-  if (balance > 0) {
-    links.push({
-      source: middleIdx,
-      target: push({ name: 'Sobra', color: MONEY.income, share: shareOf(balance) }),
-      value: balance,
-    });
-  }
 
   // Altura pela COLUNA MAIS CHEIA (as folhas), não pelo total de nós: é ela
   // que precisa de espaço para os rótulos. Assim nenhuma categoria e cortada —
@@ -249,6 +254,11 @@ export function CashFlowSankey({ income, balance, categories, level }: Props) {
           data={{ nodes, links }}
           nodeWidth={10}
           nodePadding={14}
+          // sort=false preserva a ORDEM DE INSERÇÃO no eixo vertical: com o
+          // padrão (true) o Sankey reordena por valor e o Resultado líquido
+          // caía no meio da lista. Os nós já são inseridos na ordem desejada
+          // (resultado primeiro, depois categorias por valor desc).
+          sort={false}
           margin={{ top: 12, right: 150, bottom: 12, left: 4 }}
           node={SankeyNodeShape}
           link={SankeyLinkShape}

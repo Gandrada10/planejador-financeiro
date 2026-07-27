@@ -283,6 +283,10 @@ export function DashboardPage() {
           isMonthInProgress={isMonthInProgress}
         />
 
+        {/* Fluxo em largura total: no nível de subcategoria são 4 colunas de
+            nós, que numa meia-tela ficariam espremidas. */}
+        <MonthFlowPanel data={expensesByCategory} income={totalEntries} balance={totalBalance} />
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* LEFT COLUMN: Cash flow + KPIs */}
           <div className="space-y-4">
@@ -309,8 +313,6 @@ export function DashboardPage() {
 
           {/* RIGHT COLUMN: Expenses + Projects + Metas */}
           <div className="space-y-4">
-            <MonthFlowPanel data={expensesByCategory} income={totalEntries} balance={totalBalance} />
-
             {/* Composição estrutural: peso de cada categoria na média de 12 meses */}
             <CategoryMix12mChart
               transactions={transactions}
