@@ -25,9 +25,14 @@ interface Props {
   level: FlowLevel;
 }
 
-const TOP_N = 8;
-/** Fatia menor que isto do total não ganha nó próprio — vira "Outras". */
-const MIN_SHARE = 0.015;
+/**
+ * Toda categoria ganha nó próprio. O piso existe só para o caso patológico
+ * (uma categoria de R$ 2 no mês), que seria um fio invisível de qualquer jeito
+ * — e o card CRESCE conforme o número de nós, em vez de cortar a lista.
+ */
+const MIN_SHARE = 0.003;
+/** Espaço vertical reservado por nó da última coluna, para o rótulo caber. */
+const ROW_SPACE = 32;
 
 interface SankeyNodeDef {
   name: string;
@@ -174,7 +179,7 @@ export function CashFlowSankey({ income, balance, categories, level }: Props) {
   for (const s of sources) links.push({ source: s.idx, target: middleIdx, value: s.value });
 
   // ---- Destinos ----
-  const big = outCats.filter((c, i) => i < TOP_N && c.value / totalOut >= MIN_SHARE);
+  const big = outCats.filter((c) => c.value / totalOut >= MIN_SHARE);
   const restTotal = totalOut - big.reduce((s, c) => s + c.value, 0);
 
   for (const c of big) {
@@ -230,8 +235,12 @@ export function CashFlowSankey({ income, balance, categories, level }: Props) {
     });
   }
 
-  // Com a coluna de subcategorias a lista fica mais longa — o card cresce.
-  const height = level === 'sub' ? Math.max(380, nodes.length * 26) : 360;
+  // Altura pela COLUNA MAIS CHEIA (as folhas), não pelo total de nós: é ela
+  // que precisa de espaço para os rótulos. Assim nenhuma categoria e cortada —
+  // o card e que cresce.
+  const sourceIdx = new Set(links.map((l) => l.source));
+  const leafCount = nodes.filter((_, i) => !sourceIdx.has(i)).length;
+  const height = Math.max(360, leafCount * ROW_SPACE);
 
   return (
     <div className="w-full" style={{ height }}>
@@ -239,7 +248,7 @@ export function CashFlowSankey({ income, balance, categories, level }: Props) {
         <Sankey
           data={{ nodes, links }}
           nodeWidth={10}
-          nodePadding={8}
+          nodePadding={14}
           margin={{ top: 12, right: 150, bottom: 12, left: 4 }}
           node={SankeyNodeShape}
           link={SankeyLinkShape}
