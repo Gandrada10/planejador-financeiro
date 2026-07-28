@@ -15,7 +15,6 @@ import {
 import { MONEY, AXIS_STYLE, GRID_STYLE, TOOLTIP_STYLE, FONT } from '../../lib/chartTheme';
 import {
   formatBRL,
-  formatBRL0,
   formatSignedBRL,
   formatCompactBRL,
   countsInTotals,
@@ -39,8 +38,6 @@ interface Props {
   transactions: Transaction[];
   categories: Category[];
   monthYear: string;
-  /** Mês selecionado ainda em andamento: fica FORA da média (diluiria para baixo). */
-  isMonthInProgress: boolean;
   /**
    * Média móvel de 12M avaliada em cada mês do ano selecionado (12 posições,
    * null onde a janela não fecha ou o mês ainda não chegou). Vira a linha de
@@ -71,8 +68,8 @@ interface MonthTickProps {
  * enquanto o ano anterior mostra os 12 — o que ainda vem pela frente fica
  * visível como referência.
  */
-export function MonthlyExpensesChart({ transactions, categories, monthYear, isMonthInProgress, ma }: Props) {
-  const { rows, year, prevYear, currAvg, currAvgMonths, hasPrev, hasCurr } = useMemo(() => {
+export function MonthlyExpensesChart({ transactions, categories, monthYear, ma }: Props) {
+  const { rows, year, prevYear, prevAvg, hasPrev, hasCurr } = useMemo(() => {
     const excludedIds = getExcludedFromTotalsIds(categories);
     const [y, m] = monthYear.split('-').map(Number);
     const prev = y - 1;
@@ -100,27 +97,26 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
       ma: ma[idx] ?? null,
     }));
 
-    // Média mensal do ano atual sobre os meses COMPLETOS com despesa — o mês
-    // em andamento fica de fora (com ele dentro, um julho pela metade puxava a
-    // média de R$ 45,5 mil para R$ 42,8 mil). Mesma convenção do custo de vida.
-    const completeMax = isMonthInProgress ? m - 1 : m;
-    const completeMonths = currByMonth.slice(0, completeMax).filter((v) => v !== 0);
-    const avg =
-      completeMonths.length > 0
-        ? completeMonths.reduce((s, v) => s + v, 0) / completeMonths.length
-        : 0;
+    // Régua do gráfico: a média mensal do ANO ANTERIOR. Ela é o patamar de
+    // onde a linha branca partiu — para um ano fechado, "média do ano" e
+    // "custo de vida 12M em dezembro" são o mesmo número —, então a distância
+    // entre as duas lê direto como "quanto meu custo de vida mudou desde
+    // então". A média do ano CORRENTE saiu: repetia a linha branca com outra
+    // conta, e ainda aparecia duas vezes (subtítulo e rótulo).
+    const prevMonths = prevByMonth.filter((v) => v !== 0);
+    const prevAvg =
+      prevMonths.length > 0 ? prevMonths.reduce((s, v) => s + v, 0) / prevMonths.length : 0;
 
     return {
       rows: data,
       year: y,
       prevYear: prev,
-      currAvg: avg,
-      currAvgMonths: completeMonths.length,
+      prevAvg,
       // O mês parcial ainda conta como "tem dados" — só não entra na média.
       hasPrev: prevByMonth.some((v) => v !== 0),
       hasCurr: currByMonth.slice(0, m).some((v) => v !== 0),
     };
-  }, [transactions, categories, monthYear, isMonthInProgress, ma]);
+  }, [transactions, categories, monthYear, ma]);
 
   const selectedIdx = Number(monthYear.split('-')[1]) - 1;
   const lastMa = [...rows].reverse().find((r) => r.ma !== null);
@@ -135,13 +131,6 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
 
   return (
     <div className="space-y-1.5">
-      {currAvg > 0 && (
-        <p className="text-caption text-ink-3">
-          média de {year}: {formatBRL0(currAvg)}/mês em {currAvgMonths}{' '}
-          {currAvgMonths === 1 ? 'mês completo' : 'meses completos'}
-        </p>
-      )}
-
       {/* 24 barras (2 séries × 12 meses) em 393px viram um pente. Um piso de
           largura por mês faz a faixa rolar na horizontal no celular em vez de
           espremer — no desktop o min-width nunca é atingido. */}
@@ -187,22 +176,27 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
                 wrapperStyle={{ fontFamily: FONT, fontSize: 11, color: '#8f8e89' }}
               />
             )}
-            {currAvg > 0 && (
-              // Rotulada no próprio gráfico: antes o subtítulo dizia "(linha
-              // tracejada)" e o leitor tinha que resolver a referência.
+            {prevAvg > 0 && (
+              // Contorno na cor do card, como nos rótulos do Sankey: sem ele
+              // qualquer cinza se mistura com a linha da grade e some. Um tom
+              // abaixo do branco — a régua não disputa com o protagonista.
               <ReferenceLine
-                y={currAvg}
+                y={prevAvg}
                 stroke="#8f8e89"
                 strokeDasharray="4 4"
                 strokeWidth={1}
                 ifOverflow="extendDomain"
                 label={{
-                  value: `média ${year} · ${formatCompactBRL(currAvg)}`,
+                  value: `média ${prevYear} · ${formatCompactBRL(prevAvg)}`,
                   position: 'insideTopRight',
                   offset: 6,
-                  fill: '#8f8e89',
-                  fontSize: 10.5,
+                  fill: '#d6d5d1',
+                  fontSize: 11,
                   fontFamily: FONT,
+                  stroke: '#1b1b1e',
+                  strokeWidth: 3,
+                  strokeLinejoin: 'round',
+                  paintOrder: 'stroke',
                 }}
               />
             )}

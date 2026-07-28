@@ -93,7 +93,6 @@ export function ExpensesPanel({
           transactions={transactions}
           categories={categories}
           monthYear={monthYear}
-          isMonthInProgress={isMonthInProgress}
           ma={maForYear}
         />
       ) : (

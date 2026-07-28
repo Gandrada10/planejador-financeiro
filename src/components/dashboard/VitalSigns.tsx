@@ -179,7 +179,9 @@ export function VitalSigns({
                         ? 'text-positive'
                         : 'text-negative',
                   text: `${resultDelta > 0 ? '+' : ''}${formatBRL0(resultDelta)}`,
-                  context: 'vs média 12M',
+                  // A média deixa de ser referência abstrata e mostra o valor:
+                  // é a régua do resultado do mês, e agora mora junto dele.
+                  context: `vs média 12M (${formatBRL0(avg12mResult)})`,
                 }
           }
         />
@@ -190,7 +192,7 @@ export function VitalSigns({
           label="Taxa de poupança · 12 meses"
           hint={`Resultado ÷ receitas nos 12 meses encerrados em ${
             col.endLabel || 'último mês fechado'
-          } — a mesma janela do custo de vida ao lado, então os dois fecham entre si (receita média = custo de vida ÷ (1 − taxa)). Negativa: no período você gastou mais do que ganhou (ex.: −24% = saíram R$ 124 para cada R$ 100 que entraram).`}
+          } — a mesma janela do custo de vida ao lado, então os dois fecham entre si (receita média = custo de vida ÷ (1 − taxa)). Negativa: no período você gastou mais do que ganhou (ex.: −24% = saíram R$ 124 para cada R$ 100 que entraram). A variação vem em PONTOS PERCENTUAIS (p.p.), não em %: de 10% para 12% são +2 p.p.; dizer "+20%" seria a outra leitura do mesmo fato, e com taxa negativa o percentual inverte o sinal da história.`}
           value={data.currRate !== null ? `${(data.currRate * 100).toFixed(1).replace('.', ',')}%` : '—'}
           delta={
             data.savingsDeltaPp !== null
@@ -311,10 +313,12 @@ function Tile({
         {valueSuffix && <span className="text-caption sm:text-body font-medium text-text-secondary tracking-normal">{valueSuffix}</span>}
       </span>
       {delta ? (
-        <span className={`flex items-baseline gap-1.5 text-caption font-semibold tnum ${delta.tone} min-w-0`}>
+        <span className={`flex items-baseline gap-x-1.5 flex-wrap text-caption font-semibold tnum ${delta.tone} min-w-0`}>
           <delta.Icon size={12} className="flex-shrink-0 self-center" />
-          <span className="truncate">{delta.text}</span>
-          {delta.context && <span className="text-ink-3 font-normal flex-shrink-0">{delta.context}</span>}
+          <span>{delta.text}</span>
+          {/* Quebra em vez de truncar: com o valor da média junto, o contexto
+              não cabe numa linha em 2 colunas de celular. */}
+          {delta.context && <span className="text-ink-3 font-normal">{delta.context}</span>}
         </span>
       ) : (
         <span className="text-caption text-ink-3">—</span>

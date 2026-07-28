@@ -1,5 +1,4 @@
-import { TrendingDown, TrendingUp } from 'lucide-react';
-import { formatBRL, formatBRL0 } from '../../lib/utils';
+import { formatBRL0 } from '../../lib/utils';
 import type { Account } from '../../types';
 
 export interface AccountFlow {
@@ -17,9 +16,6 @@ interface Props {
   totalEntries: number;
   totalExits: number;
   totalBalance: number;
-  yearBalance: number;
-  avg12months: number;
-  currentYear: string;
   /** "junho de 2026" — janela dos números do mês. */
   monthLabel: string;
 }
@@ -51,26 +47,29 @@ const ROW_HOVER = '[@media(hover:hover)]:hover:bg-white/[0.06] transition-colors
 const tone = (v: number) => (v === 0 ? 'text-ink-3' : v > 0 ? 'text-positive' : 'text-negative');
 
 /**
- * Card de caixa: o RESULTADO por conta é o corpo; entradas e saídas viram
- * contexto.
+ * Card de caixa: o mês decomposto por conta, com entradas, saídas e resultado
+ * em cada linha.
  *
- * A versão anterior era uma tabela de 4 colunas com as três conclusões —
- * resultado do mês, acumulado do ano e média 12M — enfileiradas no rodapé com
- * o mesmo peso de "Sodexo Refeição". Aqui elas sobem para tiles no topo, e a
- * decomposição por conta responde só "quem segurou e quem furou o mês"; o par
- * entradas/saídas de cada conta fica no title da linha.
+ * A versão anterior era uma tabela de 4 colunas com cabeçalho em maiúsculas e
+ * três conclusões enfileiradas no rodapé — resultado do mês, acumulado do ano e
+ * média 12M — com o mesmo peso de "Sodexo Refeição".
  *
- * Uma renderização só para celular e desktop: sem as 4 colunas de dinheiro, a
- * lista cabe em 375px sem precisar da versão empilhada que existia antes.
+ * O acumulado do ano saiu: ele é OUTRA métrica, de outro período, e já vive no
+ * card "O que puxou o ano", onde fecha a conta com receitas e despesas e
+ * carrega a comparação com o ano anterior. A média 12M também saiu, mas por
+ * outro motivo: ela é a RÉGUA do resultado do mês, e régua viaja junto com o
+ * que mede — agora aparece no tile "Resultado do mês", lá em cima, junto das
+ * outras referências de 12 meses.
+ *
+ * Sobra o que o card é de fato: um mês, conta a conta. Uma renderização só
+ * para celular e desktop — no estreito o par entradas/saídas desce para a
+ * segunda linha em vez de espremer três colunas de dinheiro em 375px.
  */
 export function CashFlowTable({
   data,
   totalEntries,
   totalExits,
   totalBalance,
-  yearBalance,
-  avg12months,
-  currentYear,
   monthLabel,
 }: Props) {
   const groups = GROUPS.map((g) => {
@@ -91,74 +90,101 @@ export function CashFlowTable({
         <p className="text-caption text-ink-3">{monthLabel} · por conta</p>
       </div>
 
-      {/* 3 em 326px dão ~105px cada e os rótulos viravam "ACUMULAD…". No
-          celular são 2 colunas com o terceiro na linha inteira, o mesmo
-          arranjo dos indicadores do topo. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 [&>*:nth-child(3)]:col-span-2 sm:[&>*:nth-child(3)]:col-span-1">
-        <Conclusion label="Resultado do mês" value={totalBalance} hint="entradas − saídas" />
-        <Conclusion label={`Acumulado ${currentYear}`} value={yearBalance} hint="até o mês selecionado" />
-        <Conclusion label="Média mensal" value={avg12months} hint="últimos 12 meses" />
-      </div>
-
-      <div className="flex items-center gap-4 flex-wrap">
-        <span className="flex items-center gap-1.5 text-caption text-ink-3">
-          <TrendingUp size={12} className="text-positive flex-shrink-0" /> entrou{' '}
-          <span className="tnum text-positive">{formatBRL0(totalEntries)}</span>
-        </span>
-        <span className="flex items-center gap-1.5 text-caption text-ink-3">
-          <TrendingDown size={12} className="text-negative flex-shrink-0" /> saiu{' '}
-          <span className="tnum text-negative">{formatBRL0(-totalExits)}</span>
-        </span>
-      </div>
-
       <div className="space-y-2.5">
         {groups.map((g) => (
           <div key={g.label} className="space-y-0.5">
             {/* Cabeçalho de grupo com FAIXA e texto claro: sem isso ele ficava
                 menor e mais apagado que as contas que encabeça — subordinado
                 justamente ao que deveria agrupar. */}
-            <div className="flex items-baseline justify-between gap-2 rounded-[6px] bg-white/[0.055] px-2 py-1">
-              <span className="text-caption font-semibold uppercase tracking-wider text-text-primary truncate">
-                {g.label}
-              </span>
-              <span className={`text-body tnum font-bold flex-shrink-0 ${tone(g.balance)}`}>
-                {g.balance > 0 ? '+' : ''}
-                {formatBRL0(g.balance)}
-              </span>
-            </div>
-
+            <Line
+              name={g.label}
+              entries={g.entries}
+              exits={g.exits}
+              balance={g.balance}
+              variant="group"
+            />
             {g.rows.map((d) => (
-              <div
+              <Line
                 key={d.accountName}
-                title={`Entradas ${formatBRL(d.entries)} · Saídas ${formatBRL(d.exits)}`}
-                className={`flex items-baseline justify-between gap-2 rounded px-2 py-0.5 ${ROW_HOVER}`}
-              >
-                <span className="text-body text-text-secondary truncate">
-                  {d.accountName}
-                  {d.isCard && <CycleChip status={d.cycleStatus} />}
-                </span>
-                <span className={`text-body tnum flex-shrink-0 ${tone(d.balance)}`}>
-                  {d.balance === 0 ? '—' : formatBRL0(d.balance)}
-                </span>
-              </div>
+                name={d.accountName}
+                entries={d.entries}
+                exits={d.exits}
+                balance={d.balance}
+                chip={d.isCard ? <CycleChip status={d.cycleStatus} /> : null}
+              />
             ))}
           </div>
         ))}
+      </div>
+
+      <div className="pt-2 border-t border-border">
+        <Line
+          name="Total do mês"
+          entries={totalEntries}
+          exits={totalExits}
+          balance={totalBalance}
+          variant="total"
+        />
       </div>
     </div>
   );
 }
 
-/** Uma das três conclusões do card, no idioma dos tiles do topo do dashboard. */
-function Conclusion({ label, value, hint }: { label: string; value: number; hint: string }) {
+/**
+ * Uma linha do card. No estreito o par entradas/saídas desce para a segunda
+ * linha (ordem trocada pelo `order`), porque três colunas de dinheiro em 375px
+ * cortam nome e valor — foi o que motivava a renderização empilhada separada
+ * que existia antes.
+ */
+function Line({
+  name,
+  entries,
+  exits,
+  balance,
+  chip,
+  variant,
+}: {
+  name: string;
+  entries: number;
+  exits: number;
+  balance: number;
+  chip?: React.ReactNode;
+  variant?: 'group' | 'total';
+}) {
+  const strong = variant === 'group' || variant === 'total';
   return (
-    <div className="bg-bg-secondary rounded-control px-2.5 py-2 min-w-0">
-      <p className="text-caption uppercase tracking-wider text-ink-3 truncate">{label}</p>
-      <p className={`text-[17px] sm:text-[19px] font-bold tracking-tight tnum truncate ${tone(value)}`}>
-        {value > 0 ? '+' : ''}
-        {formatBRL0(value)}
-      </p>
-      <p className="text-caption text-ink-3 truncate">{hint}</p>
+    <div
+      className={`grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_6rem] gap-x-2 items-baseline rounded-[6px] px-2 py-1 ${
+        variant === 'group' ? 'bg-white/[0.055]' : variant === 'total' ? '' : ROW_HOVER
+      }`}
+    >
+      <span
+        className={`order-1 truncate ${
+          variant === 'group'
+            ? 'text-caption font-semibold uppercase tracking-wider text-text-primary'
+            : variant === 'total'
+              ? 'text-body font-semibold text-text-primary'
+              : 'text-body text-text-secondary'
+        }`}
+      >
+        {name}
+        {chip}
+      </span>
+
+      {/* Sem entradas, o par vira só a saída: "— − R$ 111" se lê como uma
+          subtração de nada, não como "não entrou e saiu 111". */}
+      <span className="order-3 sm:order-2 col-span-2 sm:col-span-1 text-caption tnum text-ink-3 sm:text-right">
+        {entries !== 0 && <span className="text-positive/90">{formatBRL0(entries)}</span>}
+        {entries !== 0 && exits !== 0 && ' − '}
+        {exits !== 0 && <span className="text-negative/90">{formatBRL0(-exits)}</span>}
+        {entries === 0 && exits === 0 && '—'}
+      </span>
+
+      <span
+        className={`order-2 sm:order-3 tnum text-right ${strong ? 'text-body font-bold' : 'text-body'} ${tone(balance)}`}
+      >
+        {balance === 0 ? '—' : `${balance > 0 ? '+' : ''}${formatBRL0(balance)}`}
+      </span>
     </div>
   );
 }
