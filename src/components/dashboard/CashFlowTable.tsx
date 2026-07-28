@@ -1,4 +1,5 @@
-import { formatBRL } from '../../lib/utils';
+import { TrendingDown, TrendingUp } from 'lucide-react';
+import { formatBRL, formatBRL0 } from '../../lib/utils';
 import type { Account } from '../../types';
 
 export interface AccountFlow {
@@ -11,16 +12,6 @@ export interface AccountFlow {
   cycleStatus?: 'open' | 'closed';
 }
 
-/**
- * Faixa de leitura no hover. Tinta branca em vez de `bg-elevated`: o elevated
- * fica a 8 níveis do fundo do card e some numa faixa de 1 linha — aqui ela
- * precisa ser vista de relance, atravessando 4 colunas de dinheiro.
- * Só em ponteiro FINO: no toque não existe hover e o estado ficaria grudado
- * na última linha tocada.
- */
-const ROW_HOVER =
-  '[@media(hover:hover)]:hover:bg-white/[0.06] transition-colors';
-
 interface Props {
   data: AccountFlow[];
   totalEntries: number;
@@ -29,6 +20,8 @@ interface Props {
   yearBalance: number;
   avg12months: number;
   currentYear: string;
+  /** "junho de 2026" — janela dos números do mês. */
+  monthLabel: string;
 }
 
 /**
@@ -47,12 +40,29 @@ const GROUPS: Array<{ label: string; types: Array<Account['type'] | undefined> }
   { label: 'Sem conta', types: [undefined] },
 ];
 
-/** Zero vira travessão: numa linha de cartão, "R$ 0,00" de entrada é só ruído. */
-function money(value: number, tone: string) {
-  if (value === 0) return <span className="text-ink-3">—</span>;
-  return <span className={tone}>{formatBRL(value)}</span>;
-}
+/**
+ * Faixa de leitura no hover. Tinta branca em vez de `bg-elevated`: o elevated
+ * fica a 8 níveis do fundo do card e some numa faixa de 1 linha.
+ * Só em ponteiro FINO: no toque não existe hover e o estado ficaria grudado
+ * na última linha tocada.
+ */
+const ROW_HOVER = '[@media(hover:hover)]:hover:bg-white/[0.06] transition-colors';
 
+const tone = (v: number) => (v === 0 ? 'text-ink-3' : v > 0 ? 'text-positive' : 'text-negative');
+
+/**
+ * Card de caixa: o RESULTADO por conta é o corpo; entradas e saídas viram
+ * contexto.
+ *
+ * A versão anterior era uma tabela de 4 colunas com as três conclusões —
+ * resultado do mês, acumulado do ano e média 12M — enfileiradas no rodapé com
+ * o mesmo peso de "Sodexo Refeição". Aqui elas sobem para tiles no topo, e a
+ * decomposição por conta responde só "quem segurou e quem furou o mês"; o par
+ * entradas/saídas de cada conta fica no title da linha.
+ *
+ * Uma renderização só para celular e desktop: sem as 4 colunas de dinheiro, a
+ * lista cabe em 375px sem precisar da versão empilhada que existia antes.
+ */
 export function CashFlowTable({
   data,
   totalEntries,
@@ -61,6 +71,7 @@ export function CashFlowTable({
   yearBalance,
   avg12months,
   currentYear,
+  monthLabel,
 }: Props) {
   const groups = GROUPS.map((g) => {
     const rows = data.filter((d) => g.types.includes(d.type));
@@ -75,202 +86,92 @@ export function CashFlowTable({
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
-      <h3 className="text-title font-semibold text-text-primary">Resultados de caixa</h3>
-
-      {/* CELULAR: lista empilhada. Quatro colunas de dinheiro em 393px colidem
-          os cabeçalhos e cortam os valores no meio — aqui cada grupo é um
-          bloco com o resultado em destaque e entradas/saídas como detalhe. */}
-      <div className="sm:hidden divide-y divide-border/40 -my-1">
-        {groups.map((g) => {
-          const single = g.rows.length === 1 ? g.rows[0] : null;
-          return (
-            <div key={g.label} className="py-2.5 space-y-1">
-              <div className="flex items-baseline justify-between gap-2">
-                <span className="text-caption uppercase tracking-wider text-ink-3 font-semibold truncate">
-                  {g.label}
-                </span>
-                <span
-                  className={`text-body tnum font-semibold flex-shrink-0 ${
-                    g.balance >= 0 ? 'text-accent-green' : 'text-accent-red'
-                  }`}
-                >
-                  {formatBRL(g.balance)}
-                </span>
-              </div>
-
-              {/* A quebra entradas/saídas só informa quando existem as duas: num
-                  cartão (entradas = 0) ela repetiria o resultado já mostrado. */}
-              {(() => {
-                const showSplit = g.entries !== 0 && g.exits !== 0;
-                const name = single && single.accountName !== g.label ? single.accountName : '';
-                if (!showSplit && !name) return null;
-                return (
-                  <div className="flex items-baseline justify-between gap-2 text-caption tnum">
-                    <span className="text-text-secondary truncate">
-                      {name}
-                      {single?.isCard && <CycleChip status={single.cycleStatus} />}
-                    </span>
-                    {showSplit && (
-                      <span className="flex-shrink-0">
-                        <span className="text-accent-green">{formatBRL(g.entries)}</span>
-                        <span className="text-ink-3"> · </span>
-                        <span className="text-accent-red">{formatBRL(g.exits)}</span>
-                      </span>
-                    )}
-                  </div>
-                );
-              })()}
-
-              {!single &&
-                g.rows.map((d) => (
-                  <div
-                    key={d.accountName}
-                    className="flex items-baseline justify-between gap-2 pl-3 text-caption"
-                  >
-                    <span className="text-text-secondary truncate">
-                      {d.accountName}
-                      {d.isCard && <CycleChip status={d.cycleStatus} />}
-                    </span>
-                    <span
-                      className={`tnum flex-shrink-0 ${
-                        d.balance >= 0 ? 'text-accent-green/80' : 'text-accent-red/80'
-                      }`}
-                    >
-                      {formatBRL(d.balance)}
-                    </span>
-                  </div>
-                ))}
-            </div>
-          );
-        })}
-
-        <div className="py-2.5 space-y-1">
-          <div className="flex items-baseline justify-between gap-2">
-            <span className="text-body font-semibold text-text-primary">Total (mês)</span>
-            <span
-              className={`text-body tnum font-semibold ${
-                totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'
-              }`}
-            >
-              {formatBRL(totalBalance)}
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-2 text-caption tnum text-ink-3">
-            <span>Acumulado {currentYear}</span>
-            <span className={yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}>
-              {formatBRL(yearBalance)}
-            </span>
-          </div>
-          <div className="flex items-baseline justify-between gap-2 text-caption tnum text-ink-3">
-            <span>Média mensal (12M)</span>
-            <span className={avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}>
-              {formatBRL(avg12months)}
-            </span>
-          </div>
-        </div>
+      <div className="flex items-baseline justify-between gap-2 flex-wrap">
+        <h3 className="text-title font-semibold text-text-primary">Resultados de caixa</h3>
+        <p className="text-caption text-ink-3">{monthLabel} · por conta</p>
       </div>
 
-      {/* DESKTOP/TABLET: a tabela de 4 colunas */}
-      <div className="hidden sm:block overflow-auto">
-        <table className="w-full text-body table-fixed">
-          <colgroup>
-            <col />
-            <col className="w-28" />
-            <col className="w-28" />
-            <col className="w-28" />
-          </colgroup>
-          <thead>
-            <tr className="border-b border-border text-caption uppercase tracking-wider text-ink-3">
-              <th className="py-1.5 pr-3 text-left font-semibold">Conta</th>
-              <th className="py-1.5 px-3 text-right font-semibold">Entradas</th>
-              <th className="py-1.5 px-3 text-right font-semibold">Saídas</th>
-              <th className="py-1.5 pl-3 text-right font-semibold">Resultado</th>
-            </tr>
-          </thead>
+      {/* 3 em 326px dão ~105px cada e os rótulos viravam "ACUMULAD…". No
+          celular são 2 colunas com o terceiro na linha inteira, o mesmo
+          arranjo dos indicadores do topo. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 [&>*:nth-child(3)]:col-span-2 sm:[&>*:nth-child(3)]:col-span-1">
+        <Conclusion label="Resultado do mês" value={totalBalance} hint="entradas − saídas" />
+        <Conclusion label={`Acumulado ${currentYear}`} value={yearBalance} hint="até o mês selecionado" />
+        <Conclusion label="Média mensal" value={avg12months} hint="últimos 12 meses" />
+      </div>
 
-          {groups.map((g) => {
-            // Grupo com uma conta só não repete o mesmo número duas vezes:
-            // o nome da conta vira sufixo do cabeçalho do grupo.
-            const single = g.rows.length === 1 ? g.rows[0] : null;
-            return (
-              <tbody key={g.label} className="border-b border-border/40">
-                {/* Iluminação de linha inteira no hover: percorrer 4 colunas de
-                    dinheiro sem uma faixa guia é onde o olho troca de linha. */}
-                <tr className={ROW_HOVER}>
-                  <td className="py-1.5 pr-3">
-                    <div className="flex items-baseline gap-2 flex-wrap min-w-0">
-                      <span className="text-caption uppercase tracking-wider text-ink-3 font-semibold">
-                        {g.label}
-                      </span>
-                      {single && single.accountName !== g.label && (
-                        <span className="text-text-primary truncate">
-                          {single.accountName}
-                          {single.isCard && <CycleChip status={single.cycleStatus} />}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="py-1.5 px-3 text-right tnum">{money(g.entries, 'text-accent-green')}</td>
-                  <td className="py-1.5 px-3 text-right tnum">{money(g.exits, 'text-accent-red')}</td>
-                  <td className="py-1.5 pl-3 text-right tnum font-semibold">
-                    {money(g.balance, g.balance >= 0 ? 'text-accent-green' : 'text-accent-red')}
-                  </td>
-                </tr>
+      <div className="flex items-center gap-4 flex-wrap">
+        <span className="flex items-center gap-1.5 text-caption text-ink-3">
+          <TrendingUp size={12} className="text-positive flex-shrink-0" /> entrou{' '}
+          <span className="tnum text-positive">{formatBRL0(totalEntries)}</span>
+        </span>
+        <span className="flex items-center gap-1.5 text-caption text-ink-3">
+          <TrendingDown size={12} className="text-negative flex-shrink-0" /> saiu{' '}
+          <span className="tnum text-negative">{formatBRL0(-totalExits)}</span>
+        </span>
+      </div>
 
-                {!single &&
-                  g.rows.map((d) => (
-                    <tr key={d.accountName} className={ROW_HOVER}>
-                      <td className="py-1 pr-3 pl-3 text-text-secondary">
-                        <span className="truncate">
-                          {d.accountName}
-                          {d.isCard && <CycleChip status={d.cycleStatus} />}
-                        </span>
-                      </td>
-                      <td className="py-1 px-3 text-right tnum">{money(d.entries, 'text-accent-green/80')}</td>
-                      <td className="py-1 px-3 text-right tnum">{money(d.exits, 'text-accent-red/80')}</td>
-                      <td className="py-1 pl-3 text-right tnum">
-                        {money(d.balance, d.balance >= 0 ? 'text-accent-green/80' : 'text-accent-red/80')}
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            );
-          })}
+      <div className="space-y-2.5">
+        {groups.map((g) => (
+          <div key={g.label} className="space-y-0.5">
+            {/* Cabeçalho de grupo com FAIXA e texto claro: sem isso ele ficava
+                menor e mais apagado que as contas que encabeça — subordinado
+                justamente ao que deveria agrupar. */}
+            <div className="flex items-baseline justify-between gap-2 rounded-[6px] bg-white/[0.055] px-2 py-1">
+              <span className="text-caption font-semibold uppercase tracking-wider text-text-primary truncate">
+                {g.label}
+              </span>
+              <span className={`text-body tnum font-bold flex-shrink-0 ${tone(g.balance)}`}>
+                {g.balance > 0 ? '+' : ''}
+                {formatBRL0(g.balance)}
+              </span>
+            </div>
 
-          <tfoot>
-            <tr className={`border-t border-border ${ROW_HOVER}`}>
-              <td className="py-2 pr-3 text-text-primary font-semibold">Total (mês)</td>
-              <td className="py-2 px-3 text-right tnum text-accent-green font-semibold">{formatBRL(totalEntries)}</td>
-              <td className="py-2 px-3 text-right tnum text-accent-red font-semibold">{formatBRL(totalExits)}</td>
-              <td className={`py-2 pl-3 text-right tnum font-semibold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {formatBRL(totalBalance)}
-              </td>
-            </tr>
-            <tr className={ROW_HOVER}>
-              <td className="py-1.5 pr-3 text-text-secondary">Acumulado {currentYear}</td>
-              <td className="py-1.5 px-3" colSpan={2} />
-              <td className={`py-1.5 pl-3 text-right tnum ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {formatBRL(yearBalance)}
-              </td>
-            </tr>
-            <tr className={ROW_HOVER}>
-              <td className="py-1.5 pr-3 text-text-secondary">Média mensal (12M)</td>
-              <td className="py-1.5 px-3" colSpan={2} />
-              <td className={`py-1.5 pl-3 text-right tnum ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                {formatBRL(avg12months)}
-              </td>
-            </tr>
-          </tfoot>
-        </table>
+            {g.rows.map((d) => (
+              <div
+                key={d.accountName}
+                title={`Entradas ${formatBRL(d.entries)} · Saídas ${formatBRL(d.exits)}`}
+                className={`flex items-baseline justify-between gap-2 rounded px-2 py-0.5 ${ROW_HOVER}`}
+              >
+                <span className="text-body text-text-secondary truncate">
+                  {d.accountName}
+                  {d.isCard && <CycleChip status={d.cycleStatus} />}
+                </span>
+                <span className={`text-body tnum flex-shrink-0 ${tone(d.balance)}`}>
+                  {d.balance === 0 ? '—' : formatBRL0(d.balance)}
+                </span>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
+/** Uma das três conclusões do card, no idioma dos tiles do topo do dashboard. */
+function Conclusion({ label, value, hint }: { label: string; value: number; hint: string }) {
+  return (
+    <div className="bg-bg-secondary rounded-control px-2.5 py-2 min-w-0">
+      <p className="text-caption uppercase tracking-wider text-ink-3 truncate">{label}</p>
+      <p className={`text-[17px] sm:text-[19px] font-bold tracking-tight tnum truncate ${tone(value)}`}>
+        {value > 0 ? '+' : ''}
+        {formatBRL0(value)}
+      </p>
+      <p className="text-caption text-ink-3 truncate">{hint}</p>
+    </div>
+  );
+}
+
+/**
+ * Fatura fechada x aberta: numa fatura aberta o valor ainda vai mudar até o
+ * fechamento, então o número da linha é parcial por natureza.
+ */
 function CycleChip({ status }: { status?: 'open' | 'closed' }) {
+  if (!status) return null;
   return (
     <span
-      className={`ml-1.5 px-1.5 py-0.5 rounded text-caption font-semibold leading-none ${
+      className={`ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium align-middle ${
         status === 'closed'
           ? 'bg-text-secondary/15 text-text-secondary'
           : 'bg-accent/15 text-accent'

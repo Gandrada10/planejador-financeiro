@@ -297,6 +297,7 @@ export function DashboardPage() {
             yearBalance={yearBalance}
             avg12months={avg12months}
             currentYear={currentYear}
+            monthLabel={getMonthLabel(monthYear)}
           />
 
           <YoyDeviationPanel
