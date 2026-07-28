@@ -7,16 +7,13 @@ interface Props {
   income: number;
   balance: number;
   categories: FlowSlice[];
-  /** Ids de categorias-mãe abertas em subcategoria. */
-  expanded: Set<string>;
-  onToggleCategory: (id: string) => void;
   /** Sufixo dos valores: "/mês" na visão de 12 meses. */
   unit?: string;
   /** Categoria em análise no painel lateral (destacada no diagrama). */
   selectedId?: string | null;
-  /** Clique no rótulo de uma categoria de gasto → análise no painel. */
+  /** Clique numa categoria de gasto → análise no painel. */
   onSelectCategory?: (id: string) => void;
-  /** Média mensal 12M por id de categoria/sub — liga o Δ vs média nos rótulos. */
+  /** Média mensal 12M por id de categoria — liga o Δ vs média nos rótulos. */
   averages?: Map<string, number>;
 }
 
@@ -40,9 +37,6 @@ interface SankeyNodeDef {
   unit: string;
   /** Mês vs média 12M, em % — só nas categorias de gasto na visão de mês. */
   delta?: number | null;
-  /** Presente só em categoria-mãe com subcategorias: alterna a expansão. */
-  onToggle?: () => void;
-  open?: boolean;
   /** Presente nas categorias de gasto: abre a análise no painel lateral. */
   onSelect?: () => void;
   selected?: boolean;
@@ -54,8 +48,7 @@ interface SankeyNodeDef {
 function SankeyNodeShape(props: any) {
   const { x, y, width, height, payload } = props;
   const tx = x + width + 8;
-  const clickable = !!payload.onToggle || !!payload.onSelect;
-  const caret = payload.open ? '⌄ ' : '› ';
+  const clickable = !!payload.onSelect;
   // Sempre DUAS linhas: nome em cima (com reticências se preciso), valor + %
   // embaixo. O modo compacto de uma linha só cortava o valor na borda com
   // nomes longos e engolia o percentual — exatamente o defeito reportado.
@@ -66,9 +59,7 @@ function SankeyNodeShape(props: any) {
   return (
     <Layer
       style={clickable ? { cursor: 'pointer' } : undefined}
-      // Idioma de árvore: o rótulo SELECIONA (análise no painel), o caret
-      // expande. Sem painel plugado, o clique inteiro volta a expandir.
-      onClick={payload.onSelect ?? payload.onToggle}
+      onClick={payload.onSelect}
     >
       <Rectangle
         x={x}
@@ -95,7 +86,6 @@ function SankeyNodeShape(props: any) {
         strokeLinejoin="round"
         paintOrder="stroke"
       >
-        {payload.onToggle && <tspan fill="#8f8e89">{caret}</tspan>}
         {name}
       </text>
       <text
@@ -121,20 +111,6 @@ function SankeyNodeShape(props: any) {
           </tspan>
         )}
       </text>
-      {/* Zona do caret POR CIMA do rótulo: expandir sem trocar a seleção */}
-      {payload.onSelect && payload.onToggle && (
-        <rect
-          x={tx - 6}
-          y={y - 6}
-          width={22}
-          height={height + 12}
-          fill="transparent"
-          onClick={(e: React.MouseEvent) => {
-            e.stopPropagation();
-            payload.onToggle();
-          }}
-        />
-      )}
     </Layer>
   );
 }
@@ -174,13 +150,16 @@ function SankeyLinkShape(props: any) {
  *
  * Com uma fonte só, o nó "Caixa" não é criado: seriam dois blocos gigantes
  * com o mesmo valor ocupando metade do card sem informação nenhuma.
+ *
+ * NÍVEL ÚNICO: o diagrama mostra só categorias-mãe. Abrir subcategoria aqui
+ * dentro punha 8 folhas de "Compras" com nome cortado empurrando o resto do
+ * desenho — e o painel de análise já dá a mesma quebra com nome inteiro,
+ * valor, média e Δ. Clicar numa categoria abre lá.
  */
 export function CashFlowSankey({
   income,
   balance,
   categories,
-  expanded,
-  onToggleCategory,
   unit = '',
   selectedId,
   onSelectCategory,
@@ -237,12 +216,6 @@ export function CashFlowSankey({
     links.push({ source: hubIdx, target: node('Resultado líquido', MONEY.income, balance), value: balance });
   }
 
-  // Expansão NO LUGAR: a categoria aberta é substituída pelas filhas no mesmo
-  // slot da lista, todas ligadas direto ao hub. A versão anterior criava uma
-  // 4ª coluna para o pai e o motor de layout brigava com a ordem — o nó
-  // pinava no topo e as fitas atravessavam o desenho. Com uma única coluna de
-  // folhas, travessia é geometricamente impossível. Clicar em qualquer filha
-  // fecha o grupo de volta.
   // Δ vs média 12M: responde "está acima ou abaixo do normal?" direto no nó.
   const deltaFor = (id: string, value: number): number | null => {
     const avg = averages?.get(id);
@@ -251,51 +224,13 @@ export function CashFlowSankey({
 
   for (const c of outCats) {
     if (c.value / totalOut < MIN_SHARE) continue;
-
-    // Só divide quando os filhos cabem no pai: um sub com reembolso poderia
-    // estourar o total e distorcer os valores.
-    const subOut = c.subs
-      .filter((s) => s.amount < 0)
-      .map((s) => ({ ...s, value: -s.amount }))
-      .filter((s) => s.value / totalOut >= 0.005)
-      .sort((a, b) => b.value - a.value);
-    const subSum = subOut.reduce((s, x) => s + x.value, 0);
-    const canExpand = subOut.length > 0 && subSum <= c.value + 0.01;
-    const isOpen = canExpand && expanded.has(c.id);
-
-    // Clicar numa sub seleciona a MÃE: a análise da categoria já quebra por
-    // subcategoria, e é a mãe que existe nas duas visões (aberta e fechada).
-    const select = onSelectCategory
-      ? { onSelect: () => onSelectCategory(c.id), selected: selectedId === c.id }
-      : {};
-
-    if (!isOpen) {
-      const parentIdx = node(c.name, c.color, c.value, {
-        onToggle: canExpand ? () => onToggleCategory(c.id) : undefined,
-        open: false,
-        delta: deltaFor(c.id, c.value),
-        ...select,
-      });
-      links.push({ source: hubIdx, target: parentIdx, value: c.value });
-      continue;
-    }
-
-    const collapse = { onToggle: () => onToggleCategory(c.id), open: true, ...select };
-    for (const s of subOut) {
-      links.push({
-        source: hubIdx,
-        target: node(s.name, s.color || c.color, s.value, { ...collapse, delta: deltaFor(s.id, s.value) }),
-        value: s.value,
-      });
-    }
-    const remainder = c.value - subSum;
-    if (remainder > totalOut * 0.005) {
-      links.push({
-        source: hubIdx,
-        target: node(`${c.name} · outros`, c.color, remainder, collapse),
-        value: remainder,
-      });
-    }
+    const idx = node(c.name, c.color, c.value, {
+      delta: deltaFor(c.id, c.value),
+      ...(onSelectCategory
+        ? { onSelect: () => onSelectCategory(c.id), selected: selectedId === c.id }
+        : {}),
+    });
+    links.push({ source: hubIdx, target: idx, value: c.value });
   }
 
   // Altura pela coluna mais cheia (as folhas), que é quem precisa de rótulo.

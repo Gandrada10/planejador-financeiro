@@ -27,6 +27,14 @@ import type { Transaction, Category } from '../../types';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
+/**
+ * Linha de tendência em branco-osso, não em coral: coral sobre coral tem
+ * contraste 1,0:1 — a linha só existia por causa do contorno preto. O branco
+ * separa por LUMINÂNCIA (3,4:1 sobre as barras) e não gasta cor nova; a linha
+ * não é uma série de dinheiro, é leitura sobre as barras.
+ */
+const TREND_LINE = '#f5f4f2';
+
 interface Props {
   transactions: Transaction[];
   categories: Category[];
@@ -130,7 +138,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
       {currAvg > 0 && (
         <p className="text-caption text-ink-3">
           média de {year}: {formatBRL0(currAvg)}/mês em {currAvgMonths}{' '}
-          {currAvgMonths === 1 ? 'mês completo' : 'meses completos'} (linha tracejada)
+          {currAvgMonths === 1 ? 'mês completo' : 'meses completos'}
         </p>
       )}
 
@@ -169,22 +177,33 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
               content={<ExpensesTooltip year={year} prevYear={prevYear} />}
             />
             {(hasPrev || rows.some((r) => r.ma !== null)) && (
+              // Sem forma por série a legenda virava três bolinhas coral
+              // idênticas: retângulo para as barras, traço para a linha.
               <Legend
                 verticalAlign="top"
                 align="right"
                 height={24}
-                iconType="circle"
-                iconSize={8}
+                iconSize={12}
                 wrapperStyle={{ fontFamily: FONT, fontSize: 11, color: '#8f8e89' }}
               />
             )}
             {currAvg > 0 && (
+              // Rotulada no próprio gráfico: antes o subtítulo dizia "(linha
+              // tracejada)" e o leitor tinha que resolver a referência.
               <ReferenceLine
                 y={currAvg}
                 stroke="#8f8e89"
                 strokeDasharray="4 4"
                 strokeWidth={1}
                 ifOverflow="extendDomain"
+                label={{
+                  value: `média ${year} · ${formatCompactBRL(currAvg)}`,
+                  position: 'insideTopRight',
+                  offset: 6,
+                  fill: '#8f8e89',
+                  fontSize: 10.5,
+                  fontFamily: FONT,
+                }}
               />
             )}
             {hasPrev && (
@@ -195,6 +214,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
                 fillOpacity={0.35}
                 radius={[4, 4, 0, 0]}
                 isAnimationActive={false}
+                legendType="rect"
               />
             )}
             <Bar
@@ -203,9 +223,10 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
               fill={MONEY.expense}
               radius={[4, 4, 0, 0]}
               isAnimationActive={false}
+              legendType="rect"
             />
-            {/* Casing na cor do card por baixo da linha: sem ele, a linha coral
-                some onde cruza as barras coral sólidas do ano atual. */}
+            {/* Casing na cor do card por baixo da linha, para ela não colar
+                visualmente no topo das barras que cruza. */}
             <Line
               dataKey="ma"
               stroke="#1b1b1e"
@@ -219,12 +240,13 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
             <Line
               dataKey="ma"
               name="Média móvel 12M"
-              stroke={MONEY.expense}
+              stroke={TREND_LINE}
               strokeWidth={2}
               dot={false}
               activeDot={{ r: 4 }}
               connectNulls={false}
               isAnimationActive={false}
+              legendType="plainline"
             />
             {/* Rótulo direto na ponta da linha: com o herói do card sendo a
                 despesa do mês, é aqui que o custo de vida se identifica. */}
@@ -233,7 +255,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, isMo
                 x={lastMa.month}
                 y={lastMa.ma!}
                 r={4}
-                fill={MONEY.expense}
+                fill={TREND_LINE}
                 stroke="#1b1b1e"
                 strokeWidth={2}
                 label={{

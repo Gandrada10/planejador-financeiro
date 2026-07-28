@@ -19,9 +19,9 @@ interface Props {
  * coisa, então dividem um card com seletor em vez de dois cards concorrentes;
  * foi assim que a "Composição do gasto · 12 meses" veio parar aqui.
  *
- * Subcategoria abre POR CATEGORIA, no clique. Abrir todas de uma vez punha
- * ~28 folhas na última coluna e o diagrama virava espaguete — Sankey comunica
- * proporção até ~15 folhas.
+ * O diagrama é de NÍVEL ÚNICO (só categorias-mãe). Subcategoria mora no painel
+ * de análise, que abre no clique: em lista ela cabe inteira, com valor, média e
+ * Δ; dentro do Sankey virava nome cortado empurrando o resto do desenho.
  */
 export function MonthFlowPanel({
   transactions,
@@ -32,36 +32,21 @@ export function MonthFlowPanel({
   onSelectCategory,
 }: Props) {
   const [period, setPeriod] = useState<FlowPeriod>('month');
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const flow = useMemo(
     () => computeCategoryFlow(transactions, categories, monthYear, isMonthInProgress, period),
     [transactions, categories, monthYear, isMonthInProgress, period]
   );
 
-  // Média mensal 12M por categoria/sub, para o ▲▼ dos rótulos do Sankey.
+  // Média mensal 12M por categoria, para o ▲▼ dos rótulos do Sankey.
   // Na visão "Média 12M" não existe delta: o valor exibido É a média.
   const averages = useMemo(() => {
     if (period !== 'month') return undefined;
     const m12 = computeCategoryFlow(transactions, categories, monthYear, isMonthInProgress, 'm12');
     const map = new Map<string, number>();
-    for (const c of m12.categories) {
-      if (c.amount < 0) map.set(c.id, -c.amount);
-      for (const s of c.subs) if (s.amount < 0) map.set(s.id, -s.amount);
-    }
+    for (const c of m12.categories) if (c.amount < 0) map.set(c.id, -c.amount);
     return map;
   }, [transactions, categories, monthYear, isMonthInProgress, period]);
-
-  function toggleCategory(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const canCollapse = expanded.size > 0;
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
@@ -70,21 +55,12 @@ export function MonthFlowPanel({
           <h3 className="text-title font-semibold text-text-primary">Fluxo do dinheiro</h3>
           <p className="text-caption text-ink-3 mt-0.5">
             {flow.label} · % sobre tudo que entrou
-            {period === 'month' ? ' · ▲▼ vs média 12M' : ''} · toque numa categoria para analisar,
-            › abre as subcategorias
+            {period === 'month' ? ' · ▲▼ vs média 12M' : ''} · toque numa categoria para ver a
+            análise e as subcategorias
           </p>
         </div>
 
         <div className="flex items-center gap-2">
-          {canCollapse && (
-            <button
-              type="button"
-              onClick={() => setExpanded(new Set())}
-              className="text-caption text-text-secondary hover:text-text-primary transition-colors"
-            >
-              Fechar todas
-            </button>
-          )}
           <div
             className="flex bg-bg-secondary border border-border rounded-control p-0.5 flex-shrink-0"
             role="group"
@@ -104,8 +80,6 @@ export function MonthFlowPanel({
         income={flow.income}
         balance={flow.balance}
         categories={flow.categories}
-        expanded={expanded}
-        onToggleCategory={toggleCategory}
         unit={period === 'm12' ? '/mês' : ''}
         selectedId={selectedCategory}
         onSelectCategory={(id) => onSelectCategory(id === selectedCategory ? null : id)}
