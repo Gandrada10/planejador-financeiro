@@ -11,7 +11,6 @@ import { CashFlowTable } from './CashFlowTable';
 import { MonthFlowPanel } from './MonthFlowPanel';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
 import { ExpensesPanel } from './ExpensesPanel';
-import { CategoryMix12mChart } from './CategoryMix12mChart';
 import { ProjectsPanel } from './ProjectsPanel';
 import { VitalSigns } from './VitalSigns';
 import { computeCostOfLiving } from '../../lib/costOfLiving';
@@ -115,49 +114,6 @@ export function DashboardPage() {
       })
       .sort((a, b) => a.accountName.localeCompare(b.accountName, 'pt-BR'));
   }, [monthTransactions, accounts, getCycleForCard, monthYear, excludedIds]);
-
-  // Expenses by category (grouped by parent; subcategory breakdowns tracked separately)
-  const expensesByCategory = useMemo(() => {
-    const map = new Map<string, { amount: number; subs: Map<string, number> }>();
-    for (const t of monthTransactions) {
-      if (!isExpenseAmount(t) || !countsInTotals(t, excludedIds)) continue;
-      const catId = t.categoryId || '__uncategorized';
-      const cat = categories.find((c) => c.id === catId);
-      const parentId = cat?.parentId || catId; // use parent if it's a subcategory
-
-      if (!map.has(parentId)) map.set(parentId, { amount: 0, subs: new Map() });
-      const entry = map.get(parentId)!;
-      entry.amount += t.amount;
-      if (cat?.parentId) {
-        entry.subs.set(catId, (entry.subs.get(catId) || 0) + t.amount);
-      }
-    }
-    const totalExp = Math.abs(totalExits);
-    return Array.from(map.entries())
-      .map(([catId, { amount, subs }]) => {
-        const cat = categories.find((c) => c.id === catId);
-        return {
-          name: cat?.name || 'Sem categoria',
-          icon: cat?.icon || '',
-          color: cat?.color || '#737373',
-          amount,
-          percentage: totalExp > 0 ? (Math.abs(amount) / totalExp) * 100 : 0,
-          subs: Array.from(subs.entries())
-            .map(([subId, subAmount]) => {
-              const subCat = categories.find((c) => c.id === subId);
-              return {
-                name: subCat?.name || 'Sem subcategoria',
-                icon: subCat?.icon || '',
-                color: subCat?.color || '#737373',
-                amount: subAmount,
-                percentage: totalExp > 0 ? (Math.abs(subAmount) / totalExp) * 100 : 0,
-              };
-            })
-            .sort((a, b) => a.amount - b.amount),
-        };
-      })
-      .sort((a, b) => a.amount - b.amount); // most negative first
-  }, [monthTransactions, categories, totalExits, excludedIds]);
 
   // Budget progress - group by parent category, aggregate sub spending
   const budgetData = useMemo(() => {
@@ -273,61 +229,22 @@ export function DashboardPage() {
           }}
         />
 
-        {/* Despesas em largura total: lentes "mês a mês" e "tendência 24M" num
-            card só, com o custo de vida como número-herói fixo */}
-        <ExpensesPanel
-          transactions={transactions}
-          categories={categories}
-          monthYear={monthYear}
-          costOfLiving={costOfLiving}
-          isMonthInProgress={isMonthInProgress}
-        />
-
-        {/* Fluxo em largura total: no nível de subcategoria são 4 colunas de
-            nós, que numa meia-tela ficariam espremidas. */}
-        <MonthFlowPanel data={expensesByCategory} income={totalEntries} balance={totalBalance} />
-
+        {/* ---- BANDA 1: O MÊS (tudo aqui responde ao seletor de mês) ----
+            Vem antes da tendência porque é o que o seletor comanda: a
+            pergunta de quem abre é "como foi o mês?", e só depois "como está
+            o ano?". */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* LEFT COLUMN: Cash flow + KPIs */}
+          <MonthFlowPanel
+            transactions={transactions}
+            categories={categories}
+            monthYear={monthYear}
+            isMonthInProgress={isMonthInProgress}
+          />
+
+          {/* Metas ao lado do Fluxo: o que aconteceu vs o que era o plano.
+              Caixa fecha a banda — conferência por conta é o último passo da
+              leitura, não o primeiro. */}
           <div className="space-y-4">
-            <CashFlowTable
-              data={cashFlowData}
-              totalEntries={totalEntries}
-              totalExits={totalExits}
-              totalBalance={totalBalance}
-              yearBalance={yearBalance}
-              avg12months={avg12months}
-              currentYear={currentYear}
-            />
-
-            {/* YoY deviation: same period vs previous year (drill-down by category/subcategory) */}
-            <YoyDeviationPanel
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-              periodLabel={periodLabel}
-            />
-
-          </div>
-
-          {/* RIGHT COLUMN: Expenses + Projects + Metas */}
-          <div className="space-y-4">
-            {/* Composição estrutural: peso de cada categoria na média de 12 meses */}
-            <CategoryMix12mChart
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-            />
-
-            {/* Projetos do ano selecionado: em andamento + concluídos */}
-            <ProjectsPanel
-              projects={projects}
-              transactions={transactions}
-              excludedIds={excludedIds}
-              monthYear={monthYear}
-            />
-
             {/* Metas de despesas */}
             <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
               <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
@@ -398,7 +315,46 @@ export function DashboardPage() {
                 </div>
               )}
             </div>
+
+            <CashFlowTable
+              data={cashFlowData}
+              totalEntries={totalEntries}
+              totalExits={totalExits}
+              totalBalance={totalBalance}
+              yearBalance={yearBalance}
+              avg12months={avg12months}
+              currentYear={currentYear}
+            />
           </div>
+        </div>
+
+        {/* ---- BANDA 2: O ANO E A TENDÊNCIA ----
+            O gráfico mês a mês é a ponte: mostra o mês selecionado dentro da
+            série. O YoY logo abaixo é o drill-down natural dele — o gráfico
+            mostra QUE subiu, o YoY mostra O QUÊ subiu. */}
+        <ExpensesPanel
+          transactions={transactions}
+          categories={categories}
+          monthYear={monthYear}
+          costOfLiving={costOfLiving}
+          isMonthInProgress={isMonthInProgress}
+        />
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <YoyDeviationPanel
+            transactions={transactions}
+            categories={categories}
+            monthYear={monthYear}
+            isMonthInProgress={isMonthInProgress}
+            periodLabel={periodLabel}
+          />
+
+          <ProjectsPanel
+            projects={projects}
+            transactions={transactions}
+            excludedIds={excludedIds}
+            monthYear={monthYear}
+          />
         </div>
         </div>
       ) : (
