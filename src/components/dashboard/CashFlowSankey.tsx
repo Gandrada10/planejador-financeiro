@@ -16,8 +16,16 @@ interface Props {
 
 /** Piso: abaixo disso a fatia é um fio invisível e só suja o diagrama. */
 const MIN_SHARE = 0.003;
-/** Espaço vertical reservado por folha, para o rótulo caber. */
-const ROW_SPACE = 30;
+/** Espaço vertical por folha: 2 linhas de rótulo (~24px) + respiro. */
+const ROW_SPACE = 38;
+/**
+ * Vão mínimo entre nós: o rótulo tem ~24px de altura centrado no nó, então
+ * dois nós minúsculos vizinhos precisam de pelo menos isso de distância —
+ * com menos, "Luz" escrevia por cima de "Moradia · outros".
+ */
+const NODE_PADDING = 26;
+/** Nome maior que isso ganha reticências — o VALOR nunca é cortado. */
+const MAX_NAME = 26;
 
 interface SankeyNodeDef {
   name: string;
@@ -35,9 +43,13 @@ interface SankeyNodeDef {
 function SankeyNodeShape(props: any) {
   const { x, y, width, height, payload } = props;
   const tx = x + width + 8;
-  const compact = height < 26;
   const clickable = !!payload.onToggle;
   const caret = payload.open ? '⌄ ' : '› ';
+  // Sempre DUAS linhas: nome em cima (com reticências se preciso), valor + %
+  // embaixo. O modo compacto de uma linha só cortava o valor na borda com
+  // nomes longos e engolia o percentual — exatamente o defeito reportado.
+  const name =
+    payload.name.length > MAX_NAME ? `${payload.name.slice(0, MAX_NAME - 1)}…` : payload.name;
 
   return (
     <Layer
@@ -49,7 +61,7 @@ function SankeyNodeShape(props: any) {
       {clickable && <rect x={x} y={y - 6} width={190} height={height + 12} fill="transparent" />}
       <text
         x={tx}
-        y={y + height / 2 + (compact ? 3.5 : -2)}
+        y={y + height / 2 - 2}
         textAnchor="start"
         fontFamily={FONT}
         fontSize={11}
@@ -61,33 +73,24 @@ function SankeyNodeShape(props: any) {
         paintOrder="stroke"
       >
         {clickable && <tspan fill="#8f8e89">{caret}</tspan>}
-        {payload.name}
-        {compact && (
-          <tspan fontWeight={400} fill="#8f8e89">
-            {' '}
-            {formatBRL0(payload.value)}
-            {payload.unit}
-          </tspan>
-        )}
+        {name}
       </text>
-      {!compact && (
-        <text
-          x={tx}
-          y={y + height / 2 + 12}
-          textAnchor="start"
-          fontFamily={FONT}
-          fontSize={10.5}
-          fill="#8f8e89"
-          stroke="#1b1b1e"
-          strokeWidth={3}
-          strokeLinejoin="round"
-          paintOrder="stroke"
-        >
-          {formatBRL0(payload.value)}
-          {payload.unit}
-          {payload.share !== null && ` · ${payload.share.toFixed(0)}%`}
-        </text>
-      )}
+      <text
+        x={tx}
+        y={y + height / 2 + 12}
+        textAnchor="start"
+        fontFamily={FONT}
+        fontSize={10.5}
+        fill="#8f8e89"
+        stroke="#1b1b1e"
+        strokeWidth={3}
+        strokeLinejoin="round"
+        paintOrder="stroke"
+      >
+        {formatBRL0(payload.value)}
+        {payload.unit}
+        {payload.share !== null && ` · ${payload.share.toFixed(0)}%`}
+      </text>
     </Layer>
   );
 }
@@ -117,10 +120,10 @@ function SankeyLinkShape(props: any) {
 /**
  * Fluxo do dinheiro (Sankey, à la Monarch Money).
  *
- * RESULTADO LÍQUIDO existe sempre e a POSIÇÃO codifica o sinal: superávit sai
- * pela direita (virou reserva), déficit entra pela esquerda (consumiu reserva).
- * Sankey não representa fluxo negativo — é assim que o diagrama fecha, e é o
- * que de fato acontece com o dinheiro.
+ * Superávit sai pela direita como RESULTADO LÍQUIDO (primeira linha dos
+ * destinos); déficit entra pela esquerda como USO DE RESERVAS, ordenado por
+ * tamanho entre as fontes. Sankey não representa fluxo negativo — é assim que
+ * o diagrama fecha, e é o que de fato acontece com o dinheiro.
  *
  * SINAL das categorias: saldo POSITIVO é reembolso líquido — dinheiro que
  * voltou. Entra como fonte, nunca como destino.
@@ -150,15 +153,19 @@ export function CashFlowSankey({ income, balance, categories, expanded, onToggle
   const node = (name: string, color: string, value: number, extra: Partial<SankeyNodeDef> = {}) =>
     push({ name, color, share: shareOf(value), unit, ...extra });
 
-  // ---- Fontes (déficit primeiro: é a manchete do mês) ----
-  const sources: Array<{ idx: number; value: number }> = [];
-  if (balance < 0) {
-    sources.push({ idx: node('Resultado líquido', MONEY.expense, -balance), value: -balance });
-  }
-  if (income > 0) sources.push({ idx: node('Receitas', MONEY.income, income), value: income });
+  // ---- Fontes, da maior para a menor ----
+  // Déficit vira "Uso de reservas" (não é resultado líquido — é de onde veio
+  // o que faltou) e entra ordenado por tamanho: abaixo de Receitas quando
+  // menor, acima quando o buraco superar o que entrou.
+  const sourceDefs: Array<{ name: string; color: string; value: number }> = [];
+  if (income > 0) sourceDefs.push({ name: 'Receitas', color: MONEY.income, value: income });
   for (const c of inCats) {
-    sources.push({ idx: node(c.name, c.color || MONEY.income, c.value), value: c.value });
+    sourceDefs.push({ name: c.name, color: c.color || MONEY.income, value: c.value });
   }
+  if (balance < 0) sourceDefs.push({ name: 'Uso de reservas', color: MONEY.expense, value: -balance });
+  sourceDefs.sort((a, b) => b.value - a.value);
+
+  const sources = sourceDefs.map((s) => ({ idx: node(s.name, s.color, s.value), value: s.value }));
 
   // Uma fonte só não merece um nó de passagem: ela mesma vira o centro.
   // O hub NÃO leva %: ele é o total (100% por definição) — mostrar a fração
@@ -221,13 +228,18 @@ export function CashFlowSankey({ income, balance, categories, expanded, onToggle
         <Sankey
           data={{ nodes, links }}
           nodeWidth={10}
-          nodePadding={14}
+          nodePadding={NODE_PADDING}
           margin={{ top: 12, right: 190, bottom: 12, left: 4 }}
           node={SankeyNodeShape}
           link={SankeyLinkShape}
           // Preserva a ordem de inserção no eixo vertical (o padrão reordena
           // por valor e jogava o Resultado líquido para o meio da lista).
           sort={false}
+          // Sem relaxação: com uma categoria expandida, o baricentro jogava o
+          // nó-pai para o meio da tela enquanto as filhas ficavam no topo — a
+          // fita varria o desenho inteiro para ligar os dois. Com 0 iterações
+          // a posição segue a ordem de inserção, determinística.
+          iterations={0}
         />
       </ResponsiveContainer>
     </div>

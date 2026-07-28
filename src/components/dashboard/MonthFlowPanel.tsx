@@ -86,8 +86,8 @@ export function MonthFlowPanel({ transactions, categories, monthYear, isMonthInP
 
       {flow.balance < 0 && (
         <p className="text-caption text-ink-3">
-          Resultado negativo entra pela esquerda: o período gastou mais do que entrou e a diferença veio
-          de reserva, investimento ou crédito — o app não sabe de qual.
+          Uso de reservas: o período gastou mais do que entrou — a diferença veio de reserva,
+          investimento ou crédito (o app não sabe de qual).
         </p>
       )}
     </div>
