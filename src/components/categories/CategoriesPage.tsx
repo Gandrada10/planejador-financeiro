@@ -1,14 +1,19 @@
 import { useState } from 'react';
 import { Plus, Trash2, Zap, X, ChevronRight, RefreshCw, Pencil } from 'lucide-react';
 import { useCategories } from '../../hooks/useCategories';
+import { useTransactions } from '../../hooks/useTransactions';
+import { useBudgets } from '../../hooks/useBudgets';
 import type { Category, CategoryRule } from '../../types';
 import { CategoryIcon, ICON_KEYS } from '../shared/CategoryIcon';
 import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { DeleteCategoryDialog } from './DeleteCategoryDialog';
 
 const PRESET_COLORS = ['#f59e0b', '#22c55e', '#ef4444', '#3b82f6', '#8b5cf6', '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
 
 export function CategoriesPage() {
   const { categories, rootCategories, subCategories, rules, loading, addCategory, updateCategory, deleteCategory, addRule, updateRule, deleteRule, syncCategories } = useCategories();
+  const { transactions, batchUpdate } = useTransactions();
+  const { budgets, deleteBudget } = useBudgets();
   const [syncing, setSyncing] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showRuleForm, setShowRuleForm] = useState(false);
@@ -17,6 +22,9 @@ export function CategoriesPage() {
   const [activeTab, setActiveTab] = useState<'despesa' | 'receita'>('despesa');
   // Aviso informativo (um botão) ao tentar excluir a categoria de Transferência.
   const [blockedDeleteMsg, setBlockedDeleteMsg] = useState<string | null>(null);
+  // Categoria aguardando confirmação de exclusão (com destino para o que
+  // aponta para ela). null = nenhum diálogo aberto.
+  const [deleteTarget, setDeleteTarget] = useState<Category | null>(null);
 
   // Category form
   const [name, setName] = useState('');
@@ -97,7 +105,43 @@ export function CategoriesPage() {
       );
       return;
     }
-    deleteCategory(cat.id);
+    setDeleteTarget(cat);
+  }
+
+  /**
+   * Executa a exclusão depois do destino escolhido. A ORDEM importa: só apaga
+   * a categoria depois de reapontar tudo, para nenhuma tela ler um id morto
+   * caso alguma escrita falhe no meio.
+   */
+  async function confirmDelete(destinationId: string | null) {
+    const target = deleteTarget;
+    if (!target) return;
+    const doomed = new Set([target.id, ...categories.filter((c) => c.parentId === target.id).map((c) => c.id)]);
+
+    const txIds = transactions.filter((t) => t.categoryId && doomed.has(t.categoryId)).map((t) => t.id);
+    if (txIds.length > 0) await batchUpdate(txIds, { categoryId: destinationId });
+
+    // O vínculo de reembolso guarda a categoria ANTERIOR para restaurar quando
+    // o vínculo é desfeito; apontando para uma categoria morta, a restauração
+    // devolveria o lançamento ao vazio.
+    const linkIds = transactions
+      .filter((t) => t.reimbursementPrevCategoryId && doomed.has(t.reimbursementPrevCategoryId))
+      .map((t) => t.id);
+    if (linkIds.length > 0) await batchUpdate(linkIds, { reimbursementPrevCategoryId: destinationId });
+
+    // Regra precisa apontar para alguma categoria: sem destino, ela perde o
+    // sentido e é removida junto.
+    for (const r of rules.filter((rr) => doomed.has(rr.categoryId))) {
+      if (destinationId) await updateRule(r.id, { categoryId: destinationId });
+      else await deleteRule(r.id);
+    }
+
+    // Meta é limite POR categoria e mês: mover para outra categoria somaria
+    // dois limites no mesmo mês, então some junto.
+    for (const b of budgets.filter((bb) => doomed.has(bb.categoryId))) await deleteBudget(b.id);
+
+    for (const id of doomed) await deleteCategory(id);
+    setDeleteTarget(null);
   }
 
   function addKeyword() {
@@ -452,6 +496,18 @@ export function CategoriesPage() {
           confirmLabel="Entendi"
           onConfirm={() => setBlockedDeleteMsg(null)}
           onCancel={() => setBlockedDeleteMsg(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteCategoryDialog
+          target={deleteTarget}
+          categories={categories}
+          transactions={transactions}
+          rules={rules}
+          budgets={budgets}
+          onCancel={() => setDeleteTarget(null)}
+          onConfirm={confirmDelete}
         />
       )}
     </div>
