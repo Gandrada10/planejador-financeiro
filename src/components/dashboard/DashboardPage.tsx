@@ -53,13 +53,22 @@ export function DashboardPage() {
   const totalExits = useMemo(() => monthTransactions.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0), [monthTransactions, excludedIds]);
   const totalBalance = totalEntries + totalExits;
 
-  // YTD accumulated result (year of selected month)
+  // Acumulado do ano ATÉ o mês selecionado. Antes somava o ano inteiro por
+  // prefixo da chave, então parcelas de cartão e agendamentos com data
+  // contábil no futuro entravam no "acumulado" — e o card de Desvio YoY, que
+  // corta no mês selecionado para comparar Jan–mês contra Jan–mês, mostrava
+  // um resultado diferente na mesma tela sem explicar por quê.
   const currentYear = monthYear.split('-')[0];
   const yearBalance = useMemo(() => {
+    const [y, m] = monthYear.split('-').map(Number);
     return transactions
-      .filter((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)).startsWith(currentYear))
+      .filter((t) => {
+        if (!countsInTotals(t, excludedIds)) return false;
+        const ad = accountingDate(t);
+        return ad.getFullYear() === y && ad.getMonth() + 1 <= m;
+      })
       .reduce((s, t) => s + t.amount, 0);
-  }, [transactions, currentYear, excludedIds]);
+  }, [transactions, monthYear, excludedIds]);
 
   // Average monthly result over last 12 months (only months with data)
   const avg12months = useMemo(() => {

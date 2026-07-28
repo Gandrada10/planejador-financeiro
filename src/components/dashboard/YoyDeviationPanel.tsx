@@ -523,7 +523,10 @@ function BarRow({ name, color, delta, harm, max, sub, open, onToggle }: BarRowPr
 
   if (!onToggle) return <div className={cls}>{inner}</div>;
   return (
-    <button type="button" onClick={onToggle} aria-expanded={open} className={`${cls} tap text-left hover:bg-elevated/40 rounded-[4px] transition-colors`}>
+    // Sem `.tap` de proposito: os 44px so valeriam para as linhas
+    // expansiveis, e no celular a lista ficava com um degrau de altura a cada
+    // categoria com subcategoria. Numa lista densa, ritmo uniforme vale mais.
+    <button type="button" onClick={onToggle} aria-expanded={open} className={`${cls} text-left hover:bg-elevated/40 rounded-[4px] transition-colors`}>
       {inner}
     </button>
   );
@@ -573,7 +576,10 @@ function SummaryTile({
       <p className="text-caption uppercase tracking-wider text-ink-3 truncate">{label}</p>
       <p className="text-body tnum text-text-primary truncate">{formatBRL0(total.curr)}</p>
       <p className={`text-caption tnum truncate ${trend.color}`}>
-        {trend.text} <span className="text-ink-3">vs {prevYear}</span>
+        {trend.text}{' '}
+        {/* No celular os 3 tiles dividem ~110px cada e "vs 2025" era cortado
+            no meio; a comparação já está no subtítulo do card. */}
+        <span className="text-ink-3 hidden sm:inline">vs {prevYear}</span>
       </p>
     </button>
   );
