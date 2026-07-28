@@ -264,6 +264,9 @@ export interface CategoryMonthEntry {
   subName: string | null;
   subColor: string | null;
   account: string;
+  /** Observação do lançamento; `alert` a marca como aviso (vermelha). */
+  note: string;
+  noteAlert: boolean;
 }
 
 export interface CategoryMonthDetail {
@@ -310,6 +313,8 @@ export function computeCategoryMonth(
       subName: cat?.parentId ? cat.name : null,
       subColor: cat?.parentId ? cat.color : null,
       account: t.account || '',
+      note: (t.notes || '').trim(),
+      noteAlert: !!t.noteAlert,
     });
 
     const key = cat?.parentId ? catId : '__direct';

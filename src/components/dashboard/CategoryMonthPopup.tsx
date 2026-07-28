@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from 'react';
-import { X } from 'lucide-react';
+import { AlertTriangle, StickyNote, X } from 'lucide-react';
 import { computeCategoryMonth } from '../../lib/categoryFlow';
 import { formatBRL, formatBRL0, formatDate, getMonthLabel } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
@@ -64,7 +64,7 @@ export function CategoryMonthPopup({
       role="presentation"
     >
       <div
-        className="bg-bg-card border border-border rounded-card w-full max-w-lg max-h-full overflow-auto p-4 space-y-3"
+        className="bg-bg-card border border-border rounded-card w-full max-w-xl max-h-full overflow-auto p-4 space-y-3"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -131,30 +131,64 @@ export function CategoryMonthPopup({
               {shown.map((e) => (
                 <div
                   key={e.id}
-                  className="flex items-baseline justify-between gap-2 rounded px-1 -mx-1 py-0.5 [@media(hover:hover)]:hover:bg-white/[0.06] transition-colors"
-                  title={e.account ? `${e.account} · ${formatDate(e.date)}` : formatDate(e.date)}
+                  className="rounded px-1 -mx-1 py-0.5 [@media(hover:hover)]:hover:bg-white/[0.06] transition-colors"
                 >
-                  <span className="min-w-0 flex items-baseline gap-1.5">
-                    <span className="text-body text-text-primary truncate">{e.description}</span>
-                    {e.subName && (
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span className="min-w-0 flex items-baseline gap-1.5">
+                      {/* O nome corta por falta de largura; o title devolve o
+                          texto inteiro (com a nota junto) ao passar o mouse. */}
                       <span
-                        className="text-caption flex-shrink-0 truncate"
-                        style={{ color: e.subColor || undefined }}
+                        className="text-body text-text-primary truncate"
+                        title={[
+                          e.description,
+                          e.note && `📝 ${e.note}`,
+                          e.account && `conta: ${e.account}`,
+                        ]
+                          .filter(Boolean)
+                          .join('\n')}
                       >
-                        {e.subName}
+                        {e.description}
                       </span>
-                    )}
-                  </span>
-                  <span className="flex items-baseline gap-2 flex-shrink-0">
-                    <span className="text-caption text-ink-3 tnum">{formatDate(e.date)}</span>
-                    <span
-                      className={`text-body tnum w-24 text-right ${
-                        e.value < 0 ? 'text-positive' : 'text-text-primary'
+                      {e.subName && (
+                        <span
+                          className="text-caption flex-shrink-0 truncate"
+                          style={{ color: e.subColor || undefined }}
+                        >
+                          {e.subName}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex items-baseline gap-2 flex-shrink-0">
+                      <span className="text-caption text-ink-3 tnum">{formatDate(e.date)}</span>
+                      <span
+                        className={`text-body tnum w-24 text-right ${
+                          e.value < 0 ? 'text-positive' : 'text-text-primary'
+                        }`}
+                      >
+                        {formatBRL(e.value)}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* A nota vem por INTEIRO numa segunda linha, não num badge:
+                      é justamente o texto que explica o gasto que a descrição
+                      não explica — esconder atrás de um clique seria inútil
+                      aqui. Alerta em coral, nota comum em menta (convenção do
+                      NoteTag). */}
+                  {e.note && (
+                    <p
+                      className={`text-caption flex items-start gap-1 pl-0.5 ${
+                        e.noteAlert ? 'text-accent-red' : 'text-accent'
                       }`}
                     >
-                      {formatBRL(e.value)}
-                    </span>
-                  </span>
+                      {e.noteAlert ? (
+                        <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
+                      ) : (
+                        <StickyNote size={11} className="flex-shrink-0 mt-0.5" />
+                      )}
+                      <span className="min-w-0">{e.note}</span>
+                    </p>
+                  )}
                 </div>
               ))}
               {rest.length > 0 && (

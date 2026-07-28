@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { X } from 'lucide-react';
+import { AlertTriangle, StickyNote, X } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -10,7 +10,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { computeCategoryDetail } from '../../lib/categoryFlow';
+import { computeCategoryDetail, computeCategoryMonth } from '../../lib/categoryFlow';
 import { AXIS_STYLE, TOOLTIP_STYLE } from '../../lib/chartTheme';
 import { formatBRL, formatBRL0 } from '../../lib/utils';
 import { CategoryMonthPopup } from './CategoryMonthPopup';
@@ -59,6 +59,16 @@ export function CategoryDetailPanel({
   const detail = useMemo(
     () => computeCategoryDetail(transactions, categories, categoryId, monthYear, isMonthInProgress),
     [transactions, categories, categoryId, monthYear, isMonthInProgress]
+  );
+  // Só os lançamentos ANOTADOS do mês: o painel é agregado, não é lista de
+  // lançamentos — mas a nota é justamente o que explica um gasto que a
+  // descrição não explica, e sem ela é preciso abrir o popup para descobrir.
+  const notes = useMemo(
+    () =>
+      computeCategoryMonth(transactions, categories, categoryId, monthYear).entries.filter(
+        (e) => e.note,
+      ),
+    [transactions, categories, categoryId, monthYear],
   );
   const ref = useRef<HTMLDivElement>(null);
   // Mês da barra clicada na série de 12 meses. null = popup fechado.
@@ -157,6 +167,38 @@ export function CategoryDetailPanel({
               </span>
               <span className="text-body text-right">
                 <Delta pct={s.deltaPct} />
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {notes.length > 0 && (
+        <div className="pt-2 border-t border-border space-y-1">
+          <p className="text-caption text-ink-3 uppercase tracking-wider">
+            Observações · {detail.monthName}
+          </p>
+          {notes.map((e) => (
+            <div key={e.id} className="flex items-baseline justify-between gap-2">
+              <span className="min-w-0">
+                <span className="text-body text-text-secondary truncate" title={e.description}>
+                  {e.description}
+                </span>
+                <span
+                  className={`text-caption flex items-start gap-1 ${
+                    e.noteAlert ? 'text-accent-red' : 'text-accent'
+                  }`}
+                >
+                  {e.noteAlert ? (
+                    <AlertTriangle size={11} className="flex-shrink-0 mt-0.5" />
+                  ) : (
+                    <StickyNote size={11} className="flex-shrink-0 mt-0.5" />
+                  )}
+                  <span className="min-w-0">{e.note}</span>
+                </span>
+              </span>
+              <span className="text-body tnum text-text-primary flex-shrink-0">
+                {formatBRL0(e.value)}
               </span>
             </div>
           ))}
