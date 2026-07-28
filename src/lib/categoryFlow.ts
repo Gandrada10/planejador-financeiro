@@ -18,7 +18,6 @@ export interface FlowSlice {
   color: string;
   /** Negativo = despesa; positivo = reembolso líquido. Média mensal quando m12. */
   amount: number;
-  subs: FlowSlice[];
 }
 
 export interface FlowData {
@@ -202,7 +201,9 @@ export function computeCategoryFlow(
   const span = period === 'm12' ? 12 : 1;
   for (let i = 0; i < span; i++) window.add(getMonthYearOffset(endKey, -i));
 
-  const byParent = new Map<string, { amount: number; subs: Map<string, number> }>();
+  // Só categoria-MÃE: o Sankey é de nível único e a quebra por subcategoria
+  // vem de `computeCategoryDetail`, que calcula a média e o Δ de cada uma.
+  const byParent = new Map<string, number>();
   const monthsWithData = new Set<string>();
   let income = 0;
   let expenses = 0;
@@ -224,10 +225,7 @@ export function computeCategoryFlow(
     const cat = categories.find((c) => c.id === catId);
     const parentId = cat?.parentId || catId;
 
-    if (!byParent.has(parentId)) byParent.set(parentId, { amount: 0, subs: new Map() });
-    const entry = byParent.get(parentId)!;
-    entry.amount += t.amount;
-    if (cat?.parentId) entry.subs.set(catId, (entry.subs.get(catId) || 0) + t.amount);
+    byParent.set(parentId, (byParent.get(parentId) || 0) + t.amount);
   }
 
   const divisor = period === 'm12' ? Math.max(monthsWithData.size, 1) : 1;
@@ -237,14 +235,7 @@ export function computeCategoryFlow(
   };
 
   const slices: FlowSlice[] = Array.from(byParent.entries())
-    .map(([id, { amount, subs }]) => ({
-      id,
-      ...meta(id),
-      amount: amount / divisor,
-      subs: Array.from(subs.entries())
-        .map(([subId, subAmount]) => ({ id: subId, ...meta(subId), amount: subAmount / divisor, subs: [] }))
-        .sort((a, b) => a.amount - b.amount),
-    }))
+    .map(([id, amount]) => ({ id, ...meta(id), amount: amount / divisor }))
     .sort((a, b) => a.amount - b.amount);
 
   const months = Array.from(window).sort();

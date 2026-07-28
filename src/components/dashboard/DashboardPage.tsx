@@ -13,9 +13,10 @@ import { CategoryDetailPanel } from './CategoryDetailPanel';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
 import { ExpensesPanel } from './ExpensesPanel';
 import { ProjectsPanel } from './ProjectsPanel';
+import { BudgetGoalsPanel } from './BudgetGoalsPanel';
 import { VitalSigns } from './VitalSigns';
 import { computeCostOfLiving } from '../../lib/costOfLiving';
-import { formatBRL, getMonthYear, getClosedMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { getMonthYear, getClosedMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
@@ -197,8 +198,6 @@ export function DashboardPage() {
   }, [monthYear, categories, monthTransactions, getBudgetsForMonth, excludedIds]);
 
   // Grand totals - only parent-level budgets
-  const budgetTotalLimit = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.limit, 0);
-  const budgetTotalActual = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.spent, 0);
 
   if (loadingTx) {
     return <DashboardSkeleton />;
@@ -206,8 +205,6 @@ export function DashboardPage() {
 
   const hasData = transactions.length > 0;
 
-  const budgetPct = budgetTotalLimit > 0 ? Math.min((budgetTotalActual / budgetTotalLimit) * 100, 100) : 0;
-  const budgetOver = budgetTotalLimit > 0 && budgetTotalActual > budgetTotalLimit;
 
   return (
     // Largura máxima centralizada: sem ela, num monitor de 1900px os cards
@@ -274,76 +271,7 @@ export function DashboardPage() {
               monthYear={monthYear}
             />
 
-            {/* Metas de despesas */}
-            <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
-              <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
-              {budgetData.length === 0 ? (
-                <p className="text-caption text-ink-3">Nenhuma meta definida para este mês.</p>
-              ) : (
-                <div className="space-y-2">
-                  {/* Column headers */}
-                  <div className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 text-caption text-ink-3 uppercase tracking-wider">
-                    <span />
-                    <span className="text-right">Meta</span>
-                    <span className="text-right">Realizado</span>
-                    <span className="text-right">A realizar</span>
-                  </div>
-
-                  {budgetData.map((b, i) => {
-                    const pct = b.limit > 0 ? (b.spent / b.limit) * 100 : 0;
-                    const over = b.spent > b.limit;
-                    const barPct = Math.min(pct, 100);
-                    return (
-                      <div key={i} className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 items-center">
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <div className="w-0.5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: b.color }} />
-                            <span className={`text-body truncate ${b.isParent ? 'text-text-primary font-medium' : 'text-text-secondary'}`}>
-                              {b.categoryName}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 pl-2.5">
-                            <div className="flex-1 h-1.5 bg-elevated rounded-full overflow-hidden">
-                              <div
-                                className={`h-full rounded-full ${over ? 'bg-accent-red' : 'bg-accent'}`}
-                                style={{ width: `${barPct}%` }}
-                              />
-                            </div>
-                            <span className={`text-caption tnum ${over ? 'text-accent-red' : 'text-ink-3'}`}>
-                              {pct.toFixed(0)}%
-                            </span>
-                          </div>
-                        </div>
-                        <span className="text-body tnum text-text-primary text-right">{formatBRL(b.limit)}</span>
-                        <span className={`text-body tnum text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
-                        <span className="text-body tnum text-text-secondary text-right">{formatBRL(b.remaining)}</span>
-                      </div>
-                    );
-                  })}
-
-                  {/* Total */}
-                  <div className="pt-2 border-t border-border grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 items-center">
-                    <div className="space-y-1">
-                      <span className="text-body font-semibold text-text-primary">Total</span>
-                      <div className="flex items-center gap-1.5">
-                        <div className="flex-1 h-1.5 bg-elevated rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent'}`}
-                            style={{ width: `${budgetPct}%` }}
-                          />
-                        </div>
-                        <span className={`text-caption tnum ${budgetOver ? 'text-accent-red' : 'text-ink-3'}`}>
-                          {budgetPct.toFixed(0)}%
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-body tnum font-semibold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
-                    <span className={`text-body tnum font-semibold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
-                    <span className="text-body tnum text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
-                  </div>
-                </div>
-              )}
-            </div>
+            <BudgetGoalsPanel rows={budgetData} />
 
           </div>
         </div>
