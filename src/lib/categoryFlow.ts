@@ -254,3 +254,78 @@ export function computeCategoryFlow(
     label,
   };
 }
+
+export interface CategoryMonthEntry {
+  id: string;
+  description: string;
+  date: Date;
+  /** Positivo = despesa; negativo = reembolso que abateu o gasto. */
+  value: number;
+  subName: string | null;
+  subColor: string | null;
+  account: string;
+}
+
+export interface CategoryMonthDetail {
+  total: number;
+  entries: CategoryMonthEntry[];
+  /** Quebra por subcategoria, da maior para a menor. */
+  subs: Array<{ name: string; color: string; value: number }>;
+}
+
+/**
+ * O que compõe UMA categoria em UM mês — o "porquê" por trás de uma barra da
+ * série de 12 meses. Mesmas regras dos demais totais: transferência fora,
+ * `accountingDate` como data contábil, reembolso abatendo em vez de virar
+ * receita.
+ */
+export function computeCategoryMonth(
+  transactions: Transaction[],
+  categories: Category[],
+  categoryId: string,
+  monthYear: string,
+): CategoryMonthDetail {
+  const excludedIds = getExcludedFromTotalsIds(categories);
+  const entries: CategoryMonthEntry[] = [];
+  const bySub = new Map<string, { name: string; color: string; value: number }>();
+  let total = 0;
+
+  const parentColor = categories.find((c) => c.id === categoryId)?.color || '#737373';
+
+  for (const t of transactions) {
+    if (!countsInTotals(t, excludedIds) || !isExpenseAmount(t)) continue;
+    if (getMonthYear(accountingDate(t)) !== monthYear) continue;
+
+    const catId = t.categoryId || '__uncategorized';
+    const cat = categories.find((c) => c.id === catId);
+    if ((cat?.parentId || catId) !== categoryId) continue;
+
+    const value = -t.amount;
+    total += value;
+    entries.push({
+      id: t.id,
+      description: t.description || '(sem descrição)',
+      date: accountingDate(t),
+      value,
+      subName: cat?.parentId ? cat.name : null,
+      subColor: cat?.parentId ? cat.color : null,
+      account: t.account || '',
+    });
+
+    const key = cat?.parentId ? catId : '__direct';
+    const meta = bySub.get(key) || {
+      name: cat?.parentId ? cat.name : 'Sem subcategoria',
+      color: (cat?.parentId ? cat.color : parentColor) || parentColor,
+      value: 0,
+    };
+    meta.value += value;
+    bySub.set(key, meta);
+  }
+
+  entries.sort((a, b) => b.value - a.value);
+  return {
+    total,
+    entries,
+    subs: Array.from(bySub.values()).sort((a, b) => b.value - a.value),
+  };
+}

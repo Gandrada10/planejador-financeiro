@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import {
   BarChart,
@@ -13,6 +13,7 @@ import {
 import { computeCategoryDetail } from '../../lib/categoryFlow';
 import { AXIS_STYLE, TOOLTIP_STYLE } from '../../lib/chartTheme';
 import { formatBRL, formatBRL0 } from '../../lib/utils';
+import { CategoryMonthPopup } from './CategoryMonthPopup';
 import type { Transaction, Category } from '../../types';
 
 interface Props {
@@ -60,6 +61,8 @@ export function CategoryDetailPanel({
     [transactions, categories, categoryId, monthYear, isMonthInProgress]
   );
   const ref = useRef<HTMLDivElement>(null);
+  // Mês da barra clicada na série de 12 meses. null = popup fechado.
+  const [drillMonth, setDrillMonth] = useState<string | null>(null);
 
   // O painel nasce abaixo do Sankey (que é alto), muitas vezes fora da dobra —
   // sem rolar até ele o toque parece não ter feito nada. block:'nearest' não
@@ -162,7 +165,10 @@ export function CategoryDetailPanel({
 
       <div className="pt-2 border-t border-border space-y-1.5">
         <p className="text-caption text-ink-3 uppercase tracking-wider">
-          Últimos 12 meses <span className="normal-case tracking-normal">· tracejado = média 12M</span>
+          Últimos 12 meses{' '}
+          <span className="normal-case tracking-normal">
+            · tracejado = média 12M · clique numa barra para ver os lançamentos
+          </span>
         </p>
         <div className="h-[130px]">
           <ResponsiveContainer width="100%" height="100%">
@@ -178,7 +184,16 @@ export function CategoryDetailPanel({
               {detail.avg > 0 && (
                 <ReferenceLine y={detail.avg} stroke="#8f8e89" strokeDasharray="4 3" />
               )}
-              <Bar dataKey="value" radius={[4, 4, 0, 0]} maxBarSize={26} isAnimationActive={false}>
+              {/* Clique (não hover): o hover já mostra o valor no tooltip, e
+                  um popup nele abriria sem intenção ao atravessar o gráfico. */}
+              <Bar
+                dataKey="value"
+                radius={[4, 4, 0, 0]}
+                maxBarSize={26}
+                isAnimationActive={false}
+                cursor="pointer"
+                onClick={(_, index) => setDrillMonth(detail.series[index]?.key ?? null)}
+              >
                 {detail.series.map((p) => (
                   <Cell key={p.key} fill={detail.color} fillOpacity={p.selected ? 1 : 0.45} />
                 ))}
@@ -187,6 +202,19 @@ export function CategoryDetailPanel({
           </ResponsiveContainer>
         </div>
       </div>
+
+      {drillMonth && (
+        <CategoryMonthPopup
+          transactions={transactions}
+          categories={categories}
+          categoryId={detail.id}
+          categoryName={detail.name}
+          color={detail.color}
+          monthYear={drillMonth}
+          avg={detail.avg}
+          onClose={() => setDrillMonth(null)}
+        />
+      )}
     </div>
   );
 }
