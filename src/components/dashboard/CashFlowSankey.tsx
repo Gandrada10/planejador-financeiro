@@ -19,14 +19,14 @@ interface Props {
 
 /** Piso: abaixo disso a fatia é um fio invisível e só suja o diagrama. */
 const MIN_SHARE = 0.003;
-/** Espaço vertical por folha: 2 linhas de rótulo (~24px) + respiro. */
-const ROW_SPACE = 38;
+/** Espaço vertical por folha: 2 linhas de rótulo (~28px) + respiro. */
+const ROW_SPACE = 44;
 /**
  * Vão mínimo entre nós: o rótulo tem ~24px de altura centrado no nó, então
  * dois nós minúsculos vizinhos precisam de pelo menos isso de distância —
  * com menos, "Luz" escrevia por cima de "Moradia · outros".
  */
-const NODE_PADDING = 26;
+const NODE_PADDING = 30;
 /** Nome maior que isso ganha reticências — o VALOR nunca é cortado. */
 const MAX_NAME = 26;
 
@@ -72,13 +72,13 @@ function SankeyNodeShape(props: any) {
         strokeWidth={payload.selected ? 1.5 : 0}
       />
       {/* Área de toque generosa sobre o rótulo — a barra tem 10px de largura */}
-      {clickable && <rect x={x} y={y - 6} width={190} height={height + 12} fill="transparent" />}
+      {clickable && <rect x={x} y={y - 6} width={205} height={height + 12} fill="transparent" />}
       <text
         x={tx}
-        y={y + height / 2 - 2}
+        y={y + height / 2 - 3}
         textAnchor="start"
         fontFamily={FONT}
-        fontSize={11}
+        fontSize={12.5}
         fontWeight={600}
         fill={payload.selected ? '#5ee0a0' : '#f5f4f2'}
         stroke="#1b1b1e"
@@ -90,10 +90,10 @@ function SankeyNodeShape(props: any) {
       </text>
       <text
         x={tx}
-        y={y + height / 2 + 12}
+        y={y + height / 2 + 13}
         textAnchor="start"
         fontFamily={FONT}
-        fontSize={10.5}
+        fontSize={11.5}
         fill="#8f8e89"
         stroke="#1b1b1e"
         strokeWidth={3}
@@ -245,7 +245,7 @@ export function CashFlowSankey({
           data={{ nodes, links }}
           nodeWidth={10}
           nodePadding={NODE_PADDING}
-          margin={{ top: 12, right: 190, bottom: 12, left: 4 }}
+          margin={{ top: 12, right: 205, bottom: 12, left: 4 }}
           node={SankeyNodeShape}
           link={SankeyLinkShape}
           // Preserva a ordem de inserção no eixo vertical (o padrão reordena

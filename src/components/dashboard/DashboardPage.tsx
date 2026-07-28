@@ -225,26 +225,24 @@ export function DashboardPage() {
           costOfLiving={costOfLiving}
         />
 
-        {/* ---- DUAS COLUNAS DE ALTURA LIVRE (items-start) ----
-            Esquerda: para onde o dinheiro vai — fluxo do mês, análise da
-            categoria clicada e a evolução mês a mês. Direita: plano e
-            acompanhamento — o que puxou o ano, metas e projetos. Como Metas e
-            Projetos têm nº variável de itens, as colunas crescem
-            independentes; a evolução na esquerda é o contrapeso de altura. */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
-          <div className="space-y-4">
-            <MonthFlowPanel
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-              selectedCategory={flowCategory}
-              onSelectCategory={setFlowCategory}
-            />
+        {/* ---- FLUXO | ACOMPANHAMENTO ----
+            Esquerda (mais larga, 4/7): só o Sankey — ele estica até a altura
+            do trio da direita e centraliza o diagrama no espaço que sobrar.
+            Direita (3/7): o que puxou o ano, metas e projetos; clicar numa
+            categoria do fluxo troca o primeiro pela análise dela, cara a
+            cara com o diagrama que a gerou. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4">
+          <MonthFlowPanel
+            transactions={transactions}
+            categories={categories}
+            monthYear={monthYear}
+            isMonthInProgress={isMonthInProgress}
+            selectedCategory={flowCategory}
+            onSelectCategory={setFlowCategory}
+          />
 
-            {/* A análise abre COLADA no Sankey que a gerou; os cards da
-                coluna direita ficam de pé — antes ela os substituía. */}
-            {flowCategory && (
+          <div className="space-y-4">
+            {flowCategory ? (
               <CategoryDetailPanel
                 transactions={transactions}
                 categories={categories}
@@ -253,25 +251,15 @@ export function DashboardPage() {
                 isMonthInProgress={isMonthInProgress}
                 onClose={() => setFlowCategory(null)}
               />
+            ) : (
+              <YoyDeviationPanel
+                transactions={transactions}
+                categories={categories}
+                monthYear={monthYear}
+                isMonthInProgress={isMonthInProgress}
+                periodLabel={periodLabel}
+              />
             )}
-
-            <ExpensesPanel
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-              costOfLiving={costOfLiving}
-              isMonthInProgress={isMonthInProgress}
-            />
-          </div>
-
-          <div className="space-y-4">
-            <YoyDeviationPanel
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-              periodLabel={periodLabel}
-            />
             {/* Metas de despesas */}
             <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
               <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
@@ -352,8 +340,17 @@ export function DashboardPage() {
           </div>
         </div>
 
-        {/* Caixa fecha a página em largura total: conferência por conta é o
-            último passo da leitura, não o primeiro. */}
+        {/* A evolução mês a mês em largura total — 24 barras respiram — e o
+            Caixa fecha a página: conferência por conta é o último passo da
+            leitura, não o primeiro. */}
+        <ExpensesPanel
+          transactions={transactions}
+          categories={categories}
+          monthYear={monthYear}
+          costOfLiving={costOfLiving}
+          isMonthInProgress={isMonthInProgress}
+        />
+
         <CashFlowTable
           data={cashFlowData}
           totalEntries={totalEntries}
