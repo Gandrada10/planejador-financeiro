@@ -61,12 +61,11 @@ export function CategoryDetailPanel({
   );
   const ref = useRef<HTMLDivElement>(null);
 
-  // No empilhado (mobile) o painel nasce abaixo do Sankey, fora da dobra —
-  // sem rolar até ele o toque parece não ter feito nada.
+  // O painel nasce abaixo do Sankey (que é alto), muitas vezes fora da dobra —
+  // sem rolar até ele o toque parece não ter feito nada. block:'nearest' não
+  // mexe na rolagem quando ele já está visível.
   useEffect(() => {
-    if (window.matchMedia('(max-width: 1023px)').matches) {
-      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
+    ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [categoryId]);
 
   const showSubs = detail.subs.some((s) => s.id !== '__direct');

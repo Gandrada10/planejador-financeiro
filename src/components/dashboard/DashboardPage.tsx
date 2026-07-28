@@ -190,8 +190,6 @@ export function DashboardPage() {
   // Grand totals - only parent-level budgets
   const budgetTotalLimit = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.limit, 0);
   const budgetTotalActual = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.spent, 0);
-  const budgetParents = budgetData.filter((b) => b.isParent);
-  const budgetOverCount = budgetParents.filter((b) => b.spent > b.limit).length;
 
   if (loadingTx) {
     return <DashboardSkeleton />;
@@ -225,45 +223,55 @@ export function DashboardPage() {
           avg12mResult={avg12months}
           isMonthInProgress={isMonthInProgress}
           costOfLiving={costOfLiving}
-          budget={{
-            limit: budgetTotalLimit,
-            actual: budgetTotalActual,
-            overCount: budgetOverCount,
-            count: budgetParents.length,
-          }}
         />
 
-        {/* ---- BANDA 1: O MÊS (tudo aqui responde ao seletor de mês) ----
-            Vem antes da tendência porque é o que o seletor comanda: a
-            pergunta de quem abre é "como foi o mês?", e só depois "como está
-            o ano?". */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <MonthFlowPanel
-            transactions={transactions}
-            categories={categories}
-            monthYear={monthYear}
-            isMonthInProgress={isMonthInProgress}
-            selectedCategory={flowCategory}
-            onSelectCategory={setFlowCategory}
-          />
-
-          {flowCategory ? (
-            // O Sankey navega a estrutura; a análise da categoria clicada
-            // toma emprestada a coluna vizinha — melhor um painel largo de
-            // verdade do que espremer Sankey e análise no mesmo card.
-            <CategoryDetailPanel
+        {/* ---- DUAS COLUNAS DE ALTURA LIVRE (items-start) ----
+            Esquerda: para onde o dinheiro vai — fluxo do mês, análise da
+            categoria clicada e a evolução mês a mês. Direita: plano e
+            acompanhamento — o que puxou o ano, metas e projetos. Como Metas e
+            Projetos têm nº variável de itens, as colunas crescem
+            independentes; a evolução na esquerda é o contrapeso de altura. */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <div className="space-y-4">
+            <MonthFlowPanel
               transactions={transactions}
               categories={categories}
-              categoryId={flowCategory}
               monthYear={monthYear}
               isMonthInProgress={isMonthInProgress}
-              onClose={() => setFlowCategory(null)}
+              selectedCategory={flowCategory}
+              onSelectCategory={setFlowCategory}
             />
-          ) : (
-          /* Metas ao lado do Fluxo: o que aconteceu vs o que era o plano.
-              Caixa fecha a banda — conferência por conta é o último passo da
-              leitura, não o primeiro. */
+
+            {/* A análise abre COLADA no Sankey que a gerou; os cards da
+                coluna direita ficam de pé — antes ela os substituía. */}
+            {flowCategory && (
+              <CategoryDetailPanel
+                transactions={transactions}
+                categories={categories}
+                categoryId={flowCategory}
+                monthYear={monthYear}
+                isMonthInProgress={isMonthInProgress}
+                onClose={() => setFlowCategory(null)}
+              />
+            )}
+
+            <ExpensesPanel
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+              costOfLiving={costOfLiving}
+              isMonthInProgress={isMonthInProgress}
+            />
+          </div>
+
           <div className="space-y-4">
+            <YoyDeviationPanel
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+              periodLabel={periodLabel}
+            />
             {/* Metas de despesas */}
             <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
               <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
@@ -335,47 +343,26 @@ export function DashboardPage() {
               )}
             </div>
 
-            <CashFlowTable
-              data={cashFlowData}
-              totalEntries={totalEntries}
-              totalExits={totalExits}
-              totalBalance={totalBalance}
-              yearBalance={yearBalance}
-              avg12months={avg12months}
-              currentYear={currentYear}
+            <ProjectsPanel
+              projects={projects}
+              transactions={transactions}
+              excludedIds={excludedIds}
+              monthYear={monthYear}
             />
           </div>
-          )}
         </div>
 
-        {/* ---- BANDA 2: O ANO E A TENDÊNCIA ----
-            O gráfico mês a mês é a ponte: mostra o mês selecionado dentro da
-            série. O YoY logo abaixo é o drill-down natural dele — o gráfico
-            mostra QUE subiu, o YoY mostra O QUÊ subiu. */}
-        <ExpensesPanel
-          transactions={transactions}
-          categories={categories}
-          monthYear={monthYear}
-          costOfLiving={costOfLiving}
-          isMonthInProgress={isMonthInProgress}
+        {/* Caixa fecha a página em largura total: conferência por conta é o
+            último passo da leitura, não o primeiro. */}
+        <CashFlowTable
+          data={cashFlowData}
+          totalEntries={totalEntries}
+          totalExits={totalExits}
+          totalBalance={totalBalance}
+          yearBalance={yearBalance}
+          avg12months={avg12months}
+          currentYear={currentYear}
         />
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          <YoyDeviationPanel
-            transactions={transactions}
-            categories={categories}
-            monthYear={monthYear}
-            isMonthInProgress={isMonthInProgress}
-            periodLabel={periodLabel}
-          />
-
-          <ProjectsPanel
-            projects={projects}
-            transactions={transactions}
-            excludedIds={excludedIds}
-            monthYear={monthYear}
-          />
-        </div>
         </div>
       ) : (
         <div className="bg-bg-card border border-border rounded-card p-10 text-center space-y-2">

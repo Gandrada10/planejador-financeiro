@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Minus, AlertTriangle } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import {
   formatBRL0,
   getMonthYear,
@@ -12,13 +12,6 @@ import {
 } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 import type { CostOfLivingData } from '../../lib/costOfLiving';
-
-interface BudgetSummary {
-  limit: number;
-  actual: number;
-  overCount: number;
-  count: number;
-}
 
 interface Props {
   transactions: Transaction[];
@@ -33,23 +26,21 @@ interface Props {
   avg12mResult: number;
   isMonthInProgress: boolean;
   costOfLiving: CostOfLivingData;
-  budget: BudgetSummary;
 }
 
 /**
- * Todos os indicadores do dashboard vivem aqui, em duas fileiras de três — não
- * há segundo lugar com número grande na tela (o card de Despesas ficou só com o
- * gráfico). A divisão é por natureza da métrica:
+ * Todos os indicadores do dashboard vivem aqui — não há segundo lugar com
+ * número grande na tela. A divisão é por natureza da métrica:
  *
- *   fileira 1 — o MÊS selecionado: receitas, despesas, resultado. A conta
+ *   grupo 1 — o MÊS selecionado: receitas, despesas, resultado. A conta
  *   inteira à vista (receitas − despesas = resultado), auto-verificável.
- *   fileira 2 — TENDÊNCIA e plano: taxa de poupança e custo de vida, ambos na
- *   MESMA janela de 12 meses (assim um deriva do outro, e nenhum dos dois
- *   muda de significado ao longo do ano como fazia o acumulado), e metas.
- *   A leitura acumulada do ano continua existindo no card de Desvio YoY.
+ *   grupo 2 — TENDÊNCIA: taxa de poupança e custo de vida, ambos na MESMA
+ *   janela de 12 meses (assim um deriva do outro, e nenhum dos dois muda de
+ *   significado ao longo do ano como fazia o acumulado).
  *
- * Três por fileira também é o que quebra bem: 3+3 no desktop, empilhado no
- * celular — cinco tiles numa fileira só deixariam órfão em tela média.
+ * Metas NÃO tem tile: o agregado ("87%") repetia o card de Metas sem dizer
+ * qual categoria furou — quem age precisa do card, o tile era eco. A leitura
+ * acumulada do ano vive no card "O que puxou o ano".
  * Cada tile é rótulo → número-herói → delta com seta E sinal (nunca só cor).
  */
 export function VitalSigns({
@@ -62,7 +53,6 @@ export function VitalSigns({
   avg12mResult,
   isMonthInProgress,
   costOfLiving,
-  budget,
 }: Props) {
   const col = costOfLiving;
 
@@ -149,7 +139,6 @@ export function VitalSigns({
     };
   };
 
-  const budgetPct = budget.limit > 0 ? Math.round((budget.actual / budget.limit) * 100) : null;
   const monthTitle = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
   return (
@@ -195,7 +184,7 @@ export function VitalSigns({
         />
       </Group>
 
-      <Group label="Tendência e plano">
+      <Group label="Tendência · 12 meses" cols={2}>
         <Tile
           label="Taxa de poupança · 12 meses"
           hint={`Resultado ÷ receitas nos 12 meses encerrados em ${
@@ -254,46 +243,30 @@ export function VitalSigns({
                 : undefined
           }
         />
-        <Tile
-          label="Metas do mês"
-          hint="Quanto do total das metas de despesa já foi consumido no mês."
-          value={budgetPct !== null ? `${budgetPct}%` : '—'}
-          delta={
-            budgetPct !== null
-              ? budget.overCount > 0
-                ? {
-                    Icon: AlertTriangle,
-                    tone: 'text-status-warn',
-                    text: `${budget.overCount} de ${budget.count}`,
-                    context: budget.overCount === 1 ? 'estourada' : 'estouradas',
-                  }
-                : {
-                    Icon: TrendingUp,
-                    tone: 'text-positive',
-                    text: `${budget.count} ${budget.count === 1 ? 'meta' : 'metas'}`,
-                    context: 'no ritmo',
-                  }
-              : { Icon: Minus, tone: 'text-ink-3', text: 'sem metas', context: 'neste mês' }
-          }
-        />
       </Group>
     </div>
   );
 }
 
 /**
- * No celular são 2 colunas com o TERCEIRO tile ocupando a linha inteira —
- * empilhar os três deixaria a tela com quase 2000px de rolagem. E o terceiro
- * de cada grupo é justamente a conclusão (Resultado / Metas), então ganhar
- * largura é hierarquia, não sobra de layout.
+ * No grupo de 3 (o mês), o celular usa 2 colunas com o TERCEIRO tile na linha
+ * inteira — empilhar deixaria a tela com quase 2000px de rolagem, e o terceiro
+ * é justamente a conclusão (Resultado), então ganhar largura é hierarquia.
+ * O grupo de tendência tem 2 tiles e vive em 2 colunas em qualquer largura.
  */
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+function Group({ label, cols = 3, children }: { label: string; cols?: 2 | 3; children: React.ReactNode }) {
   return (
     <div>
       <p className="text-caption font-semibold uppercase tracking-wider text-ink-3 mb-1.5 px-0.5">
         {label}
       </p>
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 [&>*:nth-child(3)]:col-span-2 sm:[&>*:nth-child(3)]:col-span-1">
+      <div
+        className={
+          cols === 3
+            ? 'grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 [&>*:nth-child(3)]:col-span-2 sm:[&>*:nth-child(3)]:col-span-1'
+            : 'grid grid-cols-2 gap-2 sm:gap-3'
+        }
+      >
         {children}
       </div>
     </div>
