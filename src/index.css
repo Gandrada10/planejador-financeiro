@@ -114,6 +114,15 @@ html { -webkit-text-size-adjust: 100%; }
   .tap { min-height: 44px; min-width: 44px; }
 }
 
+/* Densidade de DESKTOP: a escala foi desenhada para leitura de perto e em
+ * tela larga os números de card ficam grandes — o conforto relatado é com
+ * zoom de 90%, então a página já abre assim. `zoom` (e não transform):
+ * reflui o layout, como o zoom do navegador. Só ponteiro fino e tela larga:
+ * no celular a escala atual e os alvos de 44px ficam intactos. */
+@media (min-width: 1024px) and (pointer: fine) {
+  html { zoom: 0.9; }
+}
+
 /* O retângulo cinza do Safari ao tocar; o :active de cada controle já
  * comunica o toque. */
 * { -webkit-tap-highlight-color: transparent; }
