@@ -183,6 +183,12 @@ export function CashFlowSankey({ income, balance, categories, expanded, onToggle
     links.push({ source: hubIdx, target: node('Resultado líquido', MONEY.income, balance), value: balance });
   }
 
+  // Expansão NO LUGAR: a categoria aberta é substituída pelas filhas no mesmo
+  // slot da lista, todas ligadas direto ao hub. A versão anterior criava uma
+  // 4ª coluna para o pai e o motor de layout brigava com a ordem — o nó
+  // pinava no topo e as fitas atravessavam o desenho. Com uma única coluna de
+  // folhas, travessia é geometricamente impossível. Clicar em qualquer filha
+  // fecha o grupo de volta.
   for (const c of outCats) {
     if (c.value / totalOut < MIN_SHARE) continue;
 
@@ -197,21 +203,28 @@ export function CashFlowSankey({ income, balance, categories, expanded, onToggle
     const canExpand = subOut.length > 0 && subSum <= c.value + 0.01;
     const isOpen = canExpand && expanded.has(c.id);
 
-    const parentIdx = node(c.name, c.color, c.value, {
-      onToggle: canExpand ? () => onToggleCategory(c.id) : undefined,
-      open: isOpen,
-    });
-    links.push({ source: hubIdx, target: parentIdx, value: c.value });
-    if (!isOpen) continue;
+    if (!isOpen) {
+      const parentIdx = node(c.name, c.color, c.value, {
+        onToggle: canExpand ? () => onToggleCategory(c.id) : undefined,
+        open: false,
+      });
+      links.push({ source: hubIdx, target: parentIdx, value: c.value });
+      continue;
+    }
 
+    const collapse = { onToggle: () => onToggleCategory(c.id), open: true };
     for (const s of subOut) {
-      links.push({ source: parentIdx, target: node(s.name, s.color || c.color, s.value), value: s.value });
+      links.push({
+        source: hubIdx,
+        target: node(s.name, s.color || c.color, s.value, collapse),
+        value: s.value,
+      });
     }
     const remainder = c.value - subSum;
     if (remainder > totalOut * 0.005) {
       links.push({
-        source: parentIdx,
-        target: node(`${c.name} · outros`, c.color, remainder),
+        source: hubIdx,
+        target: node(`${c.name} · outros`, c.color, remainder, collapse),
         value: remainder,
       });
     }
@@ -233,13 +246,11 @@ export function CashFlowSankey({ income, balance, categories, expanded, onToggle
           node={SankeyNodeShape}
           link={SankeyLinkShape}
           // Preserva a ordem de inserção no eixo vertical (o padrão reordena
-          // por valor e jogava o Resultado líquido para o meio da lista).
+          // por valor e jogava o Resultado líquido para o meio da lista). A
+          // relaxação (iterations) fica LIGADA: com a expansão no lugar não
+          // existe coluna extra para o layout brigar, e é ela que distribui
+          // colunas esparsas com harmonia em vez de pinar tudo no topo.
           sort={false}
-          // Sem relaxação: com uma categoria expandida, o baricentro jogava o
-          // nó-pai para o meio da tela enquanto as filhas ficavam no topo — a
-          // fita varria o desenho inteiro para ligar os dois. Com 0 iterações
-          // a posição segue a ordem de inserção, determinística.
-          iterations={0}
         />
       </ResponsiveContainer>
     </div>
