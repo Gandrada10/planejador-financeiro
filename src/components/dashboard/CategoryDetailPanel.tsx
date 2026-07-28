@@ -181,7 +181,12 @@ export function CategoryDetailPanel({
           {notes.map((e) => (
             <div key={e.id} className="flex items-baseline justify-between gap-2">
               <span className="min-w-0">
-                <span className="text-body text-text-secondary truncate" title={e.description}>
+                {/* `block`: `truncate` é overflow:hidden, que não corta um
+                    elemento inline — sem isso a descrição longa vaza. */}
+                <span
+                  className="block text-body text-text-secondary truncate"
+                  title={e.description}
+                >
                   {e.description}
                 </span>
                 <span
