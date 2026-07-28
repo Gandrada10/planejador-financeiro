@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { FileBarChart } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
@@ -6,21 +7,31 @@ import { useAccounts } from '../../hooks/useAccounts';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
-import { CashFlowChart } from './CashFlowChart';
-import { ExpensesByCategoryChart } from './ExpensesByCategoryChart';
+import { CashFlowTable } from './CashFlowTable';
+import { MonthFlowPanel } from './MonthFlowPanel';
+import { CategoryDetailPanel } from './CategoryDetailPanel';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
-import { formatBRL, formatDate, getMonthYear, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { ExpensesPanel } from './ExpensesPanel';
+import { ProjectsPanel } from './ProjectsPanel';
+import { VitalSigns } from './VitalSigns';
+import { computeCostOfLiving } from '../../lib/costOfLiving';
+import { formatBRL, getMonthYear, getClosedMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
 
 const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
 
 export function DashboardPage() {
-  const [monthYear, setMonthYear] = useState(getMonthYear());
+  // Abre no último mês FECHADO: o mês corrente tem números pela metade.
+  const [monthYear, setMonthYear] = useState(getClosedMonthYear());
+  // Categoria clicada no Sankey: enquanto aberta, a análise dela ocupa a
+  // coluna ao lado do fluxo (Metas/Caixa voltam ao fechar). O estado vive
+  // aqui porque atravessa os dois cards da banda.
+  const [flowCategory, setFlowCategory] = useState<string | null>(null);
   const { transactions, loading: loadingTx } = useTransactions();
   const { categories } = useCategories();
   const { getBudgetsForMonth } = useBudgets();
   const { accounts } = useAccounts();
   const { getCycleForCard } = useBillingCycles();
-  const { activeProjects } = useProjects();
+  const { projects } = useProjects();
 
   // Ids de categorias fora-dos-totais ("Transferência") — pré-computado uma vez
   // e reutilizado em todos os blocos de agregação abaixo (regra: countsInTotals).
@@ -34,6 +45,7 @@ export function DashboardPage() {
   const availableMonths = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));
     set.add(getMonthYear());
+    set.add(getClosedMonthYear()); // garante o mês de abertura na lista
     return Array.from(set).sort().reverse();
   }, [transactions]);
 
@@ -41,13 +53,22 @@ export function DashboardPage() {
   const totalExits = useMemo(() => monthTransactions.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0), [monthTransactions, excludedIds]);
   const totalBalance = totalEntries + totalExits;
 
-  // YTD accumulated result (year of selected month)
+  // Acumulado do ano ATÉ o mês selecionado. Antes somava o ano inteiro por
+  // prefixo da chave, então parcelas de cartão e agendamentos com data
+  // contábil no futuro entravam no "acumulado" — e o card de Desvio YoY, que
+  // corta no mês selecionado para comparar Jan–mês contra Jan–mês, mostrava
+  // um resultado diferente na mesma tela sem explicar por quê.
   const currentYear = monthYear.split('-')[0];
   const yearBalance = useMemo(() => {
+    const [y, m] = monthYear.split('-').map(Number);
     return transactions
-      .filter((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)).startsWith(currentYear))
+      .filter((t) => {
+        if (!countsInTotals(t, excludedIds)) return false;
+        const ad = accountingDate(t);
+        return ad.getFullYear() === y && ad.getMonth() + 1 <= m;
+      })
       .reduce((s, t) => s + t.amount, 0);
-  }, [transactions, currentYear, excludedIds]);
+  }, [transactions, monthYear, excludedIds]);
 
   // Average monthly result over last 12 months (only months with data)
   const avg12months = useMemo(() => {
@@ -70,23 +91,12 @@ export function DashboardPage() {
   const selectedMonthIdx = Number(monthYear.split('-')[1]) - 1;
   const periodLabel = `Jan–${MONTH_ABBR[selectedMonthIdx]}`;
 
-  // Active projects with both monthly and all-time spending
-  const projectsData = useMemo(() => {
-    return activeProjects.map((p) => {
-      const monthTxs = monthTransactions.filter((t) => t.projectId === p.id);
-      const spentMonth = monthTxs.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
-
-      const allTxs = transactions.filter((t) => t.projectId === p.id);
-      const spentTotal = allTxs.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
-
-      return {
-        ...p,
-        spentMonth,
-        spentTotal,
-        countMonth: monthTxs.length,
-      };
-    });
-  }, [activeProjects, transactions, monthTransactions, excludedIds]);
+  // Custo de vida (média móvel 12M) — compartilhado entre o tile de sinais
+  // vitais e o card de trajetória.
+  const costOfLiving = useMemo(
+    () => computeCostOfLiving(transactions, categories, monthYear, isMonthInProgress),
+    [transactions, categories, monthYear, isMonthInProgress]
+  );
 
   // Cash flow by account
   const cashFlowData = useMemo(() => {
@@ -99,16 +109,8 @@ export function DashboardPage() {
       if (isIncomeAmount(t)) acc.entries += t.amount;
       else acc.exits += t.amount;
     }
-    // Ordem pedida: conta corrente → cartões → vale (benefício) → demais →
-    // "Sem conta" por último. Dentro do mesmo tipo, alfabético.
-    const typeRank = (name: string): number => {
-      const t = accounts.find((a) => a.name === name)?.type;
-      if (t === 'corrente') return 0;
-      if (t === 'cartao') return 1;
-      if (t === 'beneficio') return 2;
-      if (!t) return 4; // "Sem conta" (sem cadastro)
-      return 3; // poupanca/investimento/outro
-    };
+    // A ORDEM entre tipos é do CashFlowTable (que agrupa por tipo); aqui só
+    // ordena alfabeticamente dentro de cada grupo.
     return Array.from(map.entries())
       .map(([name, v]) => {
         const account = accounts.find((a) => a.name === name);
@@ -116,62 +118,16 @@ export function DashboardPage() {
         const cycle = isCard && account ? getCycleForCard(account.id, monthYear) : undefined;
         return {
           accountName: name,
+          type: account?.type,
           entries: v.entries,
           exits: v.exits,
           balance: v.entries + v.exits,
-          color: '',
           isCard,
           cycleStatus: cycle?.status ?? (isCard ? 'open' : undefined),
         };
       })
-      .sort((a, b) => {
-        const d = typeRank(a.accountName) - typeRank(b.accountName);
-        return d !== 0 ? d : a.accountName.localeCompare(b.accountName, 'pt-BR');
-      });
+      .sort((a, b) => a.accountName.localeCompare(b.accountName, 'pt-BR'));
   }, [monthTransactions, accounts, getCycleForCard, monthYear, excludedIds]);
-
-  // Expenses by category (grouped by parent; subcategory breakdowns tracked separately)
-  const expensesByCategory = useMemo(() => {
-    const map = new Map<string, { amount: number; subs: Map<string, number> }>();
-    for (const t of monthTransactions) {
-      if (!isExpenseAmount(t) || !countsInTotals(t, excludedIds)) continue;
-      const catId = t.categoryId || '__uncategorized';
-      const cat = categories.find((c) => c.id === catId);
-      const parentId = cat?.parentId || catId; // use parent if it's a subcategory
-
-      if (!map.has(parentId)) map.set(parentId, { amount: 0, subs: new Map() });
-      const entry = map.get(parentId)!;
-      entry.amount += t.amount;
-      if (cat?.parentId) {
-        entry.subs.set(catId, (entry.subs.get(catId) || 0) + t.amount);
-      }
-    }
-    const totalExp = Math.abs(totalExits);
-    return Array.from(map.entries())
-      .map(([catId, { amount, subs }]) => {
-        const cat = categories.find((c) => c.id === catId);
-        return {
-          name: cat?.name || 'Sem categoria',
-          icon: cat?.icon || '',
-          color: cat?.color || '#737373',
-          amount,
-          percentage: totalExp > 0 ? (Math.abs(amount) / totalExp) * 100 : 0,
-          subs: Array.from(subs.entries())
-            .map(([subId, subAmount]) => {
-              const subCat = categories.find((c) => c.id === subId);
-              return {
-                name: subCat?.name || 'Sem subcategoria',
-                icon: subCat?.icon || '',
-                color: subCat?.color || '#737373',
-                amount: subAmount,
-                percentage: totalExp > 0 ? (Math.abs(subAmount) / totalExp) * 100 : 0,
-              };
-            })
-            .sort((a, b) => a.amount - b.amount),
-        };
-      })
-      .sort((a, b) => a.amount - b.amount); // most negative first
-  }, [monthTransactions, categories, totalExits, excludedIds]);
 
   // Budget progress - group by parent category, aggregate sub spending
   const budgetData = useMemo(() => {
@@ -245,7 +201,7 @@ export function DashboardPage() {
   const budgetTotalActual = budgetData.filter((b) => b.isParent).reduce((s, b) => s + b.spent, 0);
 
   if (loadingTx) {
-    return <div className="text-accent text-sm animate-pulse">Carregando dashboard...</div>;
+    return <DashboardSkeleton />;
   }
 
   const hasData = transactions.length > 0;
@@ -254,90 +210,79 @@ export function DashboardPage() {
   const budgetOver = budgetTotalLimit > 0 && budgetTotalActual > budgetTotalLimit;
 
   return (
-    <div className="space-y-4">
+    // Largura máxima centralizada: sem ela, num monitor de 1900px os cards
+    // esticavam de borda a borda — colunas de ~830px para tabelas que pedem
+    // ~600px, e os cards das pontas colados nas margens da janela.
+    <div className="max-w-[1440px] mx-auto space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-lg font-bold text-text-primary">Dashboard</h2>
+        <h2 className="text-lg font-bold tracking-tight text-text-primary">Dashboard</h2>
         <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
       </div>
 
       {hasData ? (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* LEFT COLUMN: Cash flow + KPIs */}
-          <div className="space-y-4">
-            <CashFlowChart
-              data={cashFlowData}
-              totalEntries={totalEntries}
-              totalExits={totalExits}
-              totalBalance={totalBalance}
-              yearBalance={yearBalance}
-              avg12months={avg12months}
-              currentYear={currentYear}
-            />
+        <div className="space-y-4">
+        {/* Sinais vitais: "como estou?" em 4 números, antes de qualquer tabela */}
+        <VitalSigns
+          transactions={transactions}
+          categories={categories}
+          monthLabel={getMonthLabel(monthYear)}
+          monthIncome={totalEntries}
+          monthExpenses={totalExits}
+          monthBalance={totalBalance}
+          avg12mResult={avg12months}
+          isMonthInProgress={isMonthInProgress}
+          costOfLiving={costOfLiving}
+        />
 
-            {/* YoY deviation: same period vs previous year (drill-down by category/subcategory) */}
-            <YoyDeviationPanel
+        {/* ---- FLUXO | COMPROMISSOS ----
+            Esquerda (4/7): só o Sankey — ele estica até a altura da coluna
+            vizinha e centraliza o diagrama no espaço que sobrar.
+            Direita (3/7): projetos e metas, o que você se comprometeu a
+            fazer com o dinheiro. A análise da categoria clicada entra no
+            TOPO da coluna, cara a cara com o diagrama que a gerou, sem
+            esconder nenhum dos dois.
+
+            items-start: cada coluna tem altura própria. Abrir a análise
+            empurra metas e projetos para baixo SEM esticar o fluxo — o
+            diagrama não pode mudar de tamanho a cada clique. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4 items-start">
+          <MonthFlowPanel
+            transactions={transactions}
+            categories={categories}
+            monthYear={monthYear}
+            isMonthInProgress={isMonthInProgress}
+            selectedCategory={flowCategory}
+            onSelectCategory={setFlowCategory}
+          />
+
+          <div className="space-y-4">
+            {flowCategory && (
+              <CategoryDetailPanel
+                transactions={transactions}
+                categories={categories}
+                categoryId={flowCategory}
+                monthYear={monthYear}
+                isMonthInProgress={isMonthInProgress}
+                onClose={() => setFlowCategory(null)}
+              />
+            )}
+
+            <ProjectsPanel
+              projects={projects}
               transactions={transactions}
-              categories={categories}
+              excludedIds={excludedIds}
               monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-              periodLabel={periodLabel}
             />
-          </div>
-
-          {/* RIGHT COLUMN: Expenses + Projects + Metas */}
-          <div className="space-y-4">
-            <ExpensesByCategoryChart data={expensesByCategory} />
-
-            {/* Projetos em andamento */}
-            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-              <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Projetos em andamento</h3>
-              {projectsData.length === 0 ? (
-                <p className="text-xs text-text-secondary">Nenhum projeto ativo.</p>
-              ) : (
-                <div className="space-y-2">
-                  {/* Column headers */}
-                  <div className="grid grid-cols-[1fr_repeat(2,_minmax(70px,_90px))] gap-2 text-[10px] text-text-secondary uppercase tracking-wider">
-                    <span />
-                    <span className="text-right">Acumulado</span>
-                    <span className="text-right">Gasto no mês</span>
-                  </div>
-
-                  {projectsData.map((p) => (
-                    <div
-                      key={p.id}
-                      className="grid grid-cols-[1fr_repeat(2,_minmax(70px,_90px))] gap-2 items-center border-l-2 pl-2 py-0.5"
-                      style={{ borderColor: p.color }}
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs text-text-primary truncate font-medium">{p.name}</p>
-                        <p className="text-[10px] text-text-secondary mt-0.5">
-                          {p.startDate ? `Início: ${formatDate(p.startDate)}` : 'Sem data de início'}
-                        </p>
-                      </div>
-                      <span className={`text-xs tnum text-right ${p.spentTotal < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
-                        {p.spentTotal < 0 ? formatBRL(p.spentTotal) : '—'}
-                      </span>
-                      <span className={`text-xs tnum text-right ${p.spentMonth < 0 ? 'text-accent-red' : 'text-text-secondary'}`}>
-                        {p.countMonth > 0 && p.spentMonth < 0 ? formatBRL(p.spentMonth) : '—'}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Metas de despesas */}
-            <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">Metas de despesas</h3>
-                <span className="text-[10px] text-accent-green">Situacao confirmada</span>
-              </div>
+            <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
+              <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
               {budgetData.length === 0 ? (
-                <p className="text-xs text-text-secondary">Nenhuma meta definida para este mes.</p>
+                <p className="text-caption text-ink-3">Nenhuma meta definida para este mês.</p>
               ) : (
                 <div className="space-y-2">
                   {/* Column headers */}
-                  <div className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 text-[10px] text-text-secondary uppercase tracking-wider">
+                  <div className="grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 text-caption text-ink-3 uppercase tracking-wider">
                     <span />
                     <span className="text-right">Meta</span>
                     <span className="text-right">Realizado</span>
@@ -353,25 +298,25 @@ export function DashboardPage() {
                         <div className="space-y-1 min-w-0">
                           <div className="flex items-center gap-1.5">
                             <div className="w-0.5 h-5 rounded-full flex-shrink-0" style={{ backgroundColor: b.color }} />
-                            <span className={`text-xs truncate ${b.isParent ? 'text-text-primary font-medium' : 'text-text-secondary'}`}>
+                            <span className={`text-body truncate ${b.isParent ? 'text-text-primary font-medium' : 'text-text-secondary'}`}>
                               {b.categoryName}
                             </span>
                           </div>
                           <div className="flex items-center gap-1.5 pl-2.5">
-                            <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                            <div className="flex-1 h-1.5 bg-elevated rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${over ? 'bg-accent-red' : 'bg-accent'}`}
                                 style={{ width: `${barPct}%` }}
                               />
                             </div>
-                            <span className={`text-[10px] tnum ${over ? 'text-accent-red' : 'text-text-secondary'}`}>
+                            <span className={`text-caption tnum ${over ? 'text-accent-red' : 'text-ink-3'}`}>
                               {pct.toFixed(0)}%
                             </span>
                           </div>
                         </div>
-                        <span className="text-xs tnum text-text-primary text-right">{formatBRL(b.limit)}</span>
-                        <span className={`text-xs tnum text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
-                        <span className="text-xs tnum text-text-secondary text-right">{formatBRL(b.remaining)}</span>
+                        <span className="text-body tnum text-text-primary text-right">{formatBRL(b.limit)}</span>
+                        <span className={`text-body tnum text-right ${over ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(b.spent)}</span>
+                        <span className="text-body tnum text-text-secondary text-right">{formatBRL(b.remaining)}</span>
                       </div>
                     );
                   })}
@@ -379,33 +324,90 @@ export function DashboardPage() {
                   {/* Total */}
                   <div className="pt-2 border-t border-border grid grid-cols-[1fr_repeat(3,_minmax(60px,_80px))] gap-2 items-center">
                     <div className="space-y-1">
-                      <span className="text-xs font-bold text-text-primary">Total</span>
+                      <span className="text-body font-semibold text-text-primary">Total</span>
                       <div className="flex items-center gap-1.5">
-                        <div className="flex-1 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+                        <div className="flex-1 h-1.5 bg-elevated rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full ${budgetOver ? 'bg-accent-red' : 'bg-accent'}`}
                             style={{ width: `${budgetPct}%` }}
                           />
                         </div>
-                        <span className={`text-[10px] tnum ${budgetOver ? 'text-accent-red' : 'text-text-secondary'}`}>
+                        <span className={`text-caption tnum ${budgetOver ? 'text-accent-red' : 'text-ink-3'}`}>
                           {budgetPct.toFixed(0)}%
                         </span>
                       </div>
                     </div>
-                    <span className="text-xs tnum font-bold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
-                    <span className={`text-xs tnum font-bold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
-                    <span className="text-xs tnum text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
+                    <span className="text-body tnum font-semibold text-text-primary text-right">{formatBRL(budgetTotalLimit)}</span>
+                    <span className={`text-body tnum font-semibold text-right ${budgetOver ? 'text-accent-red' : 'text-text-primary'}`}>{formatBRL(budgetTotalActual)}</span>
+                    <span className="text-body tnum text-text-secondary text-right">{formatBRL(Math.max(budgetTotalLimit - budgetTotalActual, 0))}</span>
                   </div>
                 </div>
               )}
             </div>
+
           </div>
         </div>
+
+        {/* A evolução mês a mês em largura total: 24 barras respiram. */}
+        <ExpensesPanel
+          transactions={transactions}
+          categories={categories}
+          monthYear={monthYear}
+          costOfLiving={costOfLiving}
+          isMonthInProgress={isMonthInProgress}
+        />
+
+        {/* ---- FECHAMENTO: o mês conferido | o ano explicado ----
+            Mesma proporção da faixa de cima, para as colunas fecharem
+            alinhadas de ponta a ponta da página. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4 items-start">
+          <CashFlowTable
+            data={cashFlowData}
+            totalEntries={totalEntries}
+            totalExits={totalExits}
+            totalBalance={totalBalance}
+            yearBalance={yearBalance}
+            avg12months={avg12months}
+            currentYear={currentYear}
+          />
+
+          <YoyDeviationPanel
+            transactions={transactions}
+            categories={categories}
+            monthYear={monthYear}
+            isMonthInProgress={isMonthInProgress}
+            periodLabel={periodLabel}
+          />
+        </div>
+        </div>
       ) : (
-        <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
-          Importe seus extratos para começar a ver dados aqui.
+        <div className="bg-bg-card border border-border rounded-card p-10 text-center space-y-2">
+          <FileBarChart size={24} className="mx-auto text-ink-3" strokeWidth={1.5} />
+          <p className="text-body text-text-primary">Nada por aqui ainda</p>
+          <p className="text-caption text-ink-3">Importe seus extratos em Transações para o dashboard ganhar vida.</p>
         </div>
       )}
+    </div>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="max-w-[1440px] mx-auto space-y-4" aria-busy="true" aria-label="Carregando dashboard">
+      <div className="flex items-center justify-between">
+        <div className="h-6 w-32 bg-elevated rounded animate-pulse" />
+        <div className="h-8 w-44 bg-elevated rounded animate-pulse" />
+      </div>
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="h-[92px] bg-bg-card border border-border rounded-card animate-pulse" />
+        ))}
+      </div>
+      <div className="h-[260px] bg-bg-card border border-border rounded-card animate-pulse" />
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="h-[320px] bg-bg-card border border-border rounded-card animate-pulse" />
+        <div className="h-[320px] bg-bg-card border border-border rounded-card animate-pulse" />
+      </div>
     </div>
   );
 }

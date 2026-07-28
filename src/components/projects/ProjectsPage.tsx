@@ -8,6 +8,17 @@ import type { Project, Transaction } from '../../types';
 
 const PROJECT_COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
 
+/**
+ * Orçamento digitado → número. Convenção pt-BR: ponto é milhar, vírgula é
+ * decimal ("120.000,50"). Vazio ou não-positivo vira null = sem orçamento.
+ */
+function parseBudget(raw: string): number | null {
+  const cleaned = raw.replace(/[^\d,.]/g, '').trim();
+  if (!cleaned) return null;
+  const n = Number(cleaned.replace(/\./g, '').replace(',', '.'));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function ProjectsPage() {
   const { projects, loading, addProject, updateProject, deleteProject } = useProjects();
   const { transactions } = useTransactions();
@@ -17,6 +28,7 @@ export function ProjectsPage() {
   const [color, setColor] = useState(PROJECT_COLORS[0]);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
+  const [budget, setBudget] = useState('');
   const [showArchived, setShowArchived] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
@@ -28,11 +40,13 @@ export function ProjectsPage() {
       status: 'active',
       startDate: startDate ? new Date(startDate + 'T00:00:00') : null,
       endDate: endDate ? new Date(endDate + 'T00:00:00') : null,
+      budget: parseBudget(budget),
     });
     setName('');
     setColor(PROJECT_COLORS[0]);
     setStartDate('');
     setEndDate('');
+    setBudget('');
     setShowForm(false);
   }
 
@@ -127,6 +141,23 @@ export function ProjectsPage() {
               />
             </div>
           </div>
+          <div>
+            <label className="text-xs text-text-secondary block mb-1">
+              Orçamento total <span className="text-ink-3">(opcional)</span>
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={budget}
+              onChange={(e) => setBudget(e.target.value)}
+              placeholder="Ex: 120000"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            />
+            <p className="text-[11px] text-ink-3 mt-1">
+              Vira a régua de orçado x executado no dashboard. Sem orçamento, o projeto aparece
+              só com o gasto acumulado.
+            </p>
+          </div>
           <div className="flex gap-2">
             <button type="submit" className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90">Criar</button>
             <button type="button" onClick={() => setShowForm(false)} className="px-4 py-1.5 bg-bg-secondary border border-border text-text-secondary text-xs rounded">Cancelar</button>
@@ -175,6 +206,7 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
   const [editColor, setEditColor] = useState(project.color);
   const [editStartDate, setEditStartDate] = useState(project.startDate ? project.startDate.toISOString().slice(0, 10) : '');
   const [editEndDate, setEditEndDate] = useState(project.endDate ? project.endDate.toISOString().slice(0, 10) : '');
+  const [editBudget, setEditBudget] = useState(project.budget != null ? String(project.budget) : '');
   const [showTxs, setShowTxs] = useState(false);
 
   async function saveEdit() {
@@ -184,6 +216,7 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
       color: editColor,
       startDate: editStartDate ? new Date(editStartDate + 'T00:00:00') : null,
       endDate: editEndDate ? new Date(editEndDate + 'T00:00:00') : null,
+      budget: parseBudget(editBudget),
     });
     setEditing(false);
   }
@@ -193,6 +226,7 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
     setEditColor(project.color);
     setEditStartDate(project.startDate ? project.startDate.toISOString().slice(0, 10) : '');
     setEditEndDate(project.endDate ? project.endDate.toISOString().slice(0, 10) : '');
+    setEditBudget(project.budget != null ? String(project.budget) : '');
     setEditing(false);
   }
 
@@ -236,6 +270,13 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
                     className="w-full bg-bg-secondary border border-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
                   />
                 </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-text-secondary block mb-0.5">Orçamento total (opcional)</label>
+                <input type="text" inputMode="decimal" value={editBudget} placeholder="Ex: 120000"
+                  onChange={(e) => setEditBudget(e.target.value)}
+                  className="w-full bg-bg-secondary border border-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
+                />
               </div>
             </div>
           ) : (

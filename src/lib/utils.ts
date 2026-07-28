@@ -5,6 +5,28 @@ export function formatBRL(value: number): string {
   }).format(value);
 }
 
+/** Valor monetário com sinal explícito no positivo ("+R$ 1.000,00"). */
+export function formatSignedBRL(value: number): string {
+  return `${value > 0 ? '+' : ''}${formatBRL(value)}`;
+}
+
+/** Valor sem centavos para números-herói ("R$ 3.412"). Tabelas continuam com centavos. */
+export function formatBRL0(value: number): string {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+/** Rótulo curto de eixo/ticks: "R$ 40 mil". Nunca usar em célula de valor. */
+export function formatCompactBRL(value: number): string {
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `R$ ${(value / 1_000_000).toFixed(1).replace('.', ',')} mi`;
+  if (abs >= 1_000) return `R$ ${Math.round(value / 1_000)} mil`;
+  return `R$ ${Math.round(value)}`;
+}
+
 export function formatDate(date: Date): string {
   return new Intl.DateTimeFormat('pt-BR').format(date);
 }
@@ -23,6 +45,15 @@ export function getMonthYearOffset(monthYear: string, offset: number): string {
   const [year, month] = monthYear.split('-').map(Number);
   const d = new Date(year, month - 1 + offset, 1);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/**
+ * Último mês FECHADO (o anterior ao corrente). É o padrão de abertura das
+ * telas: o mês em andamento tem números pela metade, que enganam qualquer
+ * comparação — quem quiser vê-lo avança um mês no seletor.
+ */
+export function getClosedMonthYear(): string {
+  return getMonthYearOffset(getMonthYear(), -1);
 }
 
 export function cn(...classes: (string | boolean | undefined | null)[]): string {

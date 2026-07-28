@@ -10,11 +10,12 @@ interface Props {
 
 export function MonthSelector({ value, onChange, months }: Props) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-1 sm:gap-2">
       <button
         onClick={() => onChange(getMonthYearOffset(value, -1))}
-        className="p-1 text-text-secondary hover:text-text-primary transition-colors"
+        className="tap flex items-center justify-center rounded-control text-text-secondary hover:text-text-primary active:bg-elevated transition-colors"
         title="Mês anterior"
+        aria-label="Mês anterior"
       >
         <ChevronLeft size={18} />
       </button>
@@ -23,7 +24,8 @@ export function MonthSelector({ value, onChange, months }: Props) {
         <select
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="text-xs text-text-primary bg-bg-secondary border border-border rounded px-2 py-1 focus:outline-none focus:border-accent cursor-pointer capitalize min-w-[160px] text-center"
+          aria-label="Mês"
+          className="tap text-body text-text-primary bg-bg-secondary border border-border rounded-control px-2 py-1 focus:outline-none focus:border-accent cursor-pointer capitalize min-w-[150px] sm:min-w-[160px] text-center"
         >
           {months.includes(value) ? null : (
             <option value={value}>{getMonthLabel(value)}</option>
@@ -35,15 +37,16 @@ export function MonthSelector({ value, onChange, months }: Props) {
           ))}
         </select>
       ) : (
-        <span className="text-xs text-text-primary min-w-[140px] text-center capitalize">
+        <span className="text-body text-text-primary min-w-[140px] text-center capitalize">
           {getMonthLabel(value)}
         </span>
       )}
 
       <button
         onClick={() => onChange(getMonthYearOffset(value, 1))}
-        className="p-1 text-text-secondary hover:text-text-primary transition-colors"
+        className="tap flex items-center justify-center rounded-control text-text-secondary hover:text-text-primary active:bg-elevated transition-colors"
         title="Próximo mês"
+        aria-label="Próximo mês"
       >
         <ChevronRight size={18} />
       </button>

@@ -1,15 +1,14 @@
 import { useMemo, useState } from 'react';
+import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import {
-  TrendingUp,
-  TrendingDown,
-  Minus,
-  AlertTriangle,
-  ChevronDown,
-  ChevronRight,
-} from 'lucide-react';
-import { CategoryIcon } from '../shared/CategoryIcon';
-import { formatBRL, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, accountingDate } from '../../lib/utils';
+  formatBRL0,
+  countsInTotals,
+  getExcludedFromTotalsIds,
+  isIncomeAmount,
+  accountingDate,
+} from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
+import { resolveTrend, type YoyItem, type YoySubItem, type GroupTotal } from './yoyShared';
 
 interface Props {
   transactions: Transaction[];
@@ -19,42 +18,43 @@ interface Props {
   periodLabel: string;
 }
 
-interface YoySubItem {
-  id: string;
-  name: string;
-  icon: string;
-  color: string;
-  curr: number;
-  prev: number;
-  varianceAbs: number;
-  pct: number | null;
-  resultadoImpact?: number;
-}
-
-interface YoyItem extends YoySubItem {
-  subs: YoySubItem[];
-}
-
-interface GroupTotal {
-  curr: number;
-  prev: number;
-  varianceAbs: number;
-  pct: number | null;
-}
-
 const UNCATEGORIZED_ID = '__uncategorized';
 const UNCATEGORIZED_NAME = 'Sem categoria';
 const UNCATEGORIZED_COLOR = '#737373';
 
-// Shared grid template: chevron | category | curr | prev | pct+delta (or impact)
-const ROW_GRID =
-  'grid grid-cols-[12px_minmax(0,_1fr)_92px_92px_112px] items-center gap-2';
+/** Barras visíveis antes do "ver todas" — o resto vira uma linha agregada. */
+const TOP_N = 8;
+/** Abaixo disso a variação é ruído contábil e só alonga o card. */
+const MIN_DELTA = 1;
+
+type GroupKey = 'expenses' | 'income' | 'resultado';
 
 function computePct(curr: number, prev: number, absBase = false): number | null {
   if (prev === 0) return null;
   const base = absBase ? Math.abs(prev) : prev;
   return ((curr - prev) / base) * 100;
 }
+
+const signed0 = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${formatBRL0(Math.abs(v))}`;
+
+/**
+ * Cada grupo tem seu próprio vocabulário de direção, mas a REGRA DE COR é uma
+ * só no card inteiro: coral = piorou o seu bolso, menta = melhorou. Por isso
+ * "recebeu mais" fica à esquerda em Receitas — do lado bom, junto com
+ * "gastou menos". A posição segue o efeito, não o sinal do número.
+ */
+const GROUPS: Array<{
+  key: GroupKey;
+  label: string;
+  higherIsBetter: boolean;
+  left: string;
+  right: string;
+  netNoun: string;
+}> = [
+  { key: 'expenses', label: 'Despesas', higherIsBetter: false, left: 'gastou menos', right: 'gastou mais', netNoun: 'em despesas' },
+  { key: 'income', label: 'Receitas', higherIsBetter: true, left: 'recebeu mais', right: 'recebeu menos', netNoun: 'em receitas' },
+  { key: 'resultado', label: 'Resultado', higherIsBetter: true, left: 'ajudou', right: 'piorou', netNoun: 'no resultado' },
+];
 
 export function YoyDeviationPanel({
   transactions,
@@ -64,7 +64,8 @@ export function YoyDeviationPanel({
   periodLabel,
 }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [activeGroup, setActiveGroup] = useState<'expenses' | 'income' | 'resultado' | null>(null);
+  const [activeGroup, setActiveGroup] = useState<GroupKey>('expenses');
+  const [showAll, setShowAll] = useState(false);
 
   const data = useMemo(() => {
     // Transferências ficam fora da comparação ano-a-ano (totais e por categoria).
@@ -210,11 +211,16 @@ export function YoyDeviationPanel({
     const currBalance = totalCurrInc - totalCurrExp;
     const prevBalance = totalPrevInc - totalPrevExp;
 
-    const totals: {
-      expenses: GroupTotal;
-      income: GroupTotal;
-      resultado: GroupTotal;
-    } = {
+    // Resultado NÃO usa variação percentual: base negativa que cruza o zero
+    // produz números sem leitura humana (o famoso "-151,3%"). No lugar, a
+    // variação da TAXA DE POUPANÇA (resultado ÷ receitas) em pontos
+    // percentuais — estável a troca de sinal.
+    const currRate = totalCurrInc > 0 ? currBalance / totalCurrInc : null;
+    const prevRate = totalPrevInc > 0 ? prevBalance / totalPrevInc : null;
+    const savingsRatePp =
+      currRate !== null && prevRate !== null ? (currRate - prevRate) * 100 : null;
+
+    const totals: Record<GroupKey, GroupTotal> = {
       expenses: {
         curr: totalCurrExp,
         prev: totalPrevExp,
@@ -232,54 +238,13 @@ export function YoyDeviationPanel({
         prev: prevBalance,
         varianceAbs: currBalance - prevBalance,
         pct: computePct(currBalance, prevBalance, true),
+        savingsRatePp,
       },
     };
 
-    // ----- Custo de vida: despesa média MENSAL (trajetória) -----
-    // Compara a média mensal de despesas do ANO ANTERIOR (cheio) com a do ANO
-    // ATUAL considerando só os meses COMPLETOS (exclui o mês em andamento, para
-    // não diluir a média com um mês parcial). Sinaliza se o custo de vida está
-    // em trajetória de SUBIDA (pior) ou DESCIDA. Divide pelo nº de meses COM
-    // despesa de cada ano — justo quando o histórico começou no meio do ano.
-    // Difere dos 3 cards (que comparam o MESMO período YTD vs YTD): aqui a base
-    // é a média mensal do ano anterior INTEIRO.
-    // NOTA: por ora inclui TODAS as despesas; excluir supérfluos (viagens,
-    // presentes) fica para uma evolução futura ("custo de vida real").
-    const effectiveCurrMax = isMonthInProgress ? m - 1 : m;
-    let clPrevSum = 0;
-    let clCurrSum = 0;
-    const clPrevMonths = new Set<number>();
-    const clCurrMonths = new Set<number>();
-    for (const t of transactions) {
-      if (!countsInTotals(t, excludedIds)) continue;
-      if (isIncomeAmount(t)) continue; // só despesas (reembolso reduz o gasto)
-      const ad = accountingDate(t);
-      const ty = ad.getFullYear();
-      const tm = ad.getMonth() + 1;
-      const expAmt = -t.amount; // despesa como positivo; reembolso (positivo) reduz
-      if (ty === prevYear) {
-        clPrevSum += expAmt;
-        clPrevMonths.add(tm);
-      } else if (ty === y && tm <= effectiveCurrMax) {
-        clCurrSum += expAmt;
-        clCurrMonths.add(tm);
-      }
-    }
-    const clPrevN = clPrevMonths.size;
-    const clCurrN = clCurrMonths.size;
-    const clCurrAvg = clCurrN > 0 ? clCurrSum / clCurrN : 0;
-    const clPrevAvg = clPrevN > 0 ? clPrevSum / clPrevN : 0;
-    const costOfLiving = {
-      currAvg: clCurrAvg,
-      prevAvg: clPrevAvg,
-      currSum: clCurrSum,
-      prevSum: clPrevSum,
-      currMonths: clCurrN,
-      prevMonths: clPrevN,
-      varianceAbs: clCurrAvg - clPrevAvg,
-      pct: computePct(clCurrAvg, clPrevAvg),
-      hasData: clPrevN > 0 && clCurrN > 0,
-    };
+    const monthName = new Intl.DateTimeFormat('pt-BR', { month: 'long' }).format(
+      new Date(y, m - 1, 1),
+    );
 
     return {
       prevYear,
@@ -289,10 +254,9 @@ export function YoyDeviationPanel({
       incomeItems,
       resultadoHelping,
       resultadoHurting,
-      costOfLiving,
+      monthName,
     };
-  }, [transactions, categories, monthYear, isMonthInProgress]);
-
+  }, [transactions, categories, monthYear]);
   function toggle(key: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -302,675 +266,321 @@ export function YoyDeviationPanel({
     });
   }
 
-  function handleSummaryClick(group: 'expenses' | 'income' | 'resultado') {
-    setActiveGroup((prev) => (prev === group ? null : group));
-  }
+  const group = GROUPS.find((g) => g.key === activeGroup)!;
+
+  // Uma barra por categoria: `delta` é o número que se mostra (variação no
+  // vocabulário do grupo) e `harm` é o efeito no bolso, que decide lado e cor.
+  const bars = useMemo(() => {
+    const toBar = (it: YoyItem | YoySubItem, harmSign: 1 | -1) => {
+      const delta = activeGroup === 'resultado' ? (it.resultadoImpact ?? 0) : it.varianceAbs;
+      return { id: it.id, name: it.name, color: it.color, delta, harm: harmSign * delta };
+    };
+
+    const items: YoyItem[] =
+      activeGroup === 'resultado'
+        ? [...data.resultadoHelping, ...data.resultadoHurting]
+        : activeGroup === 'expenses'
+          ? data.expenseItems
+          : data.incomeItems;
+
+    // Despesa: gastar mais machuca (harm = +delta). Receita e Resultado: o
+    // número já é "quanto melhorou", então machucar é o inverso.
+    const sign: 1 | -1 = activeGroup === 'expenses' ? 1 : -1;
+
+    return items
+      .map((it) => ({
+        ...toBar(it, sign),
+        subs: it.subs.map((s) => toBar(s, sign)).filter((s) => Math.abs(s.delta) >= MIN_DELTA),
+      }))
+      .filter((b) => Math.abs(b.delta) >= MIN_DELTA)
+      .sort((a, b) => Math.abs(b.harm) - Math.abs(a.harm));
+  }, [activeGroup, data]);
+
+  const visible = showAll ? bars : bars.slice(0, TOP_N);
+  const hidden = bars.slice(visible.length);
+  const hiddenNet = hidden.reduce((s, b) => s + b.delta, 0);
+  const netDelta = bars.reduce((s, b) => s + b.delta, 0);
+  // Escala compartilhada por categorias E subcategorias: uma barra filha nunca
+  // pode parecer maior do que a mãe.
+  const max = Math.max(...bars.map((b) => Math.abs(b.delta)), 1);
 
   const currentYear = monthYear.split('-')[0];
 
-  const canExpandExpenses = data.hasPrev && data.expenseItems.length > 0;
-  const canExpandIncome = data.hasPrev && data.incomeItems.length > 0;
-  const canExpandResultado =
-    data.hasPrev && (data.resultadoHelping.length > 0 || data.resultadoHurting.length > 0);
-
   return (
-    <div className="bg-bg-card border border-border rounded-lg">
-      <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b border-border">
-        <div className="min-w-0">
-          <p className="text-xs font-bold text-text-primary uppercase tracking-wider">
-            Desvio YoY · acumulado do ano
-          </p>
-          <p className="text-[10px] text-text-secondary mt-0.5">
-            {periodLabel} {currentYear} vs {periodLabel} {data.prevYear}
-          </p>
-        </div>
-        {isMonthInProgress && (
-          <span
-            className="flex items-center gap-1 text-[10px] text-accent bg-accent/10 border border-accent/30 rounded px-1.5 py-0.5 flex-shrink-0"
-            title="O mês selecionado ainda está em andamento; os valores podem mudar até o fechamento."
-          >
-            <AlertTriangle size={10} />
-            Mês em andamento
-          </span>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 p-2">
-        <SummaryCard
-          label="Despesas"
-          total={data.totals.expenses}
-          higherIsBetter={false}
-          hasPrev={data.hasPrev}
-          prevYear={data.prevYear}
-          isActive={activeGroup === 'expenses'}
-          canExpand={canExpandExpenses}
-          onClick={() => handleSummaryClick('expenses')}
-        />
-        <SummaryCard
-          label="Receitas"
-          total={data.totals.income}
-          higherIsBetter={true}
-          hasPrev={data.hasPrev}
-          prevYear={data.prevYear}
-          isActive={activeGroup === 'income'}
-          canExpand={canExpandIncome}
-          onClick={() => handleSummaryClick('income')}
-        />
-        <SummaryCard
-          label="Resultado"
-          total={data.totals.resultado}
-          higherIsBetter={true}
-          hasPrev={data.hasPrev}
-          prevYear={data.prevYear}
-          isActive={activeGroup === 'resultado'}
-          canExpand={canExpandResultado}
-          onClick={() => handleSummaryClick('resultado')}
-          signed
-        />
-      </div>
-
-      {/* Custo de vida — despesa média MENSAL (trajetória). Mostra total ÷ meses
-          = média, para o cálculo ser verificável a olho. */}
-      <div className="mx-2 mb-2 rounded-md border border-border bg-bg-secondary/20 px-3 py-2">
-        <div className="flex items-center justify-between gap-2 flex-wrap">
-          <p className="text-[11px] font-bold text-text-primary uppercase tracking-wider">
-            Custo de vida · despesa média mensal
-          </p>
-          {data.costOfLiving.hasData ? (() => {
-            const { color, Icon, pctText } = resolveTrend(data.costOfLiving.pct, false, true);
-            return (
-              <div className={`flex items-center gap-2 tabular-nums flex-shrink-0 ${color}`}>
-                <div className="flex items-center gap-1 text-sm font-bold">
-                  <Icon size={13} />
-                  <span>{pctText}</span>
-                </div>
-                <span className="text-[11px] font-medium opacity-80 border-l border-current/20 pl-2">
-                  {data.costOfLiving.varianceAbs > 0 ? '+' : ''}{formatBRL(data.costOfLiving.varianceAbs)}/mês
-                </span>
-              </div>
-            );
-          })() : (
-            <span className="text-[10px] text-text-secondary flex-shrink-0">sem dados suficientes</span>
+    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
+      <div>
+        <h3 className="text-title font-semibold text-text-primary">O que puxou o ano</h3>
+        <p className="text-caption text-ink-3 mt-0.5">
+          {periodLabel} {currentYear} vs {periodLabel} {data.prevYear} · por categoria
+          {isMonthInProgress && (
+            <span
+              className="text-accent inline-flex items-center gap-1 ml-1"
+              title="O mês selecionado ainda está em andamento; os valores podem mudar até o fechamento."
+            >
+              · <AlertTriangle size={11} className="flex-shrink-0" />
+              {data.monthName} em andamento
+            </span>
           )}
-        </div>
-
-        <div className="mt-1.5 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1">
-          <div className="flex items-baseline justify-between gap-2 tabular-nums">
-            <span className="text-xs font-bold text-text-primary">
-              {currentYear}: {data.costOfLiving.currMonths > 0 ? `${formatBRL(data.costOfLiving.currAvg)}/mês` : '—'}
-            </span>
-            {data.costOfLiving.currMonths > 0 && (
-              <span className="text-[10px] text-text-secondary">
-                {formatBRL(data.costOfLiving.currSum)} ÷ {data.costOfLiving.currMonths} {data.costOfLiving.currMonths === 1 ? 'mês' : 'meses'}
-              </span>
-            )}
-          </div>
-          <div className="flex items-baseline justify-between gap-2 tabular-nums">
-            <span className="text-xs font-bold text-text-secondary">
-              {data.prevYear}: {data.costOfLiving.prevMonths > 0 ? `${formatBRL(data.costOfLiving.prevAvg)}/mês` : '—'}
-            </span>
-            {data.costOfLiving.prevMonths > 0 && (
-              <span className="text-[10px] text-text-secondary">
-                {formatBRL(data.costOfLiving.prevSum)} ÷ {data.costOfLiving.prevMonths} {data.costOfLiving.prevMonths === 1 ? 'mês' : 'meses'}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <p className="text-[9px] text-text-secondary/60 mt-1.5 leading-snug">
-          Média por mês COM despesa de cada ano (o ano atual conta só os meses completos — o mês em andamento fica de fora; o ano anterior usa os meses que têm lançamento). Inclui todas as despesas — versão futura poderá excluir supérfluos (viagens, presentes).
         </p>
       </div>
 
-      {activeGroup === 'expenses' && canExpandExpenses && (
-        <GroupDrilldown
-          items={data.expenseItems}
-          higherIsBetter={false}
-          hasPrev={data.hasPrev}
-          expanded={expanded}
-          toggle={toggle}
-          catKeyPrefix="cat:exp:"
-          showAllKey="showAll:group:expenses"
-        />
-      )}
-      {activeGroup === 'income' && canExpandIncome && (
-        <GroupDrilldown
-          items={data.incomeItems}
-          higherIsBetter={true}
-          hasPrev={data.hasPrev}
-          expanded={expanded}
-          toggle={toggle}
-          catKeyPrefix="cat:inc:"
-          showAllKey="showAll:group:income"
-        />
-      )}
-      {activeGroup === 'resultado' && canExpandResultado && (
-        <ResultadoDrilldown
-          helping={data.resultadoHelping}
-          hurting={data.resultadoHurting}
-          expanded={expanded}
-          toggle={toggle}
-        />
+      {/* Os três totais viram o seletor do que as barras mostram: o resumo
+          continua à vista, mas sem ser o corpo do card. */}
+      <div className="grid grid-cols-3 gap-2">
+        {GROUPS.map((g) => (
+          <SummaryTile
+            key={g.key}
+            label={g.label}
+            total={data.totals[g.key]}
+            higherIsBetter={g.higherIsBetter}
+            hasPrev={data.hasPrev}
+            prevYear={data.prevYear}
+            isSavingsRate={g.key === 'resultado'}
+            active={activeGroup === g.key}
+            onClick={() => {
+              setActiveGroup(g.key);
+              setExpanded(new Set());
+              setShowAll(false);
+            }}
+          />
+        ))}
+      </div>
+
+      {!data.hasPrev ? (
+        <p className="text-caption text-ink-3 pt-1">
+          Sem lançamentos em {data.prevYear} para comparar.
+        </p>
+      ) : bars.length === 0 ? (
+        <p className="text-caption text-ink-3 pt-1">
+          Nenhuma variação relevante em {group.label.toLowerCase()} contra {data.prevYear}.
+        </p>
+      ) : (
+        <>
+          <div className="space-y-1 pt-1">
+            <div className="grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] text-caption text-ink-3 uppercase tracking-wider">
+              <span className="text-right pr-2">{group.left}</span>
+              <span />
+              <span className="pl-2">{group.right}</span>
+            </div>
+
+            {visible.map((b) => {
+              const open = expanded.has(b.id);
+              return (
+                <div key={b.id}>
+                  <BarRow
+                    name={b.name}
+                    color={b.color}
+                    delta={b.delta}
+                    harm={b.harm}
+                    max={max}
+                    open={open}
+                    onToggle={b.subs.length > 0 ? () => toggle(b.id) : undefined}
+                  />
+                  {open &&
+                    b.subs.map((s) => (
+                      <BarRow
+                        key={s.id}
+                        name={s.name}
+                        color={s.color}
+                        delta={s.delta}
+                        harm={s.harm}
+                        max={max}
+                        sub
+                      />
+                    ))}
+                </div>
+              );
+            })}
+
+            {hidden.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className="tap w-full grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] text-caption text-ink-3 hover:text-text-secondary transition-colors pt-0.5"
+              >
+                <span className="text-right pr-2 tnum">{signed0(hiddenNet)}</span>
+                <span />
+                <span className="pl-2 text-left">
+                  + {hidden.length} {hidden.length === 1 ? 'categoria menor' : 'categorias menores'}
+                </span>
+              </button>
+            )}
+
+            {showAll && bars.length > TOP_N && (
+              <button
+                type="button"
+                onClick={() => setShowAll(false)}
+                className="tap w-full text-caption text-ink-3 hover:text-text-secondary transition-colors pt-0.5"
+              >
+                ver menos
+              </button>
+            )}
+          </div>
+
+          <p className="text-caption text-ink-3 pt-1 border-t border-border">
+            Efeito líquido:{' '}
+            <span className={`tnum ${netTone(netDelta, group.higherIsBetter)}`}>
+              {signed0(netDelta)}
+            </span>{' '}
+            {group.netNoun} contra {data.prevYear}.
+          </p>
+        </>
       )}
     </div>
   );
 }
 
-// ---------- Summary card ----------
+function netTone(v: number, higherIsBetter: boolean): string {
+  if (Math.abs(v) < MIN_DELTA) return 'text-ink-3';
+  return (higherIsBetter ? v > 0 : v < 0) ? 'text-positive' : 'text-negative';
+}
 
-interface SummaryCardProps {
+/* ---------------- Barra divergente ---------------- */
+
+interface BarRowProps {
+  name: string;
+  color: string;
+  delta: number;
+  /** > 0 = piorou o bolso (direita, coral); < 0 = melhorou (esquerda, menta). */
+  harm: number;
+  max: number;
+  sub?: boolean;
+  open?: boolean;
+  onToggle?: () => void;
+}
+
+function BarRow({ name, color, delta, harm, max, sub, open, onToggle }: BarRowProps) {
+  const worse = harm > 0;
+  const width = `${Math.max((Math.abs(delta) / max) * 100, 1.5)}%`;
+  const tone = worse ? 'text-negative' : 'text-positive';
+  const bg = worse ? '#e05a4d' : '#34a873';
+  const h = sub ? 'h-2.5' : 'h-4';
+  const Chevron = open ? ChevronDown : ChevronRight;
+
+  const label = (
+    <span
+      className={`truncate ${sub ? 'text-caption text-ink-3' : 'text-body text-text-secondary'}`}
+    >
+      {name}
+    </span>
+  );
+  const value = (
+    <span className={`text-caption tnum flex-shrink-0 ${tone}`}>{signed0(delta)}</span>
+  );
+  const bar = (
+    <div
+      className={`${h} ${worse ? 'rounded-r-[3px]' : 'rounded-l-[3px]'}`}
+      style={{ width, backgroundColor: sub ? `${bg}99` : bg }}
+      title={name}
+    />
+  );
+  // A cor da categoria vive num tracinho ao lado do nome: pintar a barra com
+  // ela quebraria a leitura de "coral = piorou / menta = melhorou".
+  const chip = !sub && (
+    <span
+      className="w-0.5 h-3.5 rounded-full flex-shrink-0"
+      style={{ backgroundColor: color }}
+    />
+  );
+
+  const inner = (
+    <>
+      <div className={`flex justify-end items-center gap-2 pr-2 min-w-0 ${sub ? 'pl-4' : ''}`}>
+        {worse ? (
+          <>
+            {onToggle && <Chevron size={12} className="text-ink-3 flex-shrink-0" />}
+            {label}
+            {chip}
+          </>
+        ) : (
+          <>
+            {value}
+            {bar}
+          </>
+        )}
+      </div>
+      <div className={`${h} w-px bg-border`} />
+      <div className={`flex items-center gap-2 pl-2 min-w-0 ${sub ? 'pr-4' : ''}`}>
+        {worse ? (
+          <>
+            {bar}
+            {value}
+          </>
+        ) : (
+          <>
+            {chip}
+            {label}
+            {onToggle && <Chevron size={12} className="text-ink-3 flex-shrink-0" />}
+          </>
+        )}
+      </div>
+    </>
+  );
+
+  const cls = `grid grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] items-center w-full ${
+    sub ? 'py-px' : 'py-0.5'
+  }`;
+
+  if (!onToggle) return <div className={cls}>{inner}</div>;
+  return (
+    // Sem `.tap` de proposito: os 44px so valeriam para as linhas
+    // expansiveis, e no celular a lista ficava com um degrau de altura a cada
+    // categoria com subcategoria. Numa lista densa, ritmo uniforme vale mais.
+    <button type="button" onClick={onToggle} aria-expanded={open} className={`${cls} text-left hover:bg-elevated/40 rounded-[4px] transition-colors`}>
+      {inner}
+    </button>
+  );
+}
+
+/* ---------------- Tile de resumo (também é o seletor) ---------------- */
+
+interface SummaryTileProps {
   label: string;
   total: GroupTotal;
   higherIsBetter: boolean;
   hasPrev: boolean;
   prevYear: number;
-  isActive: boolean;
-  canExpand: boolean;
+  isSavingsRate: boolean;
+  active: boolean;
   onClick: () => void;
-  signed?: boolean;
 }
 
-function SummaryCard({
+function SummaryTile({
   label,
   total,
   higherIsBetter,
   hasPrev,
   prevYear,
-  isActive,
-  canExpand,
+  isSavingsRate,
+  active,
   onClick,
-  signed,
-}: SummaryCardProps) {
-  const { color, Icon, pctText } = resolveTrend(total.pct, higherIsBetter, hasPrev);
-  const fmt = (v: number) => (signed || v < 0 ? formatBRL(v) : formatBRL(Math.abs(v)));
-  const deltaText = hasPrev
-    ? `${total.varianceAbs > 0 ? '+' : ''}${formatBRL(total.varianceAbs)}`
-    : '';
+}: SummaryTileProps) {
+  // No Resultado o % vira Δ da taxa de poupança em p.p.: percentual sobre base
+  // negativa que cruza o zero não tem leitura humana (o antigo "−151,3%").
+  const trend = isSavingsRate
+    ? resolveTrend(total.savingsRatePp ?? null, true, { hasPrev, unit: 'pp' })
+    : resolveTrend(total.pct, higherIsBetter, { hasPrev });
 
   return (
     <button
       type="button"
       onClick={onClick}
-      disabled={!canExpand}
-      className={`rounded-md border p-3 text-left transition-colors ${
-        isActive
-          ? 'border-accent bg-bg-secondary/60'
-          : 'border-border bg-bg-secondary/20'
-      } ${canExpand ? 'hover:bg-bg-secondary/40 cursor-pointer' : 'cursor-default'}`}
+      aria-pressed={active}
+      title={hasPrev ? `${prevYear}: ${formatBRL0(total.prev)}` : undefined}
+      className={`tap text-left rounded-control px-2.5 py-1.5 min-w-0 border transition-colors ${
+        active
+          ? 'bg-elevated border-border'
+          : 'bg-bg-secondary border-transparent hover:border-border'
+      }`}
     >
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-xs font-medium text-text-primary truncate">{label}</p>
-        {canExpand &&
-          (isActive ? (
-            <ChevronDown size={12} className="text-text-secondary flex-shrink-0" />
-          ) : (
-            <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
-          ))}
-      </div>
-
-      <p className="mt-1.5 text-xs font-bold text-text-primary tabular-nums truncate">
-        {fmt(total.curr)}
+      <p className="text-caption uppercase tracking-wider text-ink-3 truncate">{label}</p>
+      <p className="text-body tnum text-text-primary truncate">{formatBRL0(total.curr)}</p>
+      <p className={`text-caption tnum truncate ${trend.color}`}>
+        {trend.text}{' '}
+        {/* No celular os 3 tiles dividem ~110px cada e "vs 2025" era cortado
+            no meio; a comparação já está no subtítulo do card. */}
+        <span className="text-ink-3 hidden sm:inline">vs {prevYear}</span>
       </p>
-      <p className="text-[10px] text-text-secondary tabular-nums mt-0.5 truncate">
-        {prevYear}: {hasPrev ? fmt(total.prev) : '—'}
-      </p>
-
-      <div className={`mt-2 flex items-center gap-2 tabular-nums ${color}`}>
-        <div className="flex items-center gap-1 text-xs font-bold">
-          <Icon size={12} />
-          <span>{pctText}</span>
-        </div>
-        {deltaText && (
-          <span className="text-[11px] font-medium opacity-80 border-l border-current/20 pl-2 truncate">
-            {deltaText}
-          </span>
-        )}
-      </div>
     </button>
   );
-}
-
-// ---------- Drill-down panels ----------
-
-const RESULTADO_TOP_N = 5;
-
-interface GroupDrilldownProps {
-  items: YoyItem[];
-  higherIsBetter: boolean;
-  hasPrev: boolean;
-  expanded: Set<string>;
-  toggle: (key: string) => void;
-  catKeyPrefix: string;
-  showAllKey: string;
-}
-
-function GroupDrilldown({
-  items,
-  higherIsBetter,
-  hasPrev,
-  expanded,
-  toggle,
-  catKeyPrefix,
-  showAllKey,
-}: GroupDrilldownProps) {
-  const showAll = expanded.has(showAllKey);
-  const visibleItems = showAll ? items : items.slice(0, RESULTADO_TOP_N);
-  const extraCount = Math.max(0, items.length - RESULTADO_TOP_N);
-
-  return (
-    <div className="bg-bg-secondary/40 border-t border-border">
-      <ColumnHeader />
-      <div className="divide-y divide-border/50">
-        {visibleItems.map((item) => (
-          <CategoryRow
-            key={item.id}
-            item={item}
-            higherIsBetter={higherIsBetter}
-            hasPrev={hasPrev}
-            expanded={expanded}
-            toggle={toggle}
-            rowKey={`${catKeyPrefix}${item.id}`}
-          />
-        ))}
-      </div>
-      {extraCount > 0 && (
-        <ShowMoreButton
-          expanded={showAll}
-          extraCount={extraCount}
-          onClick={() => toggle(showAllKey)}
-        />
-      )}
-    </div>
-  );
-}
-
-interface ResultadoDrilldownProps {
-  helping: YoyItem[];
-  hurting: YoyItem[];
-  expanded: Set<string>;
-  toggle: (key: string) => void;
-}
-
-function ResultadoDrilldown({
-  helping,
-  hurting,
-  expanded,
-  toggle,
-}: ResultadoDrilldownProps) {
-  const showAllHelping = expanded.has('showAll:resultado:helping');
-  const showAllHurting = expanded.has('showAll:resultado:hurting');
-
-  const helpingVisible = showAllHelping ? helping : helping.slice(0, RESULTADO_TOP_N);
-  const hurtingVisible = showAllHurting ? hurting : hurting.slice(0, RESULTADO_TOP_N);
-  const helpingExtra = Math.max(0, helping.length - RESULTADO_TOP_N);
-  const hurtingExtra = Math.max(0, hurting.length - RESULTADO_TOP_N);
-
-  return (
-    <div className="bg-bg-secondary/40 border-t border-border">
-      {helping.length > 0 && (
-        <>
-          <div className="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent-green">
-            Ajudando o resultado
-          </div>
-          <ColumnHeader showImpactCol />
-          <div className="divide-y divide-border/50">
-            {helpingVisible.map((item) => (
-              <ResultadoRow
-                key={`h-${item.id}`}
-                item={item}
-                expanded={expanded}
-                toggle={toggle}
-                rowKey={`cat:res:h:${item.id}`}
-              />
-            ))}
-          </div>
-          {helpingExtra > 0 && (
-            <ShowMoreButton
-              expanded={showAllHelping}
-              extraCount={helpingExtra}
-              onClick={() => toggle('showAll:resultado:helping')}
-            />
-          )}
-        </>
-      )}
-      {hurting.length > 0 && (
-        <>
-          <div
-            className={`px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-accent-red ${helping.length > 0 ? 'border-t border-border' : ''}`}
-          >
-            Atrapalhando o resultado
-          </div>
-          <ColumnHeader showImpactCol />
-          <div className="divide-y divide-border/50">
-            {hurtingVisible.map((item) => (
-              <ResultadoRow
-                key={`x-${item.id}`}
-                item={item}
-                expanded={expanded}
-                toggle={toggle}
-                rowKey={`cat:res:x:${item.id}`}
-              />
-            ))}
-          </div>
-          {hurtingExtra > 0 && (
-            <ShowMoreButton
-              expanded={showAllHurting}
-              extraCount={hurtingExtra}
-              onClick={() => toggle('showAll:resultado:hurting')}
-            />
-          )}
-        </>
-      )}
-    </div>
-  );
-}
-
-function ShowMoreButton({
-  expanded,
-  extraCount,
-  onClick,
-}: {
-  expanded: boolean;
-  extraCount: number;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full px-4 py-1.5 text-[10px] font-medium text-text-secondary hover:text-text-primary hover:bg-bg-secondary/60 text-left flex items-center gap-1 border-t border-border/40"
-    >
-      {expanded ? (
-        <>
-          <ChevronDown size={11} />
-          Ver menos
-        </>
-      ) : (
-        <>
-          <ChevronRight size={11} />
-          Ver mais {extraCount} {extraCount === 1 ? 'item' : 'itens'}
-        </>
-      )}
-    </button>
-  );
-}
-
-// ---------- Rows ----------
-
-interface CategoryRowProps {
-  item: YoyItem;
-  higherIsBetter: boolean;
-  hasPrev: boolean;
-  expanded: Set<string>;
-  toggle: (key: string) => void;
-  rowKey: string;
-}
-
-function CategoryRow({
-  item,
-  higherIsBetter,
-  hasPrev,
-  expanded,
-  toggle,
-  rowKey,
-}: CategoryRowProps) {
-  const isOpen = expanded.has(rowKey);
-  const hasSubs = item.subs.length > 0;
-  const { color, Icon, pctText } = resolveTrend(item.pct, higherIsBetter, hasPrev);
-  const deltaText = `${item.varianceAbs > 0 ? '+' : ''}${formatBRL(item.varianceAbs)}`;
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => hasSubs && toggle(rowKey)}
-        disabled={!hasSubs}
-        className={`w-full ${ROW_GRID} px-4 py-1 text-left ${
-          hasSubs ? 'hover:bg-bg-secondary/60 cursor-pointer' : 'cursor-default'
-        }`}
-      >
-        {hasSubs ? (
-          isOpen ? (
-            <ChevronDown size={11} style={{ color: item.color }} />
-          ) : (
-            <ChevronRight size={11} style={{ color: item.color }} />
-          )
-        ) : (
-          <ChevronRight size={11} style={{ color: item.color, opacity: 0.35 }} />
-        )}
-        <div className="flex items-center gap-1.5 min-w-0">
-          <CategoryIcon
-            icon={item.icon}
-            size={12}
-            className="flex-shrink-0"
-            style={{ color: item.color }}
-          />
-          <span className="text-xs text-text-primary truncate">{item.name}</span>
-        </div>
-        <span className="text-xs tabular-nums text-text-primary text-right">
-          {formatBRL(item.curr)}
-        </span>
-        <span className="text-xs tabular-nums text-text-secondary text-right">
-          {formatBRL(item.prev)}
-        </span>
-        <div className="flex flex-col items-end leading-tight">
-          <span className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
-            <Icon size={11} />
-            {pctText}
-          </span>
-          <span className={`text-[10px] tabular-nums opacity-80 ${color}`}>{deltaText}</span>
-        </div>
-      </button>
-      {isOpen && hasSubs && (
-        <div className="bg-bg-secondary/60 divide-y divide-border/40">
-          {item.subs.map((sub) => (
-            <SubCategoryRow
-              key={sub.id}
-              sub={sub}
-              higherIsBetter={higherIsBetter}
-              hasPrev={hasPrev}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-interface SubCategoryRowProps {
-  sub: YoySubItem;
-  higherIsBetter: boolean;
-  hasPrev: boolean;
-}
-
-function SubCategoryRow({ sub, higherIsBetter, hasPrev }: SubCategoryRowProps) {
-  const { color, Icon, pctText } = resolveTrend(sub.pct, higherIsBetter, hasPrev);
-  const deltaText = `${sub.varianceAbs > 0 ? '+' : ''}${formatBRL(sub.varianceAbs)}`;
-  return (
-    <div className={`${ROW_GRID} px-4 py-0.5 pl-10`}>
-      <ChevronRight size={10} style={{ color: sub.color, opacity: 0.5 }} />
-      <div className="flex items-center gap-1.5 min-w-0">
-        <CategoryIcon
-          icon={sub.icon}
-          size={11}
-          className="flex-shrink-0"
-          style={{ color: sub.color }}
-        />
-        <span className="text-[11px] text-text-secondary truncate">{sub.name}</span>
-      </div>
-      <span className="text-[11px] tabular-nums text-text-secondary text-right">
-        {formatBRL(sub.curr)}
-      </span>
-      <span className="text-[11px] tabular-nums text-text-secondary/70 text-right">
-        {formatBRL(sub.prev)}
-      </span>
-      <div className="flex flex-col items-end leading-tight">
-        <span className={`flex items-center gap-1 text-[11px] font-bold tabular-nums ${color}`}>
-          <Icon size={10} />
-          {pctText}
-        </span>
-        <span className={`text-[10px] tabular-nums opacity-80 ${color}`}>{deltaText}</span>
-      </div>
-    </div>
-  );
-}
-
-interface ResultadoRowProps {
-  item: YoyItem;
-  expanded: Set<string>;
-  toggle: (key: string) => void;
-  rowKey: string;
-}
-
-function ResultadoRow({ item, expanded, toggle, rowKey }: ResultadoRowProps) {
-  const isOpen = expanded.has(rowKey);
-  const hasSubs = item.subs.length > 0;
-  const impact = item.resultadoImpact ?? 0;
-  const color = impact > 0 ? 'text-accent-green' : impact < 0 ? 'text-accent-red' : 'text-text-secondary';
-  const Icon = impact > 0 ? TrendingUp : impact < 0 ? TrendingDown : Minus;
-  const deltaText = `${impact > 0 ? '+' : ''}${formatBRL(impact)}`;
-  const pctText =
-    item.pct === null
-      ? 'n/d'
-      : `${item.pct > 0 ? '+' : ''}${item.pct.toFixed(1)}%`;
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => hasSubs && toggle(rowKey)}
-        disabled={!hasSubs}
-        className={`w-full ${ROW_GRID} px-4 py-1 text-left ${
-          hasSubs ? 'hover:bg-bg-secondary/60 cursor-pointer' : 'cursor-default'
-        }`}
-      >
-        {hasSubs ? (
-          isOpen ? (
-            <ChevronDown size={11} style={{ color: item.color }} />
-          ) : (
-            <ChevronRight size={11} style={{ color: item.color }} />
-          )
-        ) : (
-          <ChevronRight size={11} style={{ color: item.color, opacity: 0.35 }} />
-        )}
-        <div className="flex items-center gap-1.5 min-w-0">
-          <CategoryIcon
-            icon={item.icon}
-            size={12}
-            className="flex-shrink-0"
-            style={{ color: item.color }}
-          />
-          <span className="text-xs text-text-primary truncate">{item.name}</span>
-        </div>
-        <span className="text-xs tabular-nums text-text-primary text-right">
-          {formatBRL(item.curr)}
-        </span>
-        <span className="text-xs tabular-nums text-text-secondary text-right">
-          {formatBRL(item.prev)}
-        </span>
-        <div className="flex flex-col items-end leading-tight">
-          <span className={`flex items-center gap-1 text-xs font-bold tabular-nums ${color}`}>
-            <Icon size={11} />
-            {deltaText}
-          </span>
-          <span className={`text-[10px] tabular-nums opacity-80 ${color}`}>{pctText}</span>
-        </div>
-      </button>
-      {isOpen && hasSubs && (
-        <div className="bg-bg-secondary/60 divide-y divide-border/40">
-          {item.subs.map((sub) => (
-            <ResultadoSubRow key={sub.id} sub={sub} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ResultadoSubRow({ sub }: { sub: YoySubItem }) {
-  const impact = sub.resultadoImpact ?? 0;
-  const color = impact > 0 ? 'text-accent-green' : impact < 0 ? 'text-accent-red' : 'text-text-secondary';
-  const Icon = impact > 0 ? TrendingUp : impact < 0 ? TrendingDown : Minus;
-  const deltaText = `${impact > 0 ? '+' : ''}${formatBRL(impact)}`;
-  const pctText =
-    sub.pct === null
-      ? 'n/d'
-      : `${sub.pct > 0 ? '+' : ''}${sub.pct.toFixed(1)}%`;
-
-  return (
-    <div className={`${ROW_GRID} px-4 py-0.5 pl-10`}>
-      <ChevronRight size={10} style={{ color: sub.color, opacity: 0.5 }} />
-      <div className="flex items-center gap-1.5 min-w-0">
-        <CategoryIcon
-          icon={sub.icon}
-          size={11}
-          className="flex-shrink-0"
-          style={{ color: sub.color }}
-        />
-        <span className="text-[11px] text-text-secondary truncate">{sub.name}</span>
-      </div>
-      <span className="text-[11px] tabular-nums text-text-secondary text-right">
-        {formatBRL(sub.curr)}
-      </span>
-      <span className="text-[11px] tabular-nums text-text-secondary/70 text-right">
-        {formatBRL(sub.prev)}
-      </span>
-      <div className="flex flex-col items-end leading-tight">
-        <span className={`flex items-center gap-1 text-[11px] font-bold tabular-nums ${color}`}>
-          <Icon size={10} />
-          {deltaText}
-        </span>
-        <span className={`text-[10px] tabular-nums opacity-80 ${color}`}>{pctText}</span>
-      </div>
-    </div>
-  );
-}
-
-function ColumnHeader({ showImpactCol = false }: { showImpactCol?: boolean }) {
-  return (
-    <div
-      className={`${ROW_GRID} px-4 py-1 text-[9px] uppercase tracking-wider text-text-secondary/80`}
-    >
-      <span />
-      <span>Categoria</span>
-      <span className="text-right">Atual</span>
-      <span className="text-right">Anterior</span>
-      <span className="text-right">{showImpactCol ? 'Impacto' : '%'}</span>
-    </div>
-  );
-}
-
-// ---------- Helpers ----------
-
-function resolveTrend(
-  pct: number | null,
-  higherIsBetter: boolean,
-  hasPrev: boolean,
-): { color: string; Icon: typeof TrendingUp; pctText: string } {
-  let color = 'text-text-secondary';
-  let Icon: typeof TrendingUp = Minus;
-  let pctText = '—';
-
-  if (!hasPrev) {
-    pctText = 'sem dados';
-  } else if (pct === null) {
-    pctText = 'n/d';
-  } else {
-    const isBetter = higherIsBetter ? pct > 0 : pct < 0;
-    const isWorse = higherIsBetter ? pct < 0 : pct > 0;
-    if (Math.abs(pct) < 0.05) {
-      color = 'text-text-secondary';
-      Icon = Minus;
-    } else if (isBetter) {
-      color = 'text-accent-green';
-      Icon = pct > 0 ? TrendingUp : TrendingDown;
-    } else if (isWorse) {
-      color = 'text-accent-red';
-      Icon = pct > 0 ? TrendingUp : TrendingDown;
-    }
-    const sign = pct > 0 ? '+' : '';
-    pctText = `${sign}${pct.toFixed(1)}%`;
-  }
-
-  return { color, Icon, pctText };
 }
