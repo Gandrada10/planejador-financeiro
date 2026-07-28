@@ -1,30 +1,10 @@
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 
 /**
- * Grade, tipos e helpers de tendência compartilhados pelo painel de Desvio YoY.
- * (Separado de YoyRow.tsx porque o Fast Refresh exige que um arquivo de
- * componente exporte só componentes.)
- *
- * A grade é a MESMA para a linha-resumo (Despesas/Receitas/Resultado) e para as
- * linhas de categoria/subcategoria do drill-down — é isso que faz o total e suas
- * categorias lerem como uma tabela contínua, e o que resolve o truncamento de
- * valores que existia quando os 3 totais dividiam uma faixa de ~110px.
- *
- * A coluna "Anterior" cai abaixo de 34rem via CONTAINER query (não media query):
- * a restrição de largura aqui é o `lg:grid-cols-2` do dashboard, não o viewport.
+ * Tipos e helper de tendência do painel "O que puxou o ano".
+ * (Arquivo separado do componente porque o Fast Refresh exige que um arquivo
+ * de componente exporte só componentes.)
  */
-export const YOY_ROW_GRID =
-  'grid items-center gap-x-2 ' +
-  // Celular: 4 colunas de dinheiro não cabem em 393px — fica nome + atual + Δ.
-  'grid-cols-[14px_minmax(0,1fr)_88px_76px] ' +
-  '@min-[26rem]:grid-cols-[14px_minmax(0,1fr)_96px_104px_68px] ' +
-  '@min-[34rem]:grid-cols-[14px_minmax(0,1fr)_96px_96px_104px_68px]';
-
-/** Coluna Δ R$: some no celular (o % conta a mesma história em menos espaço). */
-export const YOY_DELTA_CELL = 'hidden @min-[26rem]:block';
-
-/** Célula "Anterior": só existe a partir de 34rem de largura do card. */
-export const YOY_PREV_CELL = 'hidden @min-[34rem]:block';
 
 export interface YoySubItem {
   id: string;
@@ -95,17 +75,4 @@ export function resolveTrend(
     text,
     hasValue: true,
   };
-}
-
-/** Cor/ícone de um impacto em R$ no resultado (positivo é sempre bom). */
-export function resolveImpact(impact: number): { color: string; Icon: typeof TrendingUp } {
-  if (impact > 0) return { color: 'text-positive', Icon: TrendingUp };
-  if (impact < 0) return { color: 'text-negative', Icon: TrendingDown };
-  return { color: 'text-ink-3', Icon: Minus };
-}
-
-/** Cor de um delta em R$, respeitando se subir é bom (receita) ou ruim (despesa). */
-export function toneForDelta(delta: number, higherIsBetter: boolean): string {
-  if (Math.abs(delta) < 0.005) return 'text-ink-3';
-  return (higherIsBetter ? delta > 0 : delta < 0) ? 'text-positive' : 'text-negative';
 }
