@@ -21,6 +21,7 @@ function docToProject(id: string, data: Record<string, unknown>): Project {
     status: (data.status as Project['status']) || 'active',
     startDate: (data.startDate as Timestamp)?.toDate() || null,
     endDate: (data.endDate as Timestamp)?.toDate() || null,
+    budget: typeof data.budget === 'number' ? (data.budget as number) : null,
     createdAt: (data.createdAt as Timestamp)?.toDate() || new Date(),
   };
 }

@@ -188,6 +188,13 @@ export interface Project {
   status: 'active' | 'archived';
   startDate: Date | null;
   endDate: Date | null;
+  /**
+   * Orçamento TOTAL do projeto (positivo, em R$). Vira a régua "orçado x
+   * executado" no dashboard. `null`/ausente = projeto sem orçamento definido:
+   * o card mostra só o gasto acumulado, sem barra de progresso. Não há
+   * migração retroativa — projetos antigos nascem sem orçamento.
+   */
+  budget?: number | null;
   createdAt: Date;
 }
 
