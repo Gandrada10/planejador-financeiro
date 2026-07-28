@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Sankey, Layer, Rectangle, ResponsiveContainer } from 'recharts';
 import { MONEY, FONT } from '../../lib/chartTheme';
 import { formatBRL0 } from '../../lib/utils';
@@ -19,16 +20,12 @@ interface Props {
 
 /** Piso: abaixo disso a fatia é um fio invisível e só suja o diagrama. */
 const MIN_SHARE = 0.003;
-/** Espaço vertical por folha: 2 linhas de rótulo (~28px) + respiro. */
-const ROW_SPACE = 44;
 /**
  * Vão mínimo entre nós: o rótulo tem ~24px de altura centrado no nó, então
  * dois nós minúsculos vizinhos precisam de pelo menos isso de distância —
  * com menos, "Luz" escrevia por cima de "Moradia · outros".
  */
 const NODE_PADDING = 30;
-/** Nome maior que isso ganha reticências — o VALOR nunca é cortado. */
-const MAX_NAME = 26;
 const NODE_WIDTH = 10;
 const MARGIN_LEFT = 4;
 /**
@@ -39,7 +36,36 @@ const MARGIN_LEFT = 4;
  * que o olho compara, fica com quase o dobro do espaço.
  */
 const HUB_X = 0.62;
-const hubX = (x: number) => MARGIN_LEFT + (x - MARGIN_LEFT) * HUB_X;
+/** No estreito o movimento se inverte: empurra o meio para a DIREITA, para o
+ *  rótulo da fonte ("R$ 32.657 · 70%") caber antes de esbarrar no nó. */
+const HUB_X_NARROW = 1.15;
+const hubX = (x: number, narrow: boolean) =>
+  MARGIN_LEFT + (x - MARGIN_LEFT) * (narrow ? HUB_X_NARROW : HUB_X);
+
+/**
+ * No celular o card tem ~326px: os 205px de rótulo deixariam 120px de fitas,
+ * com "Receitas" escrevendo por cima de "Caixa do período". Aqui o diagrama
+ * ENCOLHE para caber — rolagem horizontal esconderia justamente os nomes, que
+ * são o conteúdo. Fontes menores, nome mais curto, e a coluna do meio volta ao
+ * lugar original: o deslocamento existe para dar espaço às categorias, e sem
+ * espaço sobrando ele só aproxima o rótulo da fonte do nó do meio.
+ */
+function useNarrow(): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)');
+    const onChange = () => setNarrow(mq.matches);
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+  return narrow;
+}
+
+/** Margem de rótulo, fontes, nome máximo e altura por folha. */
+const WIDE = { label: 205, name: 12.5, value: 11.5, maxName: 26, row: 44, narrow: false };
+const NARROW = { label: 158, name: 10.5, value: 9.5, maxName: 17, row: 38, narrow: true };
 
 interface SankeyNodeDef {
   name: string;
@@ -53,6 +79,8 @@ interface SankeyNodeDef {
   selected?: boolean;
   /** 1 = coluna do meio (o nó "Caixa"), a única que reposicionamos. */
   col?: 0 | 1 | 2;
+  /** Escala tipográfica/geométrica corrente (celular vs resto). */
+  s: typeof WIDE;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- recharts não tipa os
@@ -60,15 +88,21 @@ interface SankeyNodeDef {
 
 function SankeyNodeShape(props: any) {
   const { y, width, height, payload } = props;
-  const x = payload.col === 1 ? hubX(props.x) : props.x;
+  const s = payload.s;
+  const x = payload.col === 1 ? hubX(props.x, s.narrow) : props.x;
   const tx = x + width + 8;
   const clickable = !!payload.onSelect;
   // Sempre DUAS linhas: nome em cima (com reticências se preciso), valor + %
   // embaixo. O modo compacto de uma linha só cortava o valor na borda com
   // nomes longos e engolia o percentual — exatamente o defeito reportado.
   const name =
-    payload.name.length > MAX_NAME ? `${payload.name.slice(0, MAX_NAME - 1)}…` : payload.name;
+    payload.name.length > s.maxName ? `${payload.name.slice(0, s.maxName - 1)}…` : payload.name;
   const showDelta = typeof payload.delta === 'number' && Math.abs(payload.delta) >= 1;
+
+  // No celular o nó de passagem fica SEM rótulo: "Caixa do período" não cabe
+  // entre as fontes e as categorias sem escrever por cima de alguém, e o valor
+  // dele é o total — já dedutível das duas pontas.
+  const bare = s.narrow && payload.col === 1;
 
   return (
     <Layer
@@ -85,14 +119,17 @@ function SankeyNodeShape(props: any) {
         stroke={payload.selected ? '#5ee0a0' : undefined}
         strokeWidth={payload.selected ? 1.5 : 0}
       />
+      {bare && null}
       {/* Área de toque generosa sobre o rótulo — a barra tem 10px de largura */}
-      {clickable && <rect x={x} y={y - 6} width={205} height={height + 12} fill="transparent" />}
+      {clickable && <rect x={x} y={y - 6} width={s.label} height={height + 12} fill="transparent" />}
+      {!bare && (
+        <>
       <text
         x={tx}
-        y={y + height / 2 - 3}
+        y={y + height / 2 - (s.narrow ? 2 : 3)}
         textAnchor="start"
         fontFamily={FONT}
-        fontSize={12.5}
+        fontSize={s.name}
         fontWeight={600}
         fill={payload.selected ? '#5ee0a0' : '#f5f4f2'}
         stroke="#1b1b1e"
@@ -104,10 +141,10 @@ function SankeyNodeShape(props: any) {
       </text>
       <text
         x={tx}
-        y={y + height / 2 + 13}
+        y={y + height / 2 + (s.narrow ? 11 : 13)}
         textAnchor="start"
         fontFamily={FONT}
-        fontSize={11.5}
+        fontSize={s.value}
         fill="#8f8e89"
         stroke="#1b1b1e"
         strokeWidth={3}
@@ -125,6 +162,8 @@ function SankeyNodeShape(props: any) {
           </tspan>
         )}
       </text>
+        </>
+      )}
     </Layer>
   );
 }
@@ -133,9 +172,10 @@ function SankeyLinkShape(props: any) {
   const { sourceY, targetY, linkWidth, payload, index } = props;
   // A ponta que encosta na coluna do meio acompanha o nó; a curva é
   // recalculada em cima das novas pontas para não torcer.
+  const narrow = payload.source.s.narrow;
   const sourceX =
-    payload.source.col === 1 ? hubX(props.sourceX - NODE_WIDTH) + NODE_WIDTH : props.sourceX;
-  const targetX = payload.target.col === 1 ? hubX(props.targetX) : props.targetX;
+    payload.source.col === 1 ? hubX(props.sourceX - NODE_WIDTH, narrow) + NODE_WIDTH : props.sourceX;
+  const targetX = payload.target.col === 1 ? hubX(props.targetX, narrow) : props.targetX;
   const mid = (sourceX + targetX) / 2;
   const sourceControlX = mid;
   const targetControlX = mid;
@@ -187,6 +227,9 @@ export function CashFlowSankey({
   onSelectCategory,
   averages,
 }: Props) {
+  // Hook antes de qualquer saída antecipada.
+  const scale = useNarrow() ? NARROW : WIDE;
+
   const outCats = categories
     .filter((c) => c.amount < 0)
     .map((c) => ({ ...c, value: -c.amount }))
@@ -206,7 +249,7 @@ export function CashFlowSankey({
   const links: Array<{ source: number; target: number; value: number }> = [];
   const push = (n: SankeyNodeDef) => nodes.push(n) - 1;
   const node = (name: string, color: string, value: number, extra: Partial<SankeyNodeDef> = {}) =>
-    push({ name, color, share: shareOf(value), unit, ...extra });
+    push({ name, color, share: shareOf(value), unit, s: scale, ...extra });
 
   // ---- Fontes, da maior para a menor ----
   // Déficit vira "Uso de reservas" (não é resultado líquido — é de onde veio
@@ -228,9 +271,9 @@ export function CashFlowSankey({
   let hubIdx: number;
   if (sources.length <= 1) {
     // Sem nó de passagem só existem 2 colunas: nada a reposicionar.
-    hubIdx = sources[0]?.idx ?? push({ name: 'Caixa', color: MONEY.balance, share: null, unit });
+    hubIdx = sources[0]?.idx ?? push({ name: 'Caixa', color: MONEY.balance, share: null, unit, s: scale });
   } else {
-    hubIdx = push({ name: 'Caixa do período', color: MONEY.balance, share: null, unit, col: 1 });
+    hubIdx = push({ name: 'Caixa do período', color: MONEY.balance, share: null, unit, s: scale, col: 1 });
     for (const s of sources) links.push({ source: s.idx, target: hubIdx, value: s.value });
   }
 
@@ -259,7 +302,7 @@ export function CashFlowSankey({
   // Altura pela coluna mais cheia (as folhas), que é quem precisa de rótulo.
   const sourceIdx = new Set(links.map((l) => l.source));
   const leafCount = nodes.filter((_, i) => !sourceIdx.has(i)).length;
-  const height = Math.max(320, leafCount * ROW_SPACE);
+  const height = Math.max(320, leafCount * scale.row);
 
   return (
     <div className="w-full" style={{ height }}>
@@ -268,7 +311,7 @@ export function CashFlowSankey({
           data={{ nodes, links }}
           nodeWidth={NODE_WIDTH}
           nodePadding={NODE_PADDING}
-          margin={{ top: 12, right: 205, bottom: 12, left: 4 }}
+          margin={{ top: 12, right: scale.label, bottom: 12, left: MARGIN_LEFT }}
           node={SankeyNodeShape}
           link={SankeyLinkShape}
           // Preserva a ordem de inserção no eixo vertical (o padrão reordena
