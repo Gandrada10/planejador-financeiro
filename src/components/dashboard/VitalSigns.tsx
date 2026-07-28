@@ -7,6 +7,7 @@ import {
   countsInTotals,
   getExcludedFromTotalsIds,
   isIncomeAmount,
+  isExpenseAmount,
   accountingDate,
 } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
@@ -22,7 +23,6 @@ interface BudgetSummary {
 interface Props {
   transactions: Transaction[];
   categories: Category[];
-  monthYear: string;
   /** Rótulo do mês selecionado, ex.: "junho de 2026". */
   monthLabel: string;
   /** Receitas do mês (positivo) e despesas do mês (negativo), como vêm do DashboardPage. */
@@ -43,8 +43,10 @@ interface Props {
  *
  *   fileira 1 — o MÊS selecionado: receitas, despesas, resultado. A conta
  *   inteira à vista (receitas − despesas = resultado), auto-verificável.
- *   fileira 2 — TENDÊNCIA e plano: taxa de poupança do ano, custo de vida
- *   (média móvel 12M) e metas.
+ *   fileira 2 — TENDÊNCIA e plano: taxa de poupança e custo de vida, ambos na
+ *   MESMA janela de 12 meses (assim um deriva do outro, e nenhum dos dois
+ *   muda de significado ao longo do ano como fazia o acumulado), e metas.
+ *   A leitura acumulada do ano continua existindo no card de Desvio YoY.
  *
  * Três por fileira também é o que quebra bem: 3+3 no desktop, empilhado no
  * celular — cinco tiles numa fileira só deixariam órfão em tela média.
@@ -53,7 +55,6 @@ interface Props {
 export function VitalSigns({
   transactions,
   categories,
-  monthYear,
   monthLabel,
   monthIncome,
   monthExpenses,
@@ -67,66 +68,55 @@ export function VitalSigns({
 
   const data = useMemo(() => {
     const excludedIds = getExcludedFromTotalsIds(categories);
-    const [y, m] = monthYear.split('-').map(Number);
-    const prevYear = y - 1;
 
-    let currInc = 0;
-    let currExp = 0;
-    let prevInc = 0;
-    let prevExp = 0;
-    const incomeByMonth = new Map<string, number>();
-
+    const byMonth = new Map<string, { inc: number; exp: number }>();
     for (const t of transactions) {
       if (!countsInTotals(t, excludedIds)) continue;
-      const ad = accountingDate(t);
-      const income = isIncomeAmount(t);
-
-      if (income) {
-        const key = getMonthYear(ad);
-        incomeByMonth.set(key, (incomeByMonth.get(key) || 0) + t.amount);
+      const key = getMonthYear(accountingDate(t));
+      let e = byMonth.get(key);
+      if (!e) {
+        e = { inc: 0, exp: 0 };
+        byMonth.set(key, e);
       }
-
-      // Taxa de poupança YTD: Jan..m do ano do seletor vs mesmo período anterior.
-      const ty = ad.getFullYear();
-      const tm = ad.getMonth() + 1;
-      if (tm > m) continue;
-      const inc = income ? t.amount : 0;
-      const exp = income ? 0 : -t.amount;
-      if (ty === y) {
-        currInc += inc;
-        currExp += exp;
-      } else if (ty === prevYear) {
-        prevInc += inc;
-        prevExp += exp;
-      }
+      if (isIncomeAmount(t)) e.inc += t.amount;
+      // Reembolso é contra-despesa: abate o gasto do mês, não vira receita.
+      else if (isExpenseAmount(t)) e.exp += -t.amount;
     }
 
-    // Receita média dos 12 meses encerrados no mesmo mês do custo de vida —
-    // para os dois deltas do topo terem a mesma janela de referência.
-    let incomeAvg12m: number | null = null;
-    if (col.endKey) {
-      let sum = 0;
-      let months = 0;
+    const window12 = (endKey: string) => {
+      let inc = 0;
+      let exp = 0;
       for (let i = 0; i < 12; i++) {
-        const v = incomeByMonth.get(getMonthYearOffset(col.endKey, -i));
-        if (v !== undefined && v !== 0) {
-          sum += v;
-          months++;
+        const e = byMonth.get(getMonthYearOffset(endKey, -i));
+        if (e) {
+          inc += e.inc;
+          exp += e.exp;
         }
       }
-      if (months > 0) incomeAvg12m = sum / months;
-    }
+      return { inc, exp };
+    };
+    const rateOf = (w: { inc: number; exp: number }) => (w.inc > 0 ? (w.inc - w.exp) / w.inc : null);
 
-    const currRate = currInc > 0 ? (currInc - currExp) / currInc : null;
-    const prevRate = prevInc > 0 ? (prevInc - prevExp) / prevInc : null;
+    let currRate: number | null = null;
+    let prevRate: number | null = null;
+    let incomeAvg12m: number | null = null;
+
+    if (col.endKey) {
+      const curr = window12(col.endKey);
+      currRate = rateOf(curr);
+      prevRate = rateOf(window12(getMonthYearOffset(col.endKey, -12)));
+      // Mesmo divisor do custo de vida (12 na janela cheia; nº de meses com
+      // dado na parcial) — sem isso os dois números do grupo não fecham.
+      const divisor = col.endPartialMonths ?? 12;
+      if (curr.inc > 0) incomeAvg12m = curr.inc / divisor;
+    }
 
     return {
       incomeAvg12m,
       currRate,
       savingsDeltaPp: currRate !== null && prevRate !== null ? (currRate - prevRate) * 100 : null,
-      prevYear,
     };
-  }, [transactions, categories, monthYear, col.endKey]);
+  }, [transactions, categories, col.endKey, col.endPartialMonths]);
 
   const spentMonth = Math.abs(monthExpenses);
 
@@ -207,20 +197,22 @@ export function VitalSigns({
 
       <Group label="Tendência e plano">
         <Tile
-          label="Taxa de poupança · ano"
-          hint="Resultado ÷ receitas, acumulados de janeiro até o mês selecionado. Negativa: no ano, você gastou mais do que ganhou (ex.: −24% = saíram R$ 124 para cada R$ 100 que entraram)."
+          label="Taxa de poupança · 12 meses"
+          hint={`Resultado ÷ receitas nos 12 meses encerrados em ${
+            col.endLabel || 'último mês fechado'
+          } — a mesma janela do custo de vida ao lado, então os dois fecham entre si (receita média = custo de vida ÷ (1 − taxa)). Negativa: no período você gastou mais do que ganhou (ex.: −24% = saíram R$ 124 para cada R$ 100 que entraram).`}
           value={data.currRate !== null ? `${(data.currRate * 100).toFixed(1).replace('.', ',')}%` : '—'}
           delta={
             data.savingsDeltaPp !== null
               ? Math.abs(data.savingsDeltaPp) < 0.05
-                ? { Icon: Minus, tone: 'text-ink-3', text: '0,0 p.p.', context: `vs ${data.prevYear}` }
+                ? { Icon: Minus, tone: 'text-ink-3', text: '0,0 p.p.', context: 'vs 12M anteriores' }
                 : {
                     Icon: data.savingsDeltaPp > 0 ? TrendingUp : TrendingDown,
                     tone: data.savingsDeltaPp > 0 ? 'text-positive' : 'text-negative',
                     text: `${data.savingsDeltaPp > 0 ? '+' : '−'}${Math.abs(data.savingsDeltaPp)
                       .toFixed(1)
                       .replace('.', ',')} p.p.`,
-                    context: `vs ${data.prevYear}`,
+                    context: 'vs 12M anteriores',
                   }
               : undefined
           }

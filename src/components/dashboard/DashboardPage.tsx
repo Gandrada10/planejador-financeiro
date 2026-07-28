@@ -218,7 +218,6 @@ export function DashboardPage() {
         <VitalSigns
           transactions={transactions}
           categories={categories}
-          monthYear={monthYear}
           monthLabel={getMonthLabel(monthYear)}
           monthIncome={totalEntries}
           monthExpenses={totalExits}
