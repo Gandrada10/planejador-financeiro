@@ -205,15 +205,22 @@ export function ProjectsPanel({ projects, transactions, excludedIds, monthYear }
         )}
       </div>
 
-      {active.length === 0 ? (
-        <p className="text-caption text-ink-3">Nenhum projeto em andamento em {year}.</p>
-      ) : (
-        <div className="space-y-3">
-          {active.map((p) => (
-            <Row key={p.id} p={p} />
-          ))}
-        </div>
-      )}
+      {/* Duas seções rotuladas: em andamento é o que ainda consome dinheiro;
+          concluído é histórico do ano, então vem depois e recolhido. */}
+      <div className="space-y-2">
+        <p className="text-caption font-semibold uppercase tracking-wider text-ink-3">
+          Em andamento
+        </p>
+        {active.length === 0 ? (
+          <p className="text-caption text-ink-3">Nenhum projeto em andamento em {year}.</p>
+        ) : (
+          <div className="space-y-3">
+            {active.map((p) => (
+              <Row key={p.id} p={p} />
+            ))}
+          </div>
+        )}
+      </div>
 
       {done.length > 0 && (
         <div className="pt-2 border-t border-border">
@@ -221,11 +228,14 @@ export function ProjectsPanel({ projects, transactions, excludedIds, monthYear }
             type="button"
             onClick={() => setShowDone((v) => !v)}
             aria-expanded={showDone}
-            className="tap w-full text-left text-caption text-ink-3 hover:text-text-secondary transition-colors"
+            className="tap w-full flex items-baseline gap-1.5 text-left text-caption font-semibold uppercase tracking-wider text-ink-3 hover:text-text-secondary transition-colors"
           >
-            {showDone ? '⌄' : '›'} {done.length}{' '}
-            {done.length === 1 ? 'concluído' : 'concluídos'} em {year}
-            {doneYear < 0 && <> · <span className="tnum">{formatBRL0(-doneYear)}</span> no ano</>}
+            <span className="normal-case tracking-normal">{showDone ? '⌄' : '›'}</span>
+            Concluídos em {year}
+            <span className="font-normal normal-case tracking-normal">
+              ({done.length}
+              {doneYear < 0 && <> · <span className="tnum">{formatBRL0(-doneYear)}</span> no ano</>})
+            </span>
           </button>
           {showDone && (
             <div className="space-y-3 mt-2.5">

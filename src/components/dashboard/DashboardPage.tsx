@@ -225,12 +225,13 @@ export function DashboardPage() {
           costOfLiving={costOfLiving}
         />
 
-        {/* ---- FLUXO | ACOMPANHAMENTO ----
-            Esquerda (mais larga, 4/7): só o Sankey — ele estica até a altura
-            do trio da direita e centraliza o diagrama no espaço que sobrar.
-            Direita (3/7): o que puxou o ano, metas e projetos; clicar numa
-            categoria do fluxo troca o primeiro pela análise dela, cara a
-            cara com o diagrama que a gerou. */}
+        {/* ---- FLUXO | COMPROMISSOS ----
+            Esquerda (4/7): só o Sankey — ele estica até a altura da coluna
+            vizinha e centraliza o diagrama no espaço que sobrar.
+            Direita (3/7): projetos e metas, o que você se comprometeu a
+            fazer com o dinheiro. A análise da categoria clicada entra no
+            TOPO da coluna, cara a cara com o diagrama que a gerou, sem
+            esconder nenhum dos dois. */}
         <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4">
           <MonthFlowPanel
             transactions={transactions}
@@ -242,7 +243,7 @@ export function DashboardPage() {
           />
 
           <div className="space-y-4">
-            {flowCategory ? (
+            {flowCategory && (
               <CategoryDetailPanel
                 transactions={transactions}
                 categories={categories}
@@ -251,15 +252,15 @@ export function DashboardPage() {
                 isMonthInProgress={isMonthInProgress}
                 onClose={() => setFlowCategory(null)}
               />
-            ) : (
-              <YoyDeviationPanel
-                transactions={transactions}
-                categories={categories}
-                monthYear={monthYear}
-                isMonthInProgress={isMonthInProgress}
-                periodLabel={periodLabel}
-              />
             )}
+
+            <ProjectsPanel
+              projects={projects}
+              transactions={transactions}
+              excludedIds={excludedIds}
+              monthYear={monthYear}
+            />
+
             {/* Metas de despesas */}
             <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
               <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
@@ -331,18 +332,10 @@ export function DashboardPage() {
               )}
             </div>
 
-            <ProjectsPanel
-              projects={projects}
-              transactions={transactions}
-              excludedIds={excludedIds}
-              monthYear={monthYear}
-            />
           </div>
         </div>
 
-        {/* A evolução mês a mês em largura total — 24 barras respiram — e o
-            Caixa fecha a página: conferência por conta é o último passo da
-            leitura, não o primeiro. */}
+        {/* A evolução mês a mês em largura total: 24 barras respiram. */}
         <ExpensesPanel
           transactions={transactions}
           categories={categories}
@@ -351,15 +344,28 @@ export function DashboardPage() {
           isMonthInProgress={isMonthInProgress}
         />
 
-        <CashFlowTable
-          data={cashFlowData}
-          totalEntries={totalEntries}
-          totalExits={totalExits}
-          totalBalance={totalBalance}
-          yearBalance={yearBalance}
-          avg12months={avg12months}
-          currentYear={currentYear}
-        />
+        {/* ---- FECHAMENTO: o mês conferido | o ano explicado ----
+            Mesma proporção da faixa de cima, para as colunas fecharem
+            alinhadas de ponta a ponta da página. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4 items-start">
+          <CashFlowTable
+            data={cashFlowData}
+            totalEntries={totalEntries}
+            totalExits={totalExits}
+            totalBalance={totalBalance}
+            yearBalance={yearBalance}
+            avg12months={avg12months}
+            currentYear={currentYear}
+          />
+
+          <YoyDeviationPanel
+            transactions={transactions}
+            categories={categories}
+            monthYear={monthYear}
+            isMonthInProgress={isMonthInProgress}
+            periodLabel={periodLabel}
+          />
+        </div>
         </div>
       ) : (
         <div className="bg-bg-card border border-border rounded-card p-10 text-center space-y-2">

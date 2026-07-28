@@ -64,10 +64,7 @@ export function CashFlowTable({
   }).filter((g) => g.rows.length > 0);
 
   return (
-    <div className="bg-bg-card border border-border rounded-card p-4">
-      {/* Em largura total, colunas de dinheiro coladas nas bordas do card
-          viram um deserto no meio — o conteúdo concentra numa faixa central. */}
-      <div className="max-w-[880px] mx-auto space-y-3">
+    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
       <h3 className="text-title font-semibold text-text-primary">Resultados de caixa</h3>
 
       {/* CELULAR: lista empilhada. Quatro colunas de dinheiro em 393px colidem
@@ -253,7 +250,6 @@ export function CashFlowTable({
             </tr>
           </tfoot>
         </table>
-      </div>
       </div>
     </div>
   );

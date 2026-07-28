@@ -29,6 +29,17 @@ const ROW_SPACE = 44;
 const NODE_PADDING = 30;
 /** Nome maior que isso ganha reticências — o VALOR nunca é cortado. */
 const MAX_NAME = 26;
+const NODE_WIDTH = 10;
+const MARGIN_LEFT = 4;
+/**
+ * O Recharts espalha as 3 colunas (fontes · caixa · categorias) em intervalos
+ * IGUAIS, então a fita "Receitas → Caixa" — que não carrega informação nenhuma
+ * além do próprio valor — comia metade da largura. Puxamos a coluna do meio
+ * para 62% da posição original: o trecho das categorias, onde estão as fitas
+ * que o olho compara, fica com quase o dobro do espaço.
+ */
+const HUB_X = 0.62;
+const hubX = (x: number) => MARGIN_LEFT + (x - MARGIN_LEFT) * HUB_X;
 
 interface SankeyNodeDef {
   name: string;
@@ -40,13 +51,16 @@ interface SankeyNodeDef {
   /** Presente nas categorias de gasto: abre a análise no painel lateral. */
   onSelect?: () => void;
   selected?: boolean;
+  /** 1 = coluna do meio (o nó "Caixa"), a única que reposicionamos. */
+  col?: 0 | 1 | 2;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- recharts não tipa os
    props injetados em node/link customizados do Sankey */
 
 function SankeyNodeShape(props: any) {
-  const { x, y, width, height, payload } = props;
+  const { y, width, height, payload } = props;
+  const x = payload.col === 1 ? hubX(props.x) : props.x;
   const tx = x + width + 8;
   const clickable = !!payload.onSelect;
   // Sempre DUAS linhas: nome em cima (com reticências se preciso), valor + %
@@ -116,7 +130,15 @@ function SankeyNodeShape(props: any) {
 }
 
 function SankeyLinkShape(props: any) {
-  const { sourceX, targetX, sourceY, targetY, sourceControlX, targetControlX, linkWidth, payload, index } = props;
+  const { sourceY, targetY, linkWidth, payload, index } = props;
+  // A ponta que encosta na coluna do meio acompanha o nó; a curva é
+  // recalculada em cima das novas pontas para não torcer.
+  const sourceX =
+    payload.source.col === 1 ? hubX(props.sourceX - NODE_WIDTH) + NODE_WIDTH : props.sourceX;
+  const targetX = payload.target.col === 1 ? hubX(props.targetX) : props.targetX;
+  const mid = (sourceX + targetX) / 2;
+  const sourceControlX = mid;
+  const targetControlX = mid;
   const id = `sankey-link-${index}`;
   return (
     <Layer>
@@ -205,9 +227,10 @@ export function CashFlowSankey({
   // de uma das entradas ali contradizia o próprio valor exibido ao lado.
   let hubIdx: number;
   if (sources.length <= 1) {
+    // Sem nó de passagem só existem 2 colunas: nada a reposicionar.
     hubIdx = sources[0]?.idx ?? push({ name: 'Caixa', color: MONEY.balance, share: null, unit });
   } else {
-    hubIdx = push({ name: 'Caixa do período', color: MONEY.balance, share: null, unit });
+    hubIdx = push({ name: 'Caixa do período', color: MONEY.balance, share: null, unit, col: 1 });
     for (const s of sources) links.push({ source: s.idx, target: hubIdx, value: s.value });
   }
 
@@ -243,7 +266,7 @@ export function CashFlowSankey({
       <ResponsiveContainer width="100%" height="100%">
         <Sankey
           data={{ nodes, links }}
-          nodeWidth={10}
+          nodeWidth={NODE_WIDTH}
           nodePadding={NODE_PADDING}
           margin={{ top: 12, right: 205, bottom: 12, left: 4 }}
           node={SankeyNodeShape}

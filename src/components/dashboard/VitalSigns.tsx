@@ -142,10 +142,11 @@ export function VitalSigns({
   const monthTitle = monthLabel.charAt(0).toUpperCase() + monthLabel.slice(1);
 
   return (
-    // Em telas largas os dois grupos ficam LADO A LADO (3 + 3 = 6 tiles na
-    // mesma linha), cada um com seu rótulo — em 1900px, seis tiles em duas
-    // fileiras viravam cartões de ~560px com um número pequeno boiando dentro.
-    <div className="flex flex-col gap-3 2xl:grid 2xl:grid-cols-2 2xl:gap-x-5">
+    // Em telas largas os dois grupos ficam LADO A LADO, cada um com seu
+    // rótulo. As colunas usam a MESMA proporção (4fr/3fr) e o mesmo gap da
+    // grade de cards abaixo: assim a fileira de indicadores fecha alinhada
+    // com "Fluxo do dinheiro" e "O que puxou o ano", em vez de cortar no meio.
+    <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[4fr_3fr] lg:gap-4">
       <Group label={monthTitle}>
         <Tile
           label="Receitas do mês"
