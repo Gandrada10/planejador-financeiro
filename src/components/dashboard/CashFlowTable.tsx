@@ -11,6 +11,16 @@ export interface AccountFlow {
   cycleStatus?: 'open' | 'closed';
 }
 
+/**
+ * Faixa de leitura no hover. Tinta branca em vez de `bg-elevated`: o elevated
+ * fica a 8 níveis do fundo do card e some numa faixa de 1 linha — aqui ela
+ * precisa ser vista de relance, atravessando 4 colunas de dinheiro.
+ * Só em ponteiro FINO: no toque não existe hover e o estado ficaria grudado
+ * na última linha tocada.
+ */
+const ROW_HOVER =
+  '[@media(hover:hover)]:hover:bg-white/[0.06] transition-colors';
+
 interface Props {
   data: AccountFlow[];
   totalEntries: number;
@@ -184,7 +194,9 @@ export function CashFlowTable({
             const single = g.rows.length === 1 ? g.rows[0] : null;
             return (
               <tbody key={g.label} className="border-b border-border/40">
-                <tr>
+                {/* Iluminação de linha inteira no hover: percorrer 4 colunas de
+                    dinheiro sem uma faixa guia é onde o olho troca de linha. */}
+                <tr className={ROW_HOVER}>
                   <td className="py-1.5 pr-3">
                     <div className="flex items-baseline gap-2 flex-wrap min-w-0">
                       <span className="text-caption uppercase tracking-wider text-ink-3 font-semibold">
@@ -207,7 +219,7 @@ export function CashFlowTable({
 
                 {!single &&
                   g.rows.map((d) => (
-                    <tr key={d.accountName}>
+                    <tr key={d.accountName} className={ROW_HOVER}>
                       <td className="py-1 pr-3 pl-3 text-text-secondary">
                         <span className="truncate">
                           {d.accountName}
@@ -226,7 +238,7 @@ export function CashFlowTable({
           })}
 
           <tfoot>
-            <tr className="border-t border-border">
+            <tr className={`border-t border-border ${ROW_HOVER}`}>
               <td className="py-2 pr-3 text-text-primary font-semibold">Total (mês)</td>
               <td className="py-2 px-3 text-right tnum text-accent-green font-semibold">{formatBRL(totalEntries)}</td>
               <td className="py-2 px-3 text-right tnum text-accent-red font-semibold">{formatBRL(totalExits)}</td>
@@ -234,14 +246,14 @@ export function CashFlowTable({
                 {formatBRL(totalBalance)}
               </td>
             </tr>
-            <tr>
+            <tr className={ROW_HOVER}>
               <td className="py-1.5 pr-3 text-text-secondary">Acumulado {currentYear}</td>
               <td className="py-1.5 px-3" colSpan={2} />
               <td className={`py-1.5 pl-3 text-right tnum ${yearBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                 {formatBRL(yearBalance)}
               </td>
             </tr>
-            <tr>
+            <tr className={ROW_HOVER}>
               <td className="py-1.5 pr-3 text-text-secondary">Média mensal (12M)</td>
               <td className="py-1.5 px-3" colSpan={2} />
               <td className={`py-1.5 pl-3 text-right tnum ${avg12months >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>

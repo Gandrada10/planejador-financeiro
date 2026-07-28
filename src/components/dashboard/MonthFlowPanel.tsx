@@ -49,10 +49,9 @@ export function MonthFlowPanel({
   }, [transactions, categories, monthYear, isMonthInProgress, period]);
 
   return (
-    // h-full + flex: o card estica até a altura da coluna vizinha (o trio
-    // O que puxou o ano / Metas / Projetos) e o diagrama CENTRALIZA no espaço
-    // que sobrar — espaço vazio distribuído é harmonia, colado no topo é vão.
-    <div className="bg-bg-card border border-border rounded-card p-4 h-full flex flex-col gap-3">
+    // Altura NATURAL: a coluna vizinha cresce sozinha quando a análise abre
+    // ou quando entram mais metas/projetos, sem arrastar o diagrama junto.
+    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
       <div className="flex items-start justify-between gap-2 flex-wrap">
         <div className="min-w-0">
           <h3 className="text-title font-semibold text-text-primary">Fluxo do dinheiro</h3>
@@ -79,17 +78,15 @@ export function MonthFlowPanel({
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col justify-center min-h-0">
-        <CashFlowSankey
-          income={flow.income}
-          balance={flow.balance}
-          categories={flow.categories}
-          unit={period === 'm12' ? '/mês' : ''}
-          selectedId={selectedCategory}
-          onSelectCategory={(id) => onSelectCategory(id === selectedCategory ? null : id)}
-          averages={averages}
-        />
-      </div>
+      <CashFlowSankey
+        income={flow.income}
+        balance={flow.balance}
+        categories={flow.categories}
+        unit={period === 'm12' ? '/mês' : ''}
+        selectedId={selectedCategory}
+        onSelectCategory={(id) => onSelectCategory(id === selectedCategory ? null : id)}
+        averages={averages}
+      />
 
       {flow.balance < 0 && (
         <p className="text-caption text-ink-3">

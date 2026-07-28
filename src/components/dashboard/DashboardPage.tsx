@@ -231,8 +231,12 @@ export function DashboardPage() {
             Direita (3/7): projetos e metas, o que você se comprometeu a
             fazer com o dinheiro. A análise da categoria clicada entra no
             TOPO da coluna, cara a cara com o diagrama que a gerou, sem
-            esconder nenhum dos dois. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4">
+            esconder nenhum dos dois.
+
+            items-start: cada coluna tem altura própria. Abrir a análise
+            empurra metas e projetos para baixo SEM esticar o fluxo — o
+            diagrama não pode mudar de tamanho a cada clique. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4 items-start">
           <MonthFlowPanel
             transactions={transactions}
             categories={categories}

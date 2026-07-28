@@ -64,7 +64,7 @@ function useNarrow(): boolean {
 }
 
 /** Margem de rótulo, fontes, nome máximo e altura por folha. */
-const WIDE = { label: 205, name: 12.5, value: 11.5, maxName: 26, row: 44, narrow: false };
+const WIDE = { label: 205, name: 13, value: 11.5, maxName: 26, row: 44, narrow: false };
 const NARROW = { label: 158, name: 10.5, value: 9.5, maxName: 17, row: 38, narrow: true };
 
 interface SankeyNodeDef {
