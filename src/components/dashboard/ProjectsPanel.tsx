@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react';
 import { formatBRL, formatBRL0, getMonthYear, countsInTotals, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { BudgetRuler } from '../shared/BudgetRuler';
+import { budgetLabel } from '../shared/budgetShared';
+
+const MONTH_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+const since = (d: Date) => `${MONTH_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
 import type { Project, Transaction } from '../../types';
 
 interface Props {
@@ -16,87 +21,6 @@ interface ProjectRow extends Project {
   countMonth: number;
   firstYear: number | null;
   lastYear: number | null;
-}
-
-/** Fatia da trilha que cabe ao orçado; o resto é a zona de estouro. */
-const BUDGET_ZONE = 86;
-/** Teto da zona de estouro: ela representa de 100% a 200% do orçado. */
-const OVER_CAP = 200;
-/** Piso visual do excedente — 102% precisa aparecer, não virar um fio. */
-const MIN_OVER = 0.16;
-/** A partir daqui o rótulo avisa que está perto de estourar. */
-const NEAR = 85;
-
-const MONTH_ABBR = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
-const since = (d: Date) => `${MONTH_ABBR[d.getMonth()]}/${String(d.getFullYear()).slice(2)}`;
-
-/**
- * Régua de orçamento no idioma do bullet chart, com ZONA DE ESTOURO
- * RESERVADA: a trilha reserva sempre uma faixa à direita para o excedente, e
- * a linha do 100% fica na MESMA posição em todas as linhas do card — é isso
- * que deixa os projetos comparáveis de relance.
- *
- * Enquanto não é atingida, a faixa é apenas translúcida (sem cor de alarme).
- * Ao estourar, o preenchimento do orçado vira cinza (deixou de ser progresso,
- * virou teto ultrapassado) e o excedente cresce dentro da faixa até 200% do
- * orçado; daí em diante ela satura hachurada — não cresce mais, só muda de
- * aparência, e o valor em reais ao lado carrega a magnitude real.
- */
-function BudgetBar({ spent, budget, color }: { spent: number; budget: number | null; color: string }) {
-  if (budget === null || budget <= 0) {
-    return (
-      <div className="h-2.5 rounded-full bg-elevated overflow-hidden">
-        <div className="h-full w-full opacity-30" style={{ backgroundColor: color }} />
-      </div>
-    );
-  }
-
-  const pct = (spent / budget) * 100;
-  const over = pct > 100;
-  const overRatio = over ? Math.max(Math.min((pct - 100) / (OVER_CAP - 100), 1), MIN_OVER) : 0;
-  const saturated = pct >= OVER_CAP;
-
-  return (
-    <div className="relative h-2.5">
-      <div className="absolute inset-0 rounded-full overflow-hidden flex">
-        <div className="h-full bg-elevated" style={{ width: `${BUDGET_ZONE}%` }}>
-          <div
-            className="h-full"
-            style={{ width: `${Math.min(pct, 100)}%`, backgroundColor: over ? '#8f8e89' : color }}
-          />
-        </div>
-        {/* Zona reservada: translúcida enquanto intacta — sem alarme à toa. */}
-        <div
-          className="h-full"
-          style={{ width: `${100 - BUDGET_ZONE}%`, backgroundColor: 'rgba(255,255,255,0.05)' }}
-        >
-          {over && (
-            <div
-              className="h-full"
-              style={
-                saturated
-                  ? { width: '100%', backgroundImage: 'repeating-linear-gradient(135deg, #e05a4d 0 4px, #b8453a 4px 8px)' }
-                  : { width: `${overRatio * 100}%`, backgroundColor: '#e05a4d' }
-              }
-            />
-          )}
-        </div>
-      </div>
-      {/* Marcador do 100%: mesma posição em toda linha do card. */}
-      <div
-        className="absolute top-[-2px] bottom-[-2px] w-[2px] rounded-full"
-        style={{ left: `${BUDGET_ZONE}%`, backgroundColor: '#f5f4f2', opacity: 0.85 }}
-      />
-    </div>
-  );
-}
-
-function budgetLabel(spent: number, budget: number | null) {
-  if (budget === null || budget <= 0) return { text: 'sem orçamento', cls: 'text-ink-3' };
-  const pct = (spent / budget) * 100;
-  if (pct > 100) return { text: `estourou ${formatBRL0(spent - budget)}`, cls: 'text-negative font-semibold' };
-  if (pct >= NEAR) return { text: `faltam ${formatBRL0(budget - spent)}`, cls: 'text-status-warn' };
-  return { text: `faltam ${formatBRL0(budget - spent)}`, cls: 'text-ink-3' };
 }
 
 /**
@@ -271,7 +195,7 @@ function Row({ p, muted }: { p: ProjectRow; muted?: boolean }) {
         </span>
       </div>
 
-      <BudgetBar spent={spent} budget={p.budget ?? null} color={p.color} />
+      <BudgetRuler spent={spent} budget={p.budget ?? null} color={p.color} />
 
       <div
         className="flex items-baseline gap-2 text-caption min-w-0"

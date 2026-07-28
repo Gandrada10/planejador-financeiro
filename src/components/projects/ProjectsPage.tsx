@@ -4,6 +4,7 @@ import { useProjects } from '../../hooks/useProjects';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { formatBRL, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { BudgetRuler } from '../shared/BudgetRuler';
 import type { Project, Transaction } from '../../types';
 
 const PROJECT_COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
@@ -345,6 +346,12 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
             Saldo: {formatBRL(totals.balance)}
           </span>
         </div>
+
+        {/* Orçado x executado — a mesma régua do dashboard, para o número que
+            você digita aqui ter resposta aqui. */}
+        {project.budget != null && project.budget > 0 && (
+          <BudgetRuler spent={Math.abs(totals.expense)} budget={project.budget} color={project.color} withLabel />
+        )}
 
         {/* Action buttons */}
         <div className="flex gap-2 pt-1 border-t border-border/40">
