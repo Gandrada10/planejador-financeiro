@@ -9,6 +9,7 @@ import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
 import { CashFlowTable } from './CashFlowTable';
 import { MonthFlowPanel } from './MonthFlowPanel';
+import { CategoryDetailPanel } from './CategoryDetailPanel';
 import { YoyDeviationPanel } from './YoyDeviationPanel';
 import { ExpensesPanel } from './ExpensesPanel';
 import { ProjectsPanel } from './ProjectsPanel';
@@ -21,6 +22,10 @@ const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set
 export function DashboardPage() {
   // Abre no último mês FECHADO: o mês corrente tem números pela metade.
   const [monthYear, setMonthYear] = useState(getClosedMonthYear());
+  // Categoria clicada no Sankey: enquanto aberta, a análise dela ocupa a
+  // coluna ao lado do fluxo (Metas/Caixa voltam ao fechar). O estado vive
+  // aqui porque atravessa os dois cards da banda.
+  const [flowCategory, setFlowCategory] = useState<string | null>(null);
   const { transactions, loading: loadingTx } = useTransactions();
   const { categories } = useCategories();
   const { getBudgetsForMonth } = useBudgets();
@@ -239,11 +244,26 @@ export function DashboardPage() {
             categories={categories}
             monthYear={monthYear}
             isMonthInProgress={isMonthInProgress}
+            selectedCategory={flowCategory}
+            onSelectCategory={setFlowCategory}
           />
 
-          {/* Metas ao lado do Fluxo: o que aconteceu vs o que era o plano.
+          {flowCategory ? (
+            // O Sankey navega a estrutura; a análise da categoria clicada
+            // toma emprestada a coluna vizinha — melhor um painel largo de
+            // verdade do que espremer Sankey e análise no mesmo card.
+            <CategoryDetailPanel
+              transactions={transactions}
+              categories={categories}
+              categoryId={flowCategory}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+              onClose={() => setFlowCategory(null)}
+            />
+          ) : (
+          /* Metas ao lado do Fluxo: o que aconteceu vs o que era o plano.
               Caixa fecha a banda — conferência por conta é o último passo da
-              leitura, não o primeiro. */}
+              leitura, não o primeiro. */
           <div className="space-y-4">
             {/* Metas de despesas */}
             <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
@@ -326,6 +346,7 @@ export function DashboardPage() {
               currentYear={currentYear}
             />
           </div>
+          )}
         </div>
 
         {/* ---- BANDA 2: O ANO E A TENDÊNCIA ----

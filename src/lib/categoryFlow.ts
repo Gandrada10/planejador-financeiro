@@ -39,6 +39,144 @@ const shortLabel = (key: string) => {
   return `${MONTH_ABBR[Number(m) - 1]}/${y.slice(2)}`;
 };
 
+export interface CategoryDetailRow {
+  id: string;
+  name: string;
+  color: string;
+  /** Gasto do mês selecionado (positivo = despesa; negativo = reembolso líquido). */
+  monthValue: number;
+  /** Média mensal na janela de 12 meses completos. */
+  avg: number;
+  /** Mês vs média, em % (null quando não há média para comparar). */
+  deltaPct: number | null;
+}
+
+export interface CategoryDetail extends CategoryDetailRow {
+  /** "Junho" — o mês selecionado, para rótulos de coluna. */
+  monthName: string;
+  prevValue: number;
+  prevDeltaPct: number | null;
+  /** Meses com lançamento na janela da média (divisor). */
+  monthsCount: number;
+  /** "jul/25 a jun/26" — janela da média, para o title. */
+  windowLabel: string;
+  /** Id "__direct" = gasto lançado direto na categoria-mãe. */
+  subs: CategoryDetailRow[];
+  /** Últimos 12 meses TERMINANDO no selecionado (inclui o em andamento). */
+  series: Array<{ key: string; label: string; full: string; value: number; selected: boolean }>;
+}
+
+/**
+ * Análise de UMA categoria para o painel lateral do fluxo: mês selecionado vs
+ * média 12M, quebra por subcategoria e série dos últimos 12 meses.
+ *
+ * A média segue a convenção da casa (fluxo/custo de vida): janela de 12 meses
+ * terminando no último mês COMPLETO, dividida pelos meses com lançamento. A
+ * série é outra janela — termina no mês SELECIONADO, porque a pergunta dela é
+ * "como cheguei até aqui", não "qual é o padrão".
+ */
+export function computeCategoryDetail(
+  transactions: Transaction[],
+  categories: Category[],
+  categoryId: string,
+  monthYear: string,
+  isMonthInProgress: boolean,
+): CategoryDetail {
+  const excludedIds = getExcludedFromTotalsIds(categories);
+
+  const avgEnd = isMonthInProgress ? getMonthYearOffset(monthYear, -1) : monthYear;
+  const avgWindow = new Set<string>();
+  for (let i = 0; i < 12; i++) avgWindow.add(getMonthYearOffset(avgEnd, -i));
+
+  const seriesKeys: string[] = [];
+  for (let i = 11; i >= 0; i--) seriesKeys.push(getMonthYearOffset(monthYear, -i));
+  const seriesSet = new Set(seriesKeys);
+  const prevKey = getMonthYearOffset(monthYear, -1);
+
+  const monthsWithData = new Set<string>();
+  let monthValue = 0;
+  let prevValue = 0;
+  let windowTotal = 0;
+  const bySeries = new Map<string, number>();
+  const subMonth = new Map<string, number>();
+  const subWindow = new Map<string, number>();
+
+  for (const t of transactions) {
+    if (!countsInTotals(t, excludedIds)) continue;
+    const key = getMonthYear(accountingDate(t));
+    // Divisor da média: meses com QUALQUER lançamento, não só desta categoria —
+    // um mês sem gasto na categoria é um zero legítimo, não um buraco.
+    if (avgWindow.has(key)) monthsWithData.add(key);
+    if (!isExpenseAmount(t)) continue;
+
+    const catId = t.categoryId || '__uncategorized';
+    const cat = categories.find((c) => c.id === catId);
+    if ((cat?.parentId || catId) !== categoryId) continue;
+
+    const spend = -t.amount; // despesa negativa vira magnitude; reembolso subtrai
+    const subId = cat?.parentId ? catId : '__direct';
+    if (key === monthYear) {
+      monthValue += spend;
+      subMonth.set(subId, (subMonth.get(subId) || 0) + spend);
+    }
+    if (key === prevKey) prevValue += spend;
+    if (avgWindow.has(key)) {
+      windowTotal += spend;
+      subWindow.set(subId, (subWindow.get(subId) || 0) + spend);
+    }
+    if (seriesSet.has(key)) bySeries.set(key, (bySeries.get(key) || 0) + spend);
+  }
+
+  const monthsCount = Math.max(monthsWithData.size, 1);
+  const avg = windowTotal / monthsCount;
+  const pct = (curr: number, base: number) => (base > 0 ? ((curr - base) / base) * 100 : null);
+
+  const cat = categories.find((c) => c.id === categoryId);
+  const catMeta = { name: cat?.name || 'Sem categoria', color: cat?.color || '#737373' };
+
+  const subIds = new Set([...subMonth.keys(), ...subWindow.keys()]);
+  const subs: CategoryDetailRow[] = Array.from(subIds)
+    .map((id) => {
+      const sub = categories.find((c) => c.id === id);
+      const mv = subMonth.get(id) || 0;
+      const av = (subWindow.get(id) || 0) / monthsCount;
+      return {
+        id,
+        name: id === '__direct' ? 'Sem subcategoria' : sub?.name || 'Sem categoria',
+        color: (id === '__direct' ? catMeta.color : sub?.color) || catMeta.color,
+        monthValue: mv,
+        avg: av,
+        deltaPct: pct(mv, av),
+      };
+    })
+    .filter((s) => Math.abs(s.monthValue) >= 0.5 || Math.abs(s.avg) >= 0.5)
+    .sort((a, b) => b.monthValue - a.monthValue || b.avg - a.avg);
+
+  const monthNameRaw = getMonthLabel(monthYear).split(' de ')[0];
+  const avgKeys = Array.from(avgWindow).sort();
+
+  return {
+    id: categoryId,
+    ...catMeta,
+    monthValue,
+    avg,
+    deltaPct: pct(monthValue, avg),
+    monthName: monthNameRaw.charAt(0).toUpperCase() + monthNameRaw.slice(1),
+    prevValue,
+    prevDeltaPct: pct(monthValue, prevValue),
+    monthsCount,
+    windowLabel: `${shortLabel(avgKeys[0])} a ${shortLabel(avgKeys[avgKeys.length - 1])}`,
+    subs,
+    series: seriesKeys.map((key) => ({
+      key,
+      label: MONTH_ABBR[Number(key.split('-')[1]) - 1],
+      full: shortLabel(key),
+      value: bySeries.get(key) || 0,
+      selected: key === monthYear,
+    })),
+  };
+}
+
 /**
  * Composição do gasto por categoria — no mês selecionado ou como MÉDIA MENSAL
  * dos últimos 12 meses. As duas respondem "para onde foi o dinheiro"; a de 12

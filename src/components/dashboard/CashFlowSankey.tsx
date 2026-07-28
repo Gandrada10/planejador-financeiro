@@ -12,6 +12,12 @@ interface Props {
   onToggleCategory: (id: string) => void;
   /** Sufixo dos valores: "/mês" na visão de 12 meses. */
   unit?: string;
+  /** Categoria em análise no painel lateral (destacada no diagrama). */
+  selectedId?: string | null;
+  /** Clique no rótulo de uma categoria de gasto → análise no painel. */
+  onSelectCategory?: (id: string) => void;
+  /** Média mensal 12M por id de categoria/sub — liga o Δ vs média nos rótulos. */
+  averages?: Map<string, number>;
 }
 
 /** Piso: abaixo disso a fatia é um fio invisível e só suja o diagrama. */
@@ -32,9 +38,14 @@ interface SankeyNodeDef {
   color: string;
   share: number | null;
   unit: string;
+  /** Mês vs média 12M, em % — só nas categorias de gasto na visão de mês. */
+  delta?: number | null;
   /** Presente só em categoria-mãe com subcategorias: alterna a expansão. */
   onToggle?: () => void;
   open?: boolean;
+  /** Presente nas categorias de gasto: abre a análise no painel lateral. */
+  onSelect?: () => void;
+  selected?: boolean;
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any -- recharts não tipa os
@@ -43,20 +54,32 @@ interface SankeyNodeDef {
 function SankeyNodeShape(props: any) {
   const { x, y, width, height, payload } = props;
   const tx = x + width + 8;
-  const clickable = !!payload.onToggle;
+  const clickable = !!payload.onToggle || !!payload.onSelect;
   const caret = payload.open ? '⌄ ' : '› ';
   // Sempre DUAS linhas: nome em cima (com reticências se preciso), valor + %
   // embaixo. O modo compacto de uma linha só cortava o valor na borda com
   // nomes longos e engolia o percentual — exatamente o defeito reportado.
   const name =
     payload.name.length > MAX_NAME ? `${payload.name.slice(0, MAX_NAME - 1)}…` : payload.name;
+  const showDelta = typeof payload.delta === 'number' && Math.abs(payload.delta) >= 1;
 
   return (
     <Layer
       style={clickable ? { cursor: 'pointer' } : undefined}
-      onClick={payload.onToggle}
+      // Idioma de árvore: o rótulo SELECIONA (análise no painel), o caret
+      // expande. Sem painel plugado, o clique inteiro volta a expandir.
+      onClick={payload.onSelect ?? payload.onToggle}
     >
-      <Rectangle x={x} y={y} width={width} height={height} fill={payload.color} radius={2} />
+      <Rectangle
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={payload.color}
+        radius={2}
+        stroke={payload.selected ? '#5ee0a0' : undefined}
+        strokeWidth={payload.selected ? 1.5 : 0}
+      />
       {/* Área de toque generosa sobre o rótulo — a barra tem 10px de largura */}
       {clickable && <rect x={x} y={y - 6} width={190} height={height + 12} fill="transparent" />}
       <text
@@ -66,13 +89,13 @@ function SankeyNodeShape(props: any) {
         fontFamily={FONT}
         fontSize={11}
         fontWeight={600}
-        fill="#f5f4f2"
+        fill={payload.selected ? '#5ee0a0' : '#f5f4f2'}
         stroke="#1b1b1e"
         strokeWidth={3}
         strokeLinejoin="round"
         paintOrder="stroke"
       >
-        {clickable && <tspan fill="#8f8e89">{caret}</tspan>}
+        {payload.onToggle && <tspan fill="#8f8e89">{caret}</tspan>}
         {name}
       </text>
       <text
@@ -90,7 +113,28 @@ function SankeyNodeShape(props: any) {
         {formatBRL0(payload.value)}
         {payload.unit}
         {payload.share !== null && ` · ${payload.share.toFixed(0)}%`}
+        {showDelta && <tspan> · </tspan>}
+        {showDelta && (
+          <tspan fill={payload.delta > 0 ? '#e05a4d' : '#34a873'}>
+            {payload.delta > 0 ? '▲' : '▼'}
+            {Math.abs(payload.delta).toFixed(0)}%
+          </tspan>
+        )}
       </text>
+      {/* Zona do caret POR CIMA do rótulo: expandir sem trocar a seleção */}
+      {payload.onSelect && payload.onToggle && (
+        <rect
+          x={tx - 6}
+          y={y - 6}
+          width={22}
+          height={height + 12}
+          fill="transparent"
+          onClick={(e: React.MouseEvent) => {
+            e.stopPropagation();
+            payload.onToggle();
+          }}
+        />
+      )}
     </Layer>
   );
 }
@@ -131,7 +175,17 @@ function SankeyLinkShape(props: any) {
  * Com uma fonte só, o nó "Caixa" não é criado: seriam dois blocos gigantes
  * com o mesmo valor ocupando metade do card sem informação nenhuma.
  */
-export function CashFlowSankey({ income, balance, categories, expanded, onToggleCategory, unit = '' }: Props) {
+export function CashFlowSankey({
+  income,
+  balance,
+  categories,
+  expanded,
+  onToggleCategory,
+  unit = '',
+  selectedId,
+  onSelectCategory,
+  averages,
+}: Props) {
   const outCats = categories
     .filter((c) => c.amount < 0)
     .map((c) => ({ ...c, value: -c.amount }))
@@ -189,6 +243,12 @@ export function CashFlowSankey({ income, balance, categories, expanded, onToggle
   // pinava no topo e as fitas atravessavam o desenho. Com uma única coluna de
   // folhas, travessia é geometricamente impossível. Clicar em qualquer filha
   // fecha o grupo de volta.
+  // Δ vs média 12M: responde "está acima ou abaixo do normal?" direto no nó.
+  const deltaFor = (id: string, value: number): number | null => {
+    const avg = averages?.get(id);
+    return avg && avg > 0 ? ((value - avg) / avg) * 100 : null;
+  };
+
   for (const c of outCats) {
     if (c.value / totalOut < MIN_SHARE) continue;
 
@@ -203,20 +263,28 @@ export function CashFlowSankey({ income, balance, categories, expanded, onToggle
     const canExpand = subOut.length > 0 && subSum <= c.value + 0.01;
     const isOpen = canExpand && expanded.has(c.id);
 
+    // Clicar numa sub seleciona a MÃE: a análise da categoria já quebra por
+    // subcategoria, e é a mãe que existe nas duas visões (aberta e fechada).
+    const select = onSelectCategory
+      ? { onSelect: () => onSelectCategory(c.id), selected: selectedId === c.id }
+      : {};
+
     if (!isOpen) {
       const parentIdx = node(c.name, c.color, c.value, {
         onToggle: canExpand ? () => onToggleCategory(c.id) : undefined,
         open: false,
+        delta: deltaFor(c.id, c.value),
+        ...select,
       });
       links.push({ source: hubIdx, target: parentIdx, value: c.value });
       continue;
     }
 
-    const collapse = { onToggle: () => onToggleCategory(c.id), open: true };
+    const collapse = { onToggle: () => onToggleCategory(c.id), open: true, ...select };
     for (const s of subOut) {
       links.push({
         source: hubIdx,
-        target: node(s.name, s.color || c.color, s.value, collapse),
+        target: node(s.name, s.color || c.color, s.value, { ...collapse, delta: deltaFor(s.id, s.value) }),
         value: s.value,
       });
     }

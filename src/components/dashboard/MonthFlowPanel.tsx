@@ -8,6 +8,9 @@ interface Props {
   categories: Category[];
   monthYear: string;
   isMonthInProgress: boolean;
+  /** Categoria em análise no painel lateral (o dashboard é o dono do estado). */
+  selectedCategory: string | null;
+  onSelectCategory: (id: string | null) => void;
 }
 
 /**
@@ -20,7 +23,14 @@ interface Props {
  * ~28 folhas na última coluna e o diagrama virava espaguete — Sankey comunica
  * proporção até ~15 folhas.
  */
-export function MonthFlowPanel({ transactions, categories, monthYear, isMonthInProgress }: Props) {
+export function MonthFlowPanel({
+  transactions,
+  categories,
+  monthYear,
+  isMonthInProgress,
+  selectedCategory,
+  onSelectCategory,
+}: Props) {
   const [period, setPeriod] = useState<FlowPeriod>('month');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
@@ -28,6 +38,19 @@ export function MonthFlowPanel({ transactions, categories, monthYear, isMonthInP
     () => computeCategoryFlow(transactions, categories, monthYear, isMonthInProgress, period),
     [transactions, categories, monthYear, isMonthInProgress, period]
   );
+
+  // Média mensal 12M por categoria/sub, para o ▲▼ dos rótulos do Sankey.
+  // Na visão "Média 12M" não existe delta: o valor exibido É a média.
+  const averages = useMemo(() => {
+    if (period !== 'month') return undefined;
+    const m12 = computeCategoryFlow(transactions, categories, monthYear, isMonthInProgress, 'm12');
+    const map = new Map<string, number>();
+    for (const c of m12.categories) {
+      if (c.amount < 0) map.set(c.id, -c.amount);
+      for (const s of c.subs) if (s.amount < 0) map.set(s.id, -s.amount);
+    }
+    return map;
+  }, [transactions, categories, monthYear, isMonthInProgress, period]);
 
   function toggleCategory(id: string) {
     setExpanded((prev) => {
@@ -46,7 +69,9 @@ export function MonthFlowPanel({ transactions, categories, monthYear, isMonthInP
         <div className="min-w-0">
           <h3 className="text-title font-semibold text-text-primary">Fluxo do dinheiro</h3>
           <p className="text-caption text-ink-3 mt-0.5">
-            {flow.label} · % sobre tudo que entrou · toque numa categoria para abrir as subcategorias
+            {flow.label} · % sobre tudo que entrou
+            {period === 'month' ? ' · ▲▼ vs média 12M' : ''} · toque numa categoria para analisar,
+            › abre as subcategorias
           </p>
         </div>
 
@@ -82,6 +107,9 @@ export function MonthFlowPanel({ transactions, categories, monthYear, isMonthInP
         expanded={expanded}
         onToggleCategory={toggleCategory}
         unit={period === 'm12' ? '/mês' : ''}
+        selectedId={selectedCategory}
+        onSelectCategory={(id) => onSelectCategory(id === selectedCategory ? null : id)}
+        averages={averages}
       />
 
       {flow.balance < 0 && (
