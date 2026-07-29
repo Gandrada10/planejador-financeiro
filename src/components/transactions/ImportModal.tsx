@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect } from 'react';
-import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX, CalendarClock, Landmark } from 'lucide-react';
+import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX, CalendarClock, Landmark, Globe } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
-import type { Transaction, Category, Account, CategoryRule, Project } from '../../types';
+import type { Transaction, Category, Account, CategoryRule, Project, FxWallet } from '../../types';
 import { parseOfx, type OfxParseMeta } from '../../lib/parseOfx';
+import { parseWiseCsv, isWiseCsv, type WiseParseResult } from '../../lib/parseWiseCsv';
+import { buildFxLedger, type FxCarry, type FxLedgerResult } from '../../lib/fxLedger';
 import { NoteTag } from '../shared/NoteTag';
 import {
   formatBRL,
@@ -73,6 +75,25 @@ function isOfxDuplicate(item: ImportItem, existing: Transaction[]): boolean {
       (t) => t.fitid === item.fitid && t.account === item.account && Math.abs(t.amount - item.amount) < 0.01
     );
     if (fitidMatch) return true;
+  }
+  return isDuplicate(item, existing);
+}
+
+/**
+ * Dedupe do extrato em moeda estrangeira. Diferente do OFX de propósito: NÃO
+ * entra o valor na comparação.
+ *
+ * O `TransferWise ID` é único por lançamento dentro da conta (ao contrário do
+ * FITID, que alguns bancos reciclam), então id + conta já identificam a
+ * transação com segurança. E o valor em BRL da MESMA transação pode mudar
+ * legitimamente entre duas importações — ele é derivado do custo dos lotes de
+ * câmbio (ver `fxLedger`), que se refina quando o carry-over da carteira é
+ * informado. Exigir valor igual faria a reimportação de um período que se
+ * sobrepõe ao anterior duplicar tudo, calada.
+ */
+function isFxDuplicate(item: ImportItem, existing: Transaction[]): boolean {
+  if (item.fitid && item.account) {
+    if (existing.some((t) => t.fitid === item.fitid && t.account === item.account)) return true;
   }
   return isDuplicate(item, existing);
 }
@@ -176,6 +197,100 @@ interface Props {
   onCreateRule?: (description: string, categoryId: string) => void;
   rules?: CategoryRule[];
   projects?: Project[];
+  /** Carteiras de moeda estrangeira já conhecidas — o carry-over do FIFO de
+   *  câmbio. Sem elas o extrato em moeda ainda importa; só pede o custo do
+   *  saldo inicial na tela em vez de já saber. */
+  fxWallets?: FxWallet[];
+  /** Grava o saldo/custo de fechamento após importar um extrato em moeda —
+   *  é o ponto de partida da próxima importação. */
+  onSaveFxWallet?: (currency: string, snapshot: Omit<FxWallet, 'currency' | 'updatedAt'>) => Promise<void>;
+}
+
+/** Lê um valor em reais digitado à mão ("7.124,37" ou "7124.37"). Devolve
+ *  `null` para vazio/ilegível — o caller decide o que fazer com a ausência,
+ *  em vez de receber um 0 que se confunde com "custo zero". */
+function parseDecimalInput(raw: string): number | null {
+  const cleaned = raw.trim().replace(/[^\d.,-]/g, '');
+  if (cleaned === '') return null;
+  const lastComma = cleaned.lastIndexOf(',');
+  const lastDot = cleaned.lastIndexOf('.');
+  const normalized = lastComma > lastDot
+    ? cleaned.replace(/\./g, '').replace(',', '.')
+    : cleaned.replace(/,/g, '');
+  const n = Number(normalized);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Monta as linhas do preview a partir do extrato em moeda já apreçado.
+ *
+ * Função pura (fora do componente) porque roda em dois momentos: logo após o
+ * parse e de novo a cada mudança do custo de abertura — se fosse só o efeito,
+ * o preview apareceria vazio por um quadro entre um e outro.
+ */
+function buildFxRows(
+  ledger: FxLedgerResult,
+  currency: string,
+  includeConversions: boolean,
+  transferCategoryId: string | null,
+  matchCategory: ((description: string) => string | null) | undefined,
+  existingTransactions: Transaction[],
+  defaultAccount: string
+): ImportRow[] {
+  const priced = includeConversions
+    ? [...ledger.movements, ...ledger.conversions].sort((a, b) => a.entry.date.getTime() - b.entry.date.getTime())
+    : ledger.movements;
+
+  return priced.map((p) => {
+    // O valor original em moeda vai para a descrição: é a única forma de
+    // conferir o lançamento contra o extrato depois de convertido, já que o
+    // app não guarda moeda estrangeira em campo próprio.
+    const description = p.entry.isConversion
+      ? `Compra de ${currency} — ${formatFx(p.entry.amountFx, currency)}`
+      : `${p.entry.description} | ${formatFx(p.entry.amountFx, currency)}`;
+    const item: ImportItem = {
+      date: p.entry.date,
+      purchaseDate: null,
+      description,
+      amount: round2(p.amountBrl),
+      // Transferência para o que é troca de bolso; para o resto, as regras de
+      // categoria do app agem sobre o nome LIMPO do estabelecimento (sem o
+      // sufixo em moeda, que atrapalharia o casamento das regras).
+      categoryId: p.entry.isTransfer
+        ? transferCategoryId
+        : (matchCategory ? matchCategory(p.entry.description) : null),
+      account: defaultAccount,
+      familyMember: '',
+      titular: '',
+      installmentNumber: null,
+      totalInstallments: null,
+      cardNumber: null,
+      projectId: null,
+      fitid: p.entry.id,
+      tags: [],
+      notes: '',
+      importBatch: null,
+      reconciled: false,
+      reconciledAt: null,
+    };
+    return {
+      ...item,
+      isDuplicate: isFxDuplicate(item, existingTransactions),
+      installmentType: 'unica' as const,
+      periodicity: 1,
+      installmentAmount: null,
+    };
+  });
+}
+
+/** Valor na moeda do extrato, para a descrição do lançamento ("EUR 192,75").
+ *  Sempre em módulo: o sinal já está no valor em BRL da transação. */
+function formatFx(amount: number, currency: string): string {
+  return `${currency} ${Math.abs(amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }
 
 /** Generate month options: 6 months back + current + 3 months forward */
@@ -189,7 +304,7 @@ function generateMonthOptions(): string[] {
   return options;
 }
 
-export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, onCreateRule, rules = [], projects = [] }: Props) {
+export function ImportModal({ existingTransactions, onImport, onClose, accountNames = [], accounts = [], categories = [], allTitulars = [], titularNames = [], matchCategory, onCreateRule, rules = [], projects = [], fxWallets = [], onSaveFxWallet }: Props) {
   const [items, setItems] = useState<ImportRow[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [step, setStep] = useState<'upload' | 'preview' | 'done'>('upload');
@@ -200,10 +315,25 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const [aiUsage, setAiUsage] = useState<{ input_tokens: number; output_tokens: number } | null>(null);
 
   // Qual caminho de parse gerou as linhas atuais — governa quais painéis do
-  // preview aparecem (fatura de cartão vs. extrato de conta corrente OFX).
-  const [importKind, setImportKind] = useState<'ai' | 'ofx'>('ai');
+  // preview aparecem (fatura de cartão, extrato OFX de conta corrente ou
+  // extrato em moeda estrangeira).
+  const [importKind, setImportKind] = useState<'ai' | 'ofx' | 'fx'>('ai');
   const [ofxParsing, setOfxParsing] = useState(false);
   const [ofxMeta, setOfxMeta] = useState<OfxParseMeta | null>(null);
+
+  // ── Extrato em moeda estrangeira (Wise) ──────────────────────────────────
+  // O resultado do parse fica guardado porque as linhas são RECONSTRUÍDAS
+  // quando o custo do saldo inicial ou o "incluir compras de moeda" mudam —
+  // os dois entram no apreçamento FIFO de todas as despesas.
+  const [fxParsing, setFxParsing] = useState(false);
+  const [fxResult, setFxResult] = useState<WiseParseResult | null>(null);
+  // Custo em BRL do saldo que já existia antes do extrato. Texto (não número)
+  // porque é campo digitável e precisa aceitar o estado vazio.
+  const [fxOpeningCost, setFxOpeningCost] = useState('');
+  // Compras de moeda quase sempre JÁ estão no app, importadas do extrato da
+  // conta corrente que as pagou — por isso nascem DESmarcadas. Quando o
+  // usuário liga, entram com a categoria de exclusão-de-total.
+  const [fxIncludeConversions, setFxIncludeConversions] = useState(false);
 
   // Credit card billing month (= mês de PAGAMENTO/vencimento da fatura, regime
   // de caixa) e o dia de vencimento aplicado (override do cadastro do cartão).
@@ -224,10 +354,53 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // `accountNames` cru (que inclui cartões): extrato de conta corrente jamais
   // deve ser lançado num cartão. Se não houver nenhuma conta elegível, a lista
   // fica VAZIA (o banner "cadastre uma conta corrente" cobre esse caso).
+  // A conta em moeda estrangeira segue a mesma regra: é saldo, não fatura.
   const ofxEligibleAccounts = accounts.filter((a) => a.type !== 'cartao');
-  const rowAccountNames = importKind === 'ofx'
+  const rowAccountNames = importKind === 'ofx' || importKind === 'fx'
     ? ofxEligibleAccounts.map((a) => a.name)
     : accountNames;
+
+  // Categoria de exclusão-de-total ("Transferência"). Detectada pela FLAG,
+  // nunca pelo nome — renomear a categoria não pode quebrar o vínculo. É ela
+  // que as compras de moeda recebem: dinheiro trocando de bolso, fora dos
+  // totais (ver `countsInTotals` em `src/lib/utils.ts`).
+  const transferCategoryId = categories.find((c) => c.excludeFromTotals)?.id ?? null;
+
+  /** Conta que recebe os lançamentos do extrato em moeda. A da última
+   *  importação desta moeda (se ainda existir cadastrada) ganha da heurística
+   *  de "só existe uma conta elegível" — quem já importou antes tem preferência
+   *  explícita. Sem nenhuma das duas, fica em branco e o usuário escolhe no
+   *  "Aplicar em lote", como no caminho OFX. */
+  function resolveFxAccount(walletAccount: string | undefined): string {
+    if (walletAccount && ofxEligibleAccounts.some((a) => a.name === walletAccount)) return walletAccount;
+    return ofxEligibleAccounts.length === 1 ? ofxEligibleAccounts[0].name : '';
+  }
+
+  // Carteira guardada da moeda do extrato — traz o custo do saldo inicial.
+  const fxWallet = fxResult?.meta.currency
+    ? fxWallets.find((w) => w.currency === fxResult.meta.currency?.toUpperCase()) ?? null
+    : null;
+
+  // O saldo de abertura em MOEDA vem do próprio arquivo; o custo em BRL é o
+  // que o usuário digitou (ou o que a carteira guardou). Só confiamos no
+  // custo guardado se o saldo bater com o do arquivo — divergência significa
+  // que faltou importar algum extrato no meio, e aí o custo guardado é de
+  // outro momento (o painel avisa em vez de apreçar errado em silêncio).
+  const fxOpeningFx = fxResult?.meta.openingBalance ?? 0;
+  const fxWalletMatches = !!fxWallet && Math.abs(fxWallet.balanceFx - fxOpeningFx) < 0.01;
+  const fxOpeningCarry: FxCarry = {
+    balanceFx: fxOpeningFx,
+    costBrl: parseDecimalInput(fxOpeningCost) ?? 0,
+  };
+
+  // Apreçamento FIFO. Recalcula sempre que o custo de abertura muda — é ele
+  // que define quanto custou cada euro gasto antes da primeira conversão do
+  // arquivo.
+  const fxLedger = useMemo(
+    () => (fxResult ? buildFxLedger(fxResult.entries, fxOpeningCarry) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fxResult, fxOpeningCarry.balanceFx, fxOpeningCarry.costBrl]
+  );
 
   // Batch assignment controls
   const [batchAccount, setBatchAccount] = useState('');
@@ -303,6 +476,22 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     // se o cabeçalho é OFX, mandamos pro parser determinístico. Só olhamos os
     // bytes quando a extensão não é uma das conhecidas de IA (csv/xlsx/xls/pdf),
     // pra não ler à toa quem já se identificou pela extensão.
+    // `.csv` é ambíguo: pode ser planilha qualquer (caminho de IA) ou extrato
+    // de conta em moeda estrangeira, que tem parser próprio e determinístico.
+    // A extensão não distingue — só o cabeçalho. Sniff barato, sem ler o
+    // arquivo inteiro, e a falha cai no caminho de IA de sempre.
+    if (ext === 'csv') {
+      try {
+        const head = new TextDecoder('utf-8').decode(await file.slice(0, 2048).arrayBuffer());
+        if (isWiseCsv(head)) {
+          handleParseFx(file);
+          return;
+        }
+      } catch {
+        // Cabeçalho ilegível → segue pro caminho padrão.
+      }
+    }
+
     const knownAi = ext === 'csv' || ext === 'xlsx' || ext === 'xls' || ext === 'pdf';
     if (!knownAi) {
       try {
@@ -318,6 +507,92 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     }
     handleParse(file);
   }
+
+  // ─── Parse do extrato em moeda estrangeira (determinístico, sem IA) ───────
+  //
+  // Só faz o PARSE aqui. As linhas do preview nascem do efeito abaixo, que
+  // depende também do custo do saldo inicial — e esse o usuário ainda vai
+  // informar (ou vem da carteira guardada).
+  async function handleParseFx(file: File) {
+    setError('');
+    setFileName(file.name);
+    setDeclaredTotal(null);
+    setDetectedAccount('');
+    setAiUsage(null);
+    setOfxMeta(null);
+    setImportKind('fx');
+    setIsCreditCard(false);
+    setFxParsing(true);
+
+    try {
+      // A Wise exporta UTF-8 (acento nas descrições em pt-BR).
+      const text = new TextDecoder('utf-8').decode(await file.arrayBuffer());
+      const result = parseWiseCsv(text);
+
+      if (result.entries.length === 0) {
+        setError(
+          result.meta.warnings[0] ||
+          'Nenhum lançamento encontrado no extrato. Verifique se é o CSV exportado pela Wise.'
+        );
+        setFxParsing(false);
+        return;
+      }
+
+      // Custo do saldo inicial: se a carteira guardada fecha com o saldo de
+      // abertura do arquivo, é continuação direta da última importação e o
+      // valor entra pronto. Senão fica vazio para o usuário informar.
+      const wallet = result.meta.currency
+        ? fxWallets.find((w) => w.currency === result.meta.currency?.toUpperCase())
+        : undefined;
+      const opening = result.meta.openingBalance ?? 0;
+      const continues = !!wallet && Math.abs(wallet.balanceFx - opening) < 0.01;
+      const openingCost = continues ? wallet!.costBrl : 0;
+
+      // Já monta as linhas aqui (o efeito abaixo cuida das mudanças
+      // seguintes) para o preview nunca aparecer vazio por um quadro.
+      const ledger = buildFxLedger(result.entries, { balanceFx: opening, costBrl: openingCost });
+      const rows = buildFxRows(
+        ledger,
+        result.meta.currency || '',
+        false,
+        categories.find((c) => c.excludeFromTotals)?.id ?? null,
+        matchCategory,
+        existingTransactions,
+        resolveFxAccount(wallet?.accountName)
+      );
+
+      setFxOpeningCost(continues ? String(openingCost) : '');
+      setFxIncludeConversions(false);
+      setFxResult(result);
+      setItems(rows);
+      setSelected(new Set(rows.map((_, i) => i).filter((i) => !rows[i].isDuplicate)));
+      setStep('preview');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao processar o extrato');
+    }
+    setFxParsing(false);
+  }
+
+  // Monta as linhas do preview a partir do apreçamento FIFO. Roda de novo a
+  // cada mudança do custo de abertura ou do "incluir compras de moeda" —
+  // ambos mudam o VALOR EM BRL de todas as despesas, então reconstruir é o
+  // comportamento correto (e descarta edições manuais feitas antes, o que a
+  // tela avisa ao lado do campo).
+  useEffect(() => {
+    if (importKind !== 'fx' || !fxResult || !fxLedger) return;
+    const rows = buildFxRows(
+      fxLedger,
+      fxResult.meta.currency || '',
+      fxIncludeConversions,
+      transferCategoryId,
+      matchCategory,
+      existingTransactions,
+      resolveFxAccount(fxWallet?.accountName)
+    );
+    setItems(rows);
+    setSelected(new Set(rows.map((_, i) => i).filter((i) => !rows[i].isDuplicate)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [importKind, fxResult, fxLedger, fxIncludeConversions]);
 
   // ─── Parse via OFX (determinístico, sem IA) ────────────────────────────────
 
@@ -853,6 +1128,27 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     }
 
     await onImport(toImport);
+
+    // Fecha a carteira de moeda: o saldo e o custo do fim deste extrato são o
+    // ponto de partida do próximo. Gravado DEPOIS do import — se a gravação
+    // das transações falhar, o carry-over não avança e a reimportação começa
+    // do mesmo lugar. É snapshot, não acumulador: reimportar reescreve os
+    // mesmos números em vez de dobrar o saldo.
+    if (importKind === 'fx' && fxLedger && fxResult?.meta.currency && onSaveFxWallet) {
+      try {
+        await onSaveFxWallet(fxResult.meta.currency, {
+          balanceFx: fxLedger.closing.balanceFx,
+          costBrl: round2(fxLedger.closing.costBrl),
+          accountName: items.find((it) => it.account)?.account || '',
+          asOf: fxResult.meta.dtEnd,
+        });
+      } catch {
+        // A importação em si deu certo — não transformamos falha de metadado
+        // em erro de importação. Na próxima o campo de saldo inicial só vem
+        // vazio e o usuário informa.
+      }
+    }
+
     setStep('done');
     setImporting(false);
   }
@@ -893,6 +1189,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     return out;
   }, [items, selected, memberSet, memberOptions.length]);
   const hasUnresolved = unresolvedIndices.length > 0;
+
+  // Trava do extrato em moeda: sem NENHUMA compra de moeda no arquivo e sem
+  // custo de saldo inicial informado, não existe base de custo alguma — todos
+  // os gastos sairiam a R$ 0,00. Importar isso poluiria os totais com
+  // lançamentos zerados que parecem legítimos, então o botão fica travado.
+  const fxUnpriced =
+    importKind === 'fx' && !!fxLedger && fxLedger.averageRate === null && fxLedger.uncoveredFx > 0;
   const unresolvedSet = useMemo(() => new Set(unresolvedIndices), [unresolvedIndices]);
 
   // Category helper for select options
@@ -916,11 +1219,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           {/* UPLOAD */}
           {step === 'upload' && (
             <div className="space-y-4">
-              {(aiParsing || ofxParsing) ? (
+              {(aiParsing || ofxParsing || fxParsing) ? (
                 <div className="border-2 border-dashed border-accent rounded-card p-12 text-center">
                   <Sparkles size={32} className="mx-auto mb-3 text-accent animate-pulse" />
                   <p className="text-body text-text-primary mb-1">
-                    {ofxParsing ? 'Lendo extrato OFX...' : 'Analisando extrato com IA...'}
+                    {ofxParsing ? 'Lendo extrato OFX...'
+                      : fxParsing ? 'Lendo extrato em moeda estrangeira...'
+                      : 'Analisando extrato com IA...'}
                   </p>
                   <p className="text-caption text-text-secondary">Isso pode levar alguns segundos</p>
                 </div>
@@ -942,7 +1247,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 >
                   <Sparkles size={32} className="mx-auto mb-3 text-accent" />
                   <p className="text-body font-bold text-text-primary mb-1">Arrastar arquivo ou clicar</p>
-                  <p className="text-caption text-text-secondary mb-3">Extrato de conta corrente (.ofx) entra sem IA · fatura de cartão a IA detecta transacoes, parcelas, titulares e categorias</p>
+                  <p className="text-caption text-text-secondary mb-3">Extrato de conta corrente (.ofx) e extrato Wise em moeda estrangeira (.csv) entram sem IA · fatura de cartão a IA detecta transacoes, parcelas, titulares e categorias</p>
                   <p className="text-caption text-text-secondary">.ofx .ofc .xlsx .xls .csv .pdf</p>
                 </div>
               )}
@@ -1072,6 +1377,123 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       Cadastre o vencimento deste cartão em <b className="text-text-primary">Configurações</b>, ou
                       informe o dia acima em <b className="text-text-primary">"Vence dia:"</b>, antes de importar.
                     </p>
+                  </div>
+                </div>
+              )}
+
+              {/* Extrato em moeda estrangeira: o painel existe porque este é o
+                  único caminho de importação em que o VALOR não vem pronto no
+                  arquivo — ele é calculado a partir do custo dos lotes de
+                  câmbio, e o custo do saldo herdado é a única peça que o
+                  arquivo não tem. Tudo aqui serve a essa conta. */}
+              {importKind === 'fx' && fxResult && fxLedger && (
+                <div className="bg-accent/5 border border-accent/30 rounded-card p-3 space-y-3">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Globe size={16} className="text-accent" />
+                      <span className="text-body font-bold text-text-primary">
+                        Extrato em {fxResult.meta.currency || 'moeda estrangeira'}
+                      </span>
+                    </div>
+                    <p className="text-caption text-text-secondary">
+                      {fxLedger.movements.length} gasto{fxLedger.movements.length !== 1 ? 's' : ''}
+                      {' · '}{fxLedger.conversions.length} compra{fxLedger.conversions.length !== 1 ? 's' : ''} de moeda
+                      {fxResult.meta.dtStart && fxResult.meta.dtEnd && (
+                        <> · {formatDate(fxResult.meta.dtStart)}–{formatDate(fxResult.meta.dtEnd)}</>
+                      )}
+                      {fxResult.meta.netted > 0 && (
+                        <> · {fxResult.meta.netted} ajuste{fxResult.meta.netted !== 1 ? 's' : ''} de cobrança somado{fxResult.meta.netted !== 1 ? 's' : ''} ao lançamento original</>
+                      )}
+                      {fxResult.meta.zeroed > 0 && (
+                        <> · {fxResult.meta.zeroed} cobrança{fxResult.meta.zeroed !== 1 ? 's' : ''} cancelada{fxResult.meta.zeroed !== 1 ? 's' : ''} descartada{fxResult.meta.zeroed !== 1 ? 's' : ''}</>
+                      )}
+                    </p>
+                  </div>
+
+                  {/* Custo do saldo inicial: sem ele o apreçamento dos gastos
+                      feitos antes da primeira compra de moeda do arquivo é
+                      estimativa, não conta. */}
+                  <div className="flex items-end gap-3 flex-wrap">
+                    <div>
+                      <label htmlFor="fx-opening" className="block text-caption text-text-secondary mb-1">
+                        Saldo inicial: {formatFx(fxOpeningFx, fxResult.meta.currency || '')} — custou (R$)
+                      </label>
+                      <input
+                        id="fx-opening"
+                        type="text"
+                        inputMode="decimal"
+                        value={fxOpeningCost}
+                        onChange={(e) => setFxOpeningCost(e.target.value)}
+                        placeholder="0,00"
+                        className={inputClass + ' !w-36'}
+                      />
+                    </div>
+                    <label className="flex items-center gap-2 text-caption text-text-secondary pb-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={fxIncludeConversions}
+                        onChange={(e) => setFxIncludeConversions(e.target.checked)}
+                        className="accent-accent"
+                      />
+                      <span>
+                        Importar também as compras de moeda como transferência
+                        {!transferCategoryId && <> (categoria de transferência não encontrada)</>}
+                      </span>
+                    </label>
+                  </div>
+
+                  <p className="text-caption text-text-secondary">
+                    {fxWalletMatches
+                      ? 'Custo trazido da última importação desta moeda — o saldo inicial do arquivo confere com o saldo final guardado.'
+                      : 'Mudar este valor recalcula o valor em R$ de todas as linhas (e descarta edições feitas na lista).'}
+                    {fxLedger.averageRate !== null && (
+                      <>
+                        {' '}Taxa efetiva média das compras deste extrato:{' '}
+                        <b className="text-text-primary">
+                          R$ {fxLedger.averageRate.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                        </b>{' '}
+                        por {fxResult.meta.currency}.
+                      </>
+                    )}
+                    {' '}Sobra no fim: {formatFx(fxLedger.closing.balanceFx, fxResult.meta.currency || '')} ({formatBRL(fxLedger.closing.costBrl)}) — guardado para a próxima importação.
+                  </p>
+
+                  {/* Saldo herdado sem custo declarado: o número sai estimado.
+                      Avisar é obrigatório — senão um valor aproximado passa por
+                      exato e contamina os totais do mês. */}
+                  {fxLedger.uncoveredFx > 0 && (
+                    <p className="flex items-start gap-1.5 text-caption text-status-warn">
+                      <AlertTriangle size={13} className="shrink-0 mt-0.5" />
+                      <span>
+                        {formatFx(fxLedger.uncoveredFx, fxResult.meta.currency || '')} foram gastos sem custo declarado —
+                        essas linhas estão apreçadas pela taxa média deste extrato, não pelo custo real.
+                        Informe quanto custou o saldo inicial (ou importe antes o extrato anterior) para fechar exato.
+                      </span>
+                    </p>
+                  )}
+
+                  {rowAccountNames.length === 0 && (
+                    <p className="text-caption text-status-warn">
+                      Nenhuma conta cadastrada para receber os lançamentos — cadastre uma em Configurações antes de importar.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Warnings do parser do extrato em moeda — informativo. */}
+              {importKind === 'fx' && fxResult && fxResult.meta.warnings.length > 0 && (
+                <div className="bg-status-warn/10 border border-status-warn/30 rounded-card p-3 space-y-1">
+                  <p className="flex items-center gap-1.5 text-caption font-bold text-status-warn">
+                    <AlertTriangle size={12} className="shrink-0" />
+                    Avisos do parser ({fxResult.meta.warnings.length})
+                  </p>
+                  <div
+                    role="status"
+                    tabIndex={0}
+                    aria-label={`Avisos do parser do extrato: ${fxResult.meta.warnings.length} ${fxResult.meta.warnings.length === 1 ? 'aviso' : 'avisos'}. Role para ver todos.`}
+                    className="text-caption text-text-secondary space-y-0.5 max-h-24 overflow-y-auto focus:outline-none focus:ring-1 focus:ring-status-warn/60 rounded"
+                  >
+                    {fxResult.meta.warnings.map((w, i) => <p key={i}>{w}</p>)}
                   </div>
                 </div>
               )}
@@ -1580,21 +2002,29 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 <span className="flex items-center gap-1.5 text-status-warn">
                   <UserX size={13} /> {unresolvedIndices.length} titular{unresolvedIndices.length > 1 ? 'es' : ''} a resolver
                 </span>
+              ) : fxUnpriced ? (
+                <span className="flex items-center gap-1.5 text-status-warn">
+                  <AlertTriangle size={13} /> Informe o custo do saldo inicial para apreçar os gastos
+                </span>
               ) : (
                 `${selected.size} de ${items.length} selecionadas`
               )}
             </span>
             <div className="flex gap-2">
               <button
-                onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); setDeclaredTotal(null); setOfxMeta(null); }}
+                onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); setDeclaredTotal(null); setOfxMeta(null); setFxResult(null); }}
                 className="px-3 py-1.5 text-body text-text-secondary hover:text-text-primary"
               >
                 Voltar
               </button>
               <button
                 onClick={handleImport}
-                disabled={selected.size === 0 || importing || hasUnresolved}
-                title={hasUnresolved ? 'Resolva os titulares não reconhecidos antes de importar' : undefined}
+                disabled={selected.size === 0 || importing || hasUnresolved || fxUnpriced}
+                title={
+                  hasUnresolved ? 'Resolva os titulares não reconhecidos antes de importar'
+                    : fxUnpriced ? 'Informe quanto custou o saldo inicial — sem isso os lançamentos entrariam zerados'
+                    : undefined
+                }
                 className="px-4 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50"
               >
                 {importing ? 'Importando...' : `Importar ${selected.size} transacoes`}

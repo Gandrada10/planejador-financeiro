@@ -8,6 +8,7 @@ import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useCategorizationSessions } from '../../hooks/useCategorizationSession';
 import { useBillingCycles } from '../../hooks/useBillingCycles';
 import { useProjects } from '../../hooks/useProjects';
+import { useFxWallets } from '../../hooks/useFxWallets';
 import { TransactionTable } from './TransactionTable';
 import { TransactionForm } from './TransactionForm';
 import { ImportModal } from './ImportModal';
@@ -27,6 +28,7 @@ export function TransactionsPage() {
   const { sessions, activeSessions, expiredSessions, historySessions, applyCategorizationsFromSession, applyAllPendingSessions, reopenSession, dismissSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
   const { activeProjects } = useProjects();
+  const { wallets: fxWallets, saveWallet: saveFxWallet } = useFxWallets();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
@@ -628,6 +630,8 @@ export function TransactionsPage() {
           onCreateRule={handleCreateRule}
           rules={rules}
           projects={activeProjects}
+          fxWallets={fxWallets}
+          onSaveFxWallet={saveFxWallet}
         />
       )}
       {showShareModal && (

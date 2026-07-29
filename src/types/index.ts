@@ -211,3 +211,25 @@ export interface FamilyMember {
   name: string;
   color: string;
 }
+
+/**
+ * Snapshot de uma carteira em moeda estrangeira (Wise e afins) no fim do
+ * último extrato importado. É o carry-over do apreçamento FIFO em
+ * `src/lib/fxLedger.ts`: `balanceFx` também vem no próprio extrato, mas
+ * `costBrl` — quanto esses euros custaram de fato — só existe no histórico, e
+ * é o que permite a importação seguinte continuar exata em vez de estimar.
+ * Um documento por moeda (id = "EUR"), gravado por `useFxWallets`.
+ */
+export interface FxWallet {
+  /** Código da moeda em maiúsculas — também é o id do documento. */
+  currency: string;
+  /** Saldo na moeda no fim do último extrato importado. */
+  balanceFx: number;
+  /** Quanto esse saldo custou, em BRL (IOF e spread já embutidos). */
+  costBrl: number;
+  /** Conta do app usada na última importação — só pré-seleção de tela. */
+  accountName: string;
+  /** Data final do último extrato aplicado. */
+  asOf: Date | null;
+  updatedAt: Date;
+}
