@@ -22,6 +22,9 @@ export interface YoySubItem {
    * união de gastos de naturezas diferentes. Ver `isRecurring`.
    */
   recurring?: boolean;
+  /** Parte de `curr` lançada no mês corrente — descartada no cálculo da taxa
+   *  mensal quando esse mês ainda não fechou. */
+  currTail?: number;
 }
 
 export interface YoyItem extends YoySubItem {

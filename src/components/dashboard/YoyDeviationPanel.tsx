@@ -91,12 +91,28 @@ export function YoyDeviationPanel({
      * reajuste permanente com um gasto de uma vez só e chama os dois de
      * aumento.
      */
-    type Slice = { curr: number; prev: number; mCurr: Set<number>; mPrev: Set<number> };
-    const newSlice = (): Slice => ({ curr: 0, prev: 0, mCurr: new Set(), mPrev: new Set() });
+    type Slice = {
+      curr: number;
+      prev: number;
+      /** Só o mês corrente do ano atual. Serve para tirar um mês PELA METADE
+       *  da conta da taxa mensal — senão um junho ainda aberto rebaixaria a
+       *  base recorrente e a projeção sairia otimista de graça. */
+      currTail: number;
+      mCurr: Set<number>;
+      mPrev: Set<number>;
+    };
+    const newSlice = (): Slice => ({
+      curr: 0,
+      prev: 0,
+      currTail: 0,
+      mCurr: new Set(),
+      mPrev: new Set(),
+    });
     const addTo = (s: Slice, amt: number, isCurr: boolean, month: number) => {
       if (isCurr) {
         s.curr += amt;
         s.mCurr.add(month);
+        if (month === m) s.currTail += amt;
       } else {
         s.prev += amt;
         s.mPrev.add(month);
@@ -191,6 +207,7 @@ export function YoyDeviationPanel({
       color: meta.color,
       curr: s.curr,
       prev: s.prev,
+      currTail: s.currTail,
       varianceAbs: s.curr - s.prev,
       pct: computePct(s.curr, s.prev),
       recurring: isRecurring(s),
@@ -234,6 +251,23 @@ export function YoyDeviationPanel({
     const expenseItems = buildItems(expMap);
     const incomeItems = buildItems(incMap);
 
+    /**
+     * Quanto a base que se repete gasta POR MÊS. Soma as folhas recorrentes
+     * (a mãe agregaria o eventual junto) e divide pelos meses FECHADOS.
+     */
+    function recurringMonthly(items: YoyItem[]): number {
+      const closed = isMonthInProgress ? m - 1 : m;
+      if (closed <= 0) return 0;
+      let sum = 0;
+      for (const it of items) {
+        for (const leaf of it.subs.length > 0 ? it.subs : [it]) {
+          if (!leaf.recurring) continue;
+          sum += leaf.curr - (isMonthInProgress ? (leaf.currTail ?? 0) : 0);
+        }
+      }
+      return sum / closed;
+    }
+
     // Build resultado lists (impact on resultado: +varianceAbs for income, -varianceAbs for expenses)
     const resultadoHelping: YoyItem[] = [];
     const resultadoHurting: YoyItem[] = [];
@@ -244,10 +278,16 @@ export function YoyDeviationPanel({
       // Sem filtrar por MIN_DELTA aqui: a lista de folhas precisa ficar
       // COMPLETA para a soma recorrente+pontual bater com o efeito líquido.
       // Quem esconde folha irrelevante é a montagem das barras, lá embaixo.
+      // O grupo Resultado junta os dois lados numa lista só, e a mesma
+      // categoria pode aparecer nos dois (o caso certo é "Sem categoria", que
+      // existe em receita e em despesa). Sem o prefixo, as duas linhas dividem
+      // a chave: React reclama e expandir uma abria a outra junto. O id aqui
+      // só identifica a linha — não é usado para buscar categoria.
+      const side = sign === 1 ? 'inc' : 'exp';
       const subs = item.subs
-        .map((s) => ({ ...s, resultadoImpact: sign * s.varianceAbs }))
+        .map((s) => ({ ...s, id: `${side}:${s.id}`, resultadoImpact: sign * s.varianceAbs }))
         .sort((a, b) => Math.abs(b.resultadoImpact!) - Math.abs(a.resultadoImpact!));
-      const entry: YoyItem = { ...item, resultadoImpact, subs };
+      const entry: YoyItem = { ...item, id: `${side}:${item.id}`, resultadoImpact, subs };
       if (resultadoImpact > 0) resultadoHelping.push(entry);
       else resultadoHurting.push(entry);
     }
@@ -308,6 +348,10 @@ export function YoyDeviationPanel({
       cadenceReliable: m >= CADENCE_MIN_MONTHS,
       cadenceMonths: Math.ceil(m * CADENCE_SHARE),
       windowMonths: m,
+      recurringMonthly: {
+        expenses: recurringMonthly(expenseItems),
+        income: recurringMonthly(incomeItems),
+      },
       // Dinheiro sem classificação não é uma categoria como as outras: é o
       // tamanho do buraco na análise. Fica fora das barras, num aviso.
       uncategorized: {
@@ -315,7 +359,7 @@ export function YoyDeviationPanel({
         income: incMap.get(UNCATEGORIZED_ID)?.total ?? null,
       },
     };
-  }, [transactions, categories, monthYear]);
+  }, [transactions, categories, monthYear, isMonthInProgress]);
   function toggle(key: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -410,6 +454,22 @@ export function YoyDeviationPanel({
     }
     return { recorrente, pontual };
   }, [bars, data.cadenceReliable]);
+
+  // O fecho do raciocínio: se só a base recorrente rodar até dezembro, onde o
+  // ano termina. Deliberadamente NÃO estima os pontuais que ainda vão
+  // aparecer no 2º semestre — inventar um número para o imprevisto seria pior
+  // do que dizer que ele está de fora. Em despesa, portanto, é um piso.
+  const projection = useMemo(() => {
+    const remaining = 12 - data.windowMonths;
+    if (!data.cadenceReliable || remaining <= 0) return null;
+    const at = (curr: number, monthly: number) => curr + monthly * remaining;
+    const exp = at(data.totals.expenses.curr, data.recurringMonthly.expenses);
+    const inc = at(data.totals.income.curr, data.recurringMonthly.income);
+    return {
+      value: activeGroup === 'expenses' ? exp : activeGroup === 'income' ? inc : inc - exp,
+      remaining,
+    };
+  }, [activeGroup, data]);
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
@@ -572,6 +632,20 @@ export function YoyDeviationPanel({
                   {signed0(cadence.pontual)}
                 </span>{' '}
                 foi pontual.
+              </p>
+            )}
+            {projection && (
+              <p
+                className="text-caption text-ink-3"
+                title={`${periodLabel} realizado mais a base recorrente rodando nos ${projection.remaining} meses que faltam. Não inclui gastos pontuais que ainda vão aparecer — em despesa, é um piso, não uma previsão.`}
+              >
+                No ritmo recorrente, {currentYear} fecha perto de{' '}
+                <span className="tnum text-text-secondary">
+                  {activeGroup === 'resultado'
+                    ? signed0(projection.value)
+                    : formatBRL0(projection.value)}
+                </span>
+                .
               </p>
             )}
           </div>
