@@ -30,6 +30,7 @@ function docToWallet(id: string, data: Record<string, unknown>): FxWallet {
     currency: id,
     balanceFx: typeof data.balanceFx === 'number' ? data.balanceFx : 0,
     costBrl: typeof data.costBrl === 'number' ? data.costBrl : 0,
+    estimated: data.estimated === true,
     accountName: (data.accountName as string) || '',
     asOf: (data.asOf as Timestamp)?.toDate() || null,
     updatedAt: (data.updatedAt as Timestamp)?.toDate() || new Date(),
@@ -64,6 +65,7 @@ export function useFxWallets() {
       {
         balanceFx: snapshot.balanceFx,
         costBrl: snapshot.costBrl,
+        estimated: snapshot.estimated === true,
         accountName: snapshot.accountName,
         asOf: snapshot.asOf ? Timestamp.fromDate(snapshot.asOf) : null,
         updatedAt: Timestamp.now(),

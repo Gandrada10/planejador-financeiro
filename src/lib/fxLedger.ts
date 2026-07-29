@@ -53,6 +53,12 @@ export interface FxCarry {
   balanceFx: number;
   /** Quanto esse saldo custou, em BRL. */
   costBrl: number;
+  /** `true` quando esse custo não é o desembolso real e sim uma estimativa —
+   *  o saldo veio de um extrato importado sem o custo de abertura declarado.
+   *  A marca ATRAVESSA importações: sem ela, o extrato seguinte apresentaria
+   *  como exato um valor que herdou uma base estimada, e a estimativa
+   *  desapareceria da vista justamente por ter ficado velha. */
+  estimated?: boolean;
 }
 
 /** Um lançamento do extrato já com preço em BRL. */
@@ -96,6 +102,11 @@ interface Lot {
   fx: number;
   /** Custo restante do lote, em centavos de BRL. */
   brl: number;
+  /** `true` quando o custo do lote não veio de uma compra de moeda real e sim
+   *  da taxa média (saldo de abertura sem custo declarado). Contamina quem
+   *  consome o lote: um gasto lastreado por custo estimado é, ele próprio,
+   *  estimado — sem isso a linha se apresentaria como exata. */
+  estimated?: boolean;
 }
 
 const toCents = (n: number): number => Math.round(n * 100);
@@ -137,6 +148,7 @@ export function buildFxLedger(entries: WiseEntry[], opening: FxCarry): FxLedgerR
     lots.push({
       fx: openingFx,
       brl: openingCovered ? openingBrl : (averageRate !== null ? Math.round(openingFx * averageRate) : 0),
+      estimated: !openingCovered || opening.estimated === true,
     });
   }
 
@@ -186,7 +198,7 @@ export function buildFxLedger(entries: WiseEntry[], opening: FxCarry): FxLedgerR
     const stockRate = currentAverage(lots);
     const rate = stockRate ?? averageRate;
     const costCents = rate !== null ? Math.round(fxCents * rate) : 0;
-    lots.push({ fx: fxCents, brl: costCents });
+    lots.push({ fx: fxCents, brl: costCents, estimated: stockRate === null || lots.some((l) => l.estimated) });
     movements.push({
       entry,
       amountBrl: fromCents(costCents),
@@ -202,7 +214,13 @@ export function buildFxLedger(entries: WiseEntry[], opening: FxCarry): FxLedgerR
   return {
     movements,
     conversions,
-    closing: { balanceFx: fromCents(restFx), costBrl: fromCents(restBrl) },
+    closing: {
+      balanceFx: fromCents(restFx),
+      costBrl: fromCents(restBrl),
+      // Só o que SOBROU importa: se os lotes estimados já foram todos
+      // gastos, o saldo que atravessa é de compras reais e volta a ser exato.
+      estimated: lots.some((l) => l.estimated),
+    },
     averageRate,
     uncoveredFx: fromCents(uncoveredFx),
     fallbackRate: uncoveredFx > 0 ? averageRate : null,
@@ -229,6 +247,7 @@ function consume(
 
   while (remaining > 0 && lots.length > 0) {
     const lot = lots[0];
+    if (lot.estimated) estimated = true;
     if (lot.fx <= remaining) {
       cost += lot.brl;
       remaining -= lot.fx;

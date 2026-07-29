@@ -391,6 +391,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const fxOpeningCarry: FxCarry = {
     balanceFx: fxOpeningFx,
     costBrl: parseDecimalInput(fxOpeningCost) ?? 0,
+    // Herda a marca só quando o custo veio da carteira intocado — se o usuário
+    // digitou o valor, é declaração dele e vale como exata.
+    estimated: fxWalletMatches && fxWallet?.estimated === true
+      && parseDecimalInput(fxOpeningCost) === fxWallet.costBrl,
   };
 
   // Apreçamento FIFO. Recalcula sempre que o custo de abertura muda — é ele
@@ -399,7 +403,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const fxLedger = useMemo(
     () => (fxResult ? buildFxLedger(fxResult.entries, fxOpeningCarry) : null),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fxResult, fxOpeningCarry.balanceFx, fxOpeningCarry.costBrl]
+    [fxResult, fxOpeningCarry.balanceFx, fxOpeningCarry.costBrl, fxOpeningCarry.estimated]
   );
 
   // Batch assignment controls
@@ -550,7 +554,11 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
       // Já monta as linhas aqui (o efeito abaixo cuida das mudanças
       // seguintes) para o preview nunca aparecer vazio por um quadro.
-      const ledger = buildFxLedger(result.entries, { balanceFx: opening, costBrl: openingCost });
+      const ledger = buildFxLedger(result.entries, {
+        balanceFx: opening,
+        costBrl: openingCost,
+        estimated: continues && wallet!.estimated === true,
+      });
       const rows = buildFxRows(
         ledger,
         result.meta.currency || '',
@@ -1139,6 +1147,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         await onSaveFxWallet(fxResult.meta.currency, {
           balanceFx: fxLedger.closing.balanceFx,
           costBrl: round2(fxLedger.closing.costBrl),
+          estimated: fxLedger.closing.estimated === true,
           accountName: items.find((it) => it.account)?.account || '',
           asOf: fxResult.meta.dtEnd,
         });
@@ -1444,7 +1453,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
                   <p className="text-caption text-text-secondary">
                     {fxWalletMatches
-                      ? 'Custo trazido da última importação desta moeda — o saldo inicial do arquivo confere com o saldo final guardado.'
+                      ? `Custo trazido da última importação desta moeda — o saldo inicial do arquivo confere com o saldo final guardado.${fxWallet?.estimated ? ' Ele próprio era estimado, então estas linhas herdam a estimativa.' : ''}`
                       : 'Mudar este valor recalcula o valor em R$ de todas as linhas (e descarta edições feitas na lista).'}
                     {fxLedger.averageRate !== null && (
                       <>

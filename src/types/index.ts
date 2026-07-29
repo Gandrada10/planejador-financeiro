@@ -227,6 +227,10 @@ export interface FxWallet {
   balanceFx: number;
   /** Quanto esse saldo custou, em BRL (IOF e spread já embutidos). */
   costBrl: number;
+  /** `true` quando esse custo é estimado (veio de um extrato importado sem o
+   *  custo de abertura declarado) — a próxima importação herda a marca e
+   *  continua avisando em vez de apresentar o número como exato. */
+  estimated?: boolean;
   /** Conta do app usada na última importação — só pré-seleção de tela. */
   accountName: string;
   /** Data final do último extrato aplicado. */
