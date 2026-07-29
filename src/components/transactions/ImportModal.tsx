@@ -27,6 +27,12 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 type ImportItem = Omit<Transaction, 'id' | 'createdAt'>;
 type ImportRow = ImportItem & {
   isDuplicate: boolean;
+  /** POR QUE a linha foi marcada como duplicata. Sem isso o preview diz
+   *  "84 possíveis duplicatas" e não há como saber contra o quê — se contra
+   *  uma importação anterior que deu errado, contra lançamentos digitados à
+   *  mão, ou contra nada (falso positivo). Era o que transformava um número
+   *  assustador em beco sem saída. */
+  duplicateOf?: { account: string; date: Date; description: string; via: 'id' | 'valor' };
   installmentType: 'unica' | 'parcelada';
   periodicity: number; // months between installments
   installmentAmount: number | null;
@@ -37,9 +43,11 @@ function datesMatch(a: Date | null, b: Date | null): boolean {
   return a.toDateString() === b.toDateString();
 }
 
-function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
+/** Devolve a transação que colide, ou `null`. Antes era um booleano — mas
+ *  quem está olhando o preview precisa saber CONTRA O QUÊ bateu. */
+function findDuplicate(item: ImportItem, existing: Transaction[]): Transaction | null {
   const itemDescNorm = normalizeDescriptionForDedup(item.description);
-  return existing.some((t) => {
+  return existing.find((t) => {
     if (Math.abs(t.amount - item.amount) >= 0.01) return false;
     if (normalizeDescriptionForDedup(t.description) !== itemDescNorm) return false;
     // Match if any date pair aligns — handles the case where one side stores
@@ -50,7 +58,11 @@ function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
       datesMatch(t.date, item.purchaseDate) ||
       datesMatch(t.purchaseDate, item.date)
     );
-  });
+  }) ?? null;
+}
+
+function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
+  return findDuplicate(item, existing) !== null;
 }
 
 // Teto de tamanho para o arquivo OFX (~15 MB). Extrato de conta corrente é
@@ -92,11 +104,16 @@ function isOfxDuplicate(item: ImportItem, existing: Transaction[]): boolean {
  * informado. Exigir valor igual faria a reimportação de um período que se
  * sobrepõe ao anterior duplicar tudo, calada.
  */
-function isFxDuplicate(item: ImportItem, existing: Transaction[]): boolean {
+function findFxDuplicate(item: ImportItem, existing: Transaction[]): ImportRow['duplicateOf'] {
   if (item.fitid && item.account) {
-    if (existing.some((t) => t.fitid === item.fitid && t.account === item.account)) return true;
+    const byId = existing.find((t) => t.fitid === item.fitid && t.account === item.account);
+    if (byId) return { account: byId.account, date: byId.date, description: byId.description, via: 'id' };
   }
-  return isDuplicate(item, existing);
+  const byValue = findDuplicate(item, existing);
+  if (byValue) {
+    return { account: byValue.account, date: byValue.date, description: byValue.description, via: 'valor' };
+  }
+  return undefined;
 }
 
 // BANKID (OFX) → padrões de nome/banco, para auto-selecionar a conta de
@@ -282,9 +299,11 @@ function buildFxRows(
       reconciled: false,
       reconciledAt: null,
     };
+    const duplicateOf = findFxDuplicate(item, existingTransactions);
     return {
       ...item,
-      isDuplicate: isFxDuplicate(item, existingTransactions),
+      isDuplicate: duplicateOf !== undefined,
+      duplicateOf,
       installmentType: 'unica' as const,
       periodicity: 1,
       installmentAmount: null,
@@ -625,8 +644,54 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       existingTransactions,
       resolveFxAccount(fxWallet?.accountName)
     );
-    setItems(rows);
-    setSelected(new Set(rows.map((_, i) => i).filter((i) => !rows[i].isDuplicate)));
+
+    // PRESERVA o que o usuário já ajustou. O recálculo muda só o VALOR EM
+    // REAIS de cada linha — conta, categoria, projeto e membro são escolha
+    // dele e não têm nada a ver com câmbio. Substituir as linhas inteiras
+    // (o que esta tela fazia) apagava um "aplicar em lote" inteiro assim que
+    // se mexesse no custo do saldo inicial, e o lote seguia para o banco com
+    // as linhas em branco — foi assim que uma importação foi parar metade
+    // numa conta e metade em conta nenhuma.
+    // `fitid` é a chave estável entre reconstruções (é o id da própria Wise).
+    // A descrição serve de reserva para linha sem id.
+    const keyOf = (r: { fitid?: string | null; description: string }) => r.fitid ?? r.description;
+    // Lê `items`/`selected` do render atual em vez de usar o updater
+    // funcional: o efeito roda DEPOIS do commit, então os dois já estão
+    // atualizados, e assim não há setState aninhado dentro de outro updater
+    // (que o StrictMode chamaria duas vezes).
+    const byKey = new Map(items.map((r) => [keyOf(r), r]));
+    const selectedKeys = new Set(items.filter((_, i) => selected.has(i)).map(keyOf));
+    const isFirstBuild = items.length === 0;
+
+    const merged = rows.map((row) => {
+      const old = byKey.get(keyOf(row));
+      if (!old) return row;
+      return {
+        ...row,
+        account: old.account,
+        categoryId: old.categoryId,
+        projectId: old.projectId,
+        familyMember: old.familyMember,
+        titular: old.titular,
+        notes: old.notes,
+        noteAlert: old.noteAlert,
+      };
+    });
+
+    // A seleção é por ÍNDICE, e ligar "incluir compras de moeda" muda a
+    // quantidade de linhas — reaproveitar os índices antigos apontaria para
+    // linhas erradas. Traduzimos pela chave: quem estava marcado continua
+    // marcado, no índice novo; linha inédita entra marcada se não for
+    // duplicata, como na primeira montagem.
+    setItems(merged);
+    setSelected(new Set(
+      merged
+        .map((row, i) => ({ row, i }))
+        .filter(({ row }) => (isFirstBuild || !byKey.has(keyOf(row)))
+          ? !row.isDuplicate
+          : selectedKeys.has(keyOf(row)))
+        .map(({ i }) => i)
+    ));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [importKind, fxResult, fxLedger, fxIncludeConversions]);
 
@@ -1192,6 +1257,20 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
   const duplicateCount = items.filter((i) => i.isDuplicate).length;
 
+  /** Duplicatas agrupadas por conta de destino + critério de casamento. É o
+   *  que transforma "84 possíveis duplicatas" em algo acionável. */
+  const duplicateBreakdown = useMemo(() => {
+    const acc = new Map<string, { key: string; account: string; via: 'id' | 'valor'; count: number }>();
+    for (const it of items) {
+      if (!it.duplicateOf) continue;
+      const key = `${it.duplicateOf.account}|${it.duplicateOf.via}`;
+      const cur = acc.get(key) ?? { key, account: it.duplicateOf.account, via: it.duplicateOf.via, count: 0 };
+      cur.count += 1;
+      acc.set(key, cur);
+    }
+    return [...acc.values()].sort((a, b) => b.count - a.count);
+  }, [items]);
+
   // Placar do lote: soma das linhas SELECIONADAS (as que serão gravadas, já que
   // as duplicatas entram desmarcadas). Compras = Σ negativos; Estornos/créditos
   // = Σ positivos; Líquido = o que sai no fluxo de caixa do mês. Um total de
@@ -1314,6 +1393,29 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   </span>
                 )}
               </div>
+
+              {/* Contra O QUÊ as duplicatas bateram. Um total isolado não dá
+                  para agir: com a conta e o critério à vista, dá para ver na
+                  hora se elas vêm de uma importação anterior que ficou pela
+                  metade — e aí desfazer aquela importação em Configurações em
+                  vez de tentar limpar na mão. */}
+              {duplicateCount > 0 && duplicateBreakdown.length > 0 && (
+                <div className="bg-status-warn/10 border border-status-warn/30 rounded-card p-3 space-y-1">
+                  <p className="text-caption font-bold text-status-warn">
+                    As {duplicateCount} duplicatas já existem em:
+                  </p>
+                  {duplicateBreakdown.map((d) => (
+                    <p key={d.key} className="text-caption text-text-secondary">
+                      <b className="text-text-primary">{d.account || 'sem conta definida'}</b> — {d.count} lançamento{d.count !== 1 ? 's' : ''},
+                      {' '}casando por {d.via === 'id' ? 'id do extrato' : 'data, valor e descrição'}
+                    </p>
+                  ))}
+                  <p className="text-caption text-ink-3">
+                    Elas entram DESMARCADAS. Se vieram de uma importação anterior que deu errado,
+                    desfaça aquela importação em Configurações › Importações antes de importar de novo.
+                  </p>
+                </div>
+              )}
 
               {/* Placar do lote — confere antes de gravar (soma das selecionadas).
                   role=status + aria-live: o leitor de tela anuncia a mudança
@@ -1882,7 +1984,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         </td>
                         <td className="p-2 text-center">
                           {item.isDuplicate && (
-                            <span title="Possivel duplicata — ja existe transacao com mesma data, valor e descricao">
+                            <span
+                              title={
+                                item.duplicateOf
+                                  ? `Já existe: "${item.duplicateOf.description}" em ${item.duplicateOf.account || 'conta não definida'}, ${formatDate(item.duplicateOf.date)} — casou por ${item.duplicateOf.via === 'id' ? 'id do extrato' : 'data, valor e descrição'}`
+                                  : 'Possivel duplicata — ja existe transacao com mesma data, valor e descricao'
+                              }
+                            >
                               <AlertTriangle size={13} className="text-status-warn" />
                             </span>
                           )}

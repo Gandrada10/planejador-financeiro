@@ -185,6 +185,22 @@ export function useTransactions() {
     });
   }
 
+  /**
+   * Apaga várias transações de uma vez, em lotes commitados — é o que desfaz
+   * uma importação inteira. A alternativa (um `deleteTransaction` por id, como
+   * a tabela faz na exclusão em lote) dispara centenas de escritas soltas: em
+   * 108 lançamentos isso é lento, sem atomicidade por bloco e com falha
+   * parcial silenciosa, que foi exatamente como uma importação errada virou
+   * "apaguei 105 dos 108 e não sei onde estão os outros 3".
+   */
+  async function batchDelete(ids: string[]) {
+    const uid = auth.currentUser?.uid;
+    if (!uid || ids.length === 0) return;
+    await commitInChunks(ids, (batch, id) => {
+      batch.delete(doc(db, 'users', uid, 'transactions', id));
+    });
+  }
+
   async function batchUpdateReconciled(ids: string[], reconciled: boolean) {
     const uid = auth.currentUser?.uid;
     if (!uid || ids.length === 0) return;
@@ -241,5 +257,5 @@ export function useTransactions() {
     });
   }
 
-  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate, batchUpdateVarying };
+  return { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchDelete, batchUpdateReconciled, batchUpdate, batchUpdateVarying };
 }

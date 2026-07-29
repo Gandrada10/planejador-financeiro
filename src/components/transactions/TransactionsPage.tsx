@@ -48,6 +48,11 @@ export function TransactionsPage() {
   // projeto ("Abrir em Lançamentos"); sem isso não havia caminho nenhum de um
   // projeto até a tabela editável.
   const [filterProject, setFilterProject] = useState(() => searchParams.get('projeto') || 'all');
+  // Recorte por LOTE de importação. Não tem seletor próprio: chega pela URL,
+  // do histórico de importações em Configurações, e se anuncia como um chip
+  // removível — é um recorte de diagnóstico ("o que esta importação criou?"),
+  // não um filtro do dia a dia que mereça ocupar a barra.
+  const [filterImport, setFilterImport] = useState(() => searchParams.get('importacao') || '');
   const [filterInstallment, setFilterInstallment] = useState('all');
   // Fluxo: 'all' | 'income' (receitas) | 'expense' (despesas). Usa os mesmos
   // predicados da linha de totais (isIncomeAmount/isExpenseAmount) para a lista
@@ -149,6 +154,9 @@ export function TransactionsPage() {
     } else if (filterAccount !== 'all') {
       list = list.filter((t) => t.account === filterAccount);
     }
+    if (filterImport) {
+      list = list.filter((t) => t.importBatch === filterImport);
+    }
     if (filterProject === 'none') {
       list = list.filter((t) => !t.projectId);
     } else if (filterProject !== 'all') {
@@ -189,7 +197,7 @@ export function TransactionsPage() {
       });
     }
     return list;
-  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterProject, filterInstallment, filterFlow, filterReconciled, searchText]);
+  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterProject, filterImport, filterInstallment, filterFlow, filterReconciled, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -314,6 +322,7 @@ export function TransactionsPage() {
     month: filterMonth !== defaultMonth,
     category: filterCategory !== 'all',
     project: filterProject !== 'all',
+    importBatch: filterImport !== '',
     titular: filterTitular !== 'all',
     installment: filterInstallment !== 'all',
     flow: filterFlow !== 'all',
@@ -327,6 +336,7 @@ export function TransactionsPage() {
     setFilterMonth(defaultMonth);
     setFilterCategory('all');
     setFilterProject('all');
+    setFilterImport('');
     setFilterTitular('all');
     setFilterInstallment('all');
     setFilterFlow('all');
@@ -466,6 +476,25 @@ export function TransactionsPage() {
           />
         </div>
       </div>
+
+      {/* Chip do recorte por importação: sem ele o usuário veria uma lista
+          curta sem entender por quê — o filtro chegou pela URL, não por um
+          seletor que ele mexeu. */}
+      {filterImport && (
+        <div className="flex items-center gap-2 text-body bg-accent/5 border border-accent/30 rounded-card px-3 py-2">
+          <History size={13} className="text-accent shrink-0" />
+          <span className="text-text-secondary">
+            Mostrando só os lançamentos criados por <b className="text-text-primary">uma importação</b>
+            {' '}({filtered.length} de {transactions.length}).
+          </span>
+          <button
+            onClick={() => setFilterImport('')}
+            className="ml-auto flex items-center gap-1 text-text-secondary hover:text-accent"
+          >
+            <X size={12} /> Remover
+          </button>
+        </div>
+      )}
 
       {activeCount > 0 && (
         <div className="flex justify-end -mt-2">

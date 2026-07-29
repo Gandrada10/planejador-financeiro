@@ -3,6 +3,7 @@ import { Plus, Trash2, CreditCard, Wallet, Pencil, Check, X, Users, KeyRound, Ey
 import { NormalizeTitulars } from './NormalizeTitulars';
 import { BackfillInvoiceFields } from './BackfillInvoiceFields';
 import { BackfillFxFields } from './BackfillFxFields';
+import { ImportBatches } from './ImportBatches';
 import { useTitularMappings } from '../../hooks/useTitularMappings';
 import { useFamilyMembers } from '../../hooks/useFamilyMembers';
 import { useAccounts } from '../../hooks/useAccounts';
@@ -561,6 +562,7 @@ export function SettingsPage() {
             não apaga nem sobrescreve nada. Ferramenta de uso pontual, com pré-visualização antes de gravar.
           </p>
         </div>
+        <ImportBatches />
         <BackfillInvoiceFields />
         <BackfillFxFields />
       </div>
