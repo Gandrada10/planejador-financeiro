@@ -34,6 +34,16 @@ const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set
  */
 const TREND_LINE = '#f5f4f2';
 
+/**
+ * Ano anterior: coral do MONEY.expense a 35% JÁ MISTURADO com o fundo do card
+ * (#1b1b1e), em vez de `fillOpacity`. A legenda do Recharts pinta o quadradinho
+ * só com `fill` e ignora a opacidade — com fillOpacity o ano anterior aparecia
+ * na legenda no mesmo coral cheio do ano atual, dizendo que as duas séries têm
+ * a mesma cor quando as barras têm tons diferentes. Cor sólida faz legenda e
+ * barra baterem exatamente. Mesmo pixel de antes nas barras.
+ */
+const PREV_EXPENSE = '#60312e';
+
 interface Props {
   transactions: Transaction[];
   categories: Category[];
@@ -204,8 +214,7 @@ export function MonthlyExpensesChart({ transactions, categories, monthYear, ma }
               <Bar
                 dataKey="prev"
                 name={String(prevYear)}
-                fill={MONEY.expense}
-                fillOpacity={0.35}
+                fill={PREV_EXPENSE}
                 radius={[4, 4, 0, 0]}
                 isAnimationActive={false}
                 legendType="rect"

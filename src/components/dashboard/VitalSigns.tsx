@@ -234,7 +234,11 @@ export function VitalSigns({
                         ? 'text-negative'
                         : 'text-positive',
                   text: `${col.deltaPct > 0 ? '+' : ''}${col.deltaPct.toFixed(1).replace('.', ',')}%`,
-                  context: `em ${col.base.spanMonths} meses`,
+                  // "desde jan/26", não "em 6 meses": o valor acima é uma
+                  // média de 12 MESES, e um chip com outro número de meses
+                  // logo abaixo lia como se a média fosse desse período. O
+                  // que a base marca é um PONTO no tempo, não uma janela.
+                  context: `desde ${col.base.label}`,
                 }
               : col.endPartialMonths !== null
                 ? {
