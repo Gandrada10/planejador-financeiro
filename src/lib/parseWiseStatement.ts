@@ -1,12 +1,23 @@
 /**
- * parseWiseCsv — parser determinístico do CSV de extrato da Wise (ou de
+ * parseWiseStatement — parser determinístico do extrato da Wise (ou de
  * qualquer conta em moeda estrangeira que exporte o mesmo layout).
  *
  * Terceiro irmão dos parsers de importação, ao lado de `parseOfx` (extrato de
  * conta corrente, determinístico) e `functions/api/parse-statement.ts` (fatura
  * de cartão em texto livre, via IA). Aqui o formato é estruturado e estável —
- * cabeçalho nomeado, valores com ponto decimal, id próprio por lançamento —
- * então NÃO passa por IA: é varredura de colunas, reprodutível e de graça.
+ * cabeçalho nomeado, id próprio por lançamento — então NÃO passa por IA: é
+ * varredura de colunas, reprodutível e de graça.
+ *
+ * ── Duas entradas, um núcleo ───────────────────────────────────────────────
+ * A Wise exporta o MESMO extrato em CSV e em XLSX, e traduz os NOMES DAS
+ * COLUNAS para o idioma da conta ("Amount"/"Valor", "Running Balance"/"Saldo
+ * cumulativo"). O núcleo (`parseWiseRows`) trabalha sobre linhas já
+ * desserializadas em objetos e resolve as colunas por uma tabela de apelidos;
+ * `parseWiseCsv` é só o adaptador do CSV. O XLSX entra pelo mesmo núcleo, com
+ * a planilha lida por quem chama (a lib já está no bundle do importador).
+ *
+ * Por isso os valores chegam como `string` (CSV) OU `number`/`Date` (XLSX):
+ * toda leitura de célula passa pelos conversores tolerantes daqui.
  *
  * ── Por que este parser existe ─────────────────────────────────────────────
  * O extrato vem TODO na moeda da conta (ex.: EUR) e mistura duas coisas que o
@@ -116,9 +127,44 @@ export interface WiseParseResult {
   meta: WiseParseMeta;
 }
 
-/** Colunas que identificam o layout. `TransferWise ID` é o marcador forte —
- *  nenhum outro extrato usa esse nome. */
-const SIGNATURE_COLUMNS = ['transferwise id', 'running balance'];
+/**
+ * Apelidos de cada coluna que o parser usa, em todos os idiomas de exportação
+ * conhecidos. A Wise traduz o cabeçalho conforme o idioma da conta — quem
+ * exporta em português recebe "Valor" onde a documentação diz "Amount" — e
+ * ancorar no nome em inglês faria o arquivo do usuário brasileiro cair no
+ * caminho de IA, que leria os valores em euro como se fossem reais.
+ *
+ * Acrescentar um idioma é acrescentar apelido aqui; nada mais no arquivo
+ * conhece nome de coluna.
+ */
+const COLUMNS = {
+  id: ['TransferWise ID', 'ID', 'Número da transferência'],
+  date: ['Date', 'Data'],
+  dateTime: ['Date Time', 'Data e hora'],
+  amount: ['Amount', 'Valor'],
+  currency: ['Currency', 'Moeda'],
+  description: ['Description', 'Descrição'],
+  runningBalance: ['Running Balance', 'Saldo cumulativo'],
+  exchangeFrom: ['Exchange From', 'Convertido de'],
+  merchant: ['Merchant', 'Estabelecimento comercial'],
+  cardLast4: ['Card Last Four Digits', 'Últimos quatro dígitos do cartão'],
+  detailsType: ['Transaction Details Type', 'Tipo de detalhe da transação'],
+} as const;
+
+/** O id e o saldo acumulado juntos são assinatura suficiente: nenhum outro
+ *  extrato traz os dois. Um só deles daria falso positivo em planilha caseira. */
+const SIGNATURE: (keyof typeof COLUMNS)[] = ['id', 'runningBalance'];
+
+/**
+ * Reconhece o extrato pelos NOMES DAS COLUNAS. Serve tanto para a planilha
+ * (cabeçalho já lido) quanto para o CSV, via `isWiseCsv`.
+ */
+export function isWiseHeader(headers: string[]): boolean {
+  const norm = headers.map((h) => String(h ?? '').trim().toLowerCase());
+  return SIGNATURE.every((key) =>
+    COLUMNS[key].some((alias) => norm.includes(alias.toLowerCase()))
+  );
+}
 
 /**
  * Reconhece o CSV da Wise pelo CABEÇALHO, sem parsear o arquivo inteiro.
@@ -126,8 +172,11 @@ const SIGNATURE_COLUMNS = ['transferwise id', 'running balance'];
  * a extensão sozinha não distingue este extrato de uma planilha qualquer.
  */
 export function isWiseCsv(text: string): boolean {
-  const head = text.slice(0, 1000).toLowerCase();
-  return SIGNATURE_COLUMNS.every((c) => head.includes(c));
+  const firstLine = text.slice(0, 2000).split(/\r?\n/)[0] ?? '';
+  // Split cru por vírgula/ponto-e-vírgula basta para o sniff: as aspas viram
+  // ruído nas pontas do nome, e o `includes` do `isWiseHeader` não se importa
+  // — o parse de verdade fica com o Papa.
+  return isWiseHeader(firstLine.split(/[,;]/).map((h) => h.replace(/"/g, '')));
 }
 
 /**
@@ -139,8 +188,11 @@ export function isWiseCsv(text: string): boolean {
  * de assumir locale — assumir erraria por um fator de 1000 exatamente nos
  * valores altos, calado.
  */
-function parseLooseNumber(raw: string | null | undefined): number | null {
-  if (!raw) return null;
+function parseLooseNumber(raw: unknown): number | null {
+  // A planilha entrega número de verdade; o CSV, texto. Aceitar os dois aqui
+  // é o que permite um núcleo só para as duas entradas.
+  if (typeof raw === 'number') return Number.isFinite(raw) ? raw : null;
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
   const cleaned = raw.trim().replace(/\s/g, '');
   if (!/^-?[\d.,]+$/.test(cleaned) || !/\d/.test(cleaned)) return null;
   const lastComma = cleaned.lastIndexOf(',');
@@ -166,18 +218,29 @@ function parseLooseNumber(raw: string | null | undefined): number | null {
  * como `05-06-2026`. Ancorado ao meio-dia local (mesmo padrão de `parseOfx`)
  * para nunca sofrer rollover de fuso horário.
  */
-function parseWiseDate(raw: string | null | undefined): Date | null {
-  if (!raw) return null;
+function parseWiseDate(raw: unknown): Date | null {
+  // XLSX pode entregar Date (célula formatada como data) ou o SERIAL do Excel
+  // (número de dias desde 30/12/1899 — a época com o bug do ano bissexto de
+  // 1900 já embutido, que é por isso que a base é 30/12 e não 31/12).
+  if (raw instanceof Date) return anchorNoon(raw.getFullYear(), raw.getMonth() + 1, raw.getDate());
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const ms = Date.UTC(1899, 11, 30) + Math.floor(raw) * 86_400_000;
+    const d = new Date(ms);
+    return anchorNoon(d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate());
+  }
+  if (typeof raw !== 'string') return null;
   const m = raw.trim().match(/^(\d{1,4})[-/](\d{1,2})[-/](\d{1,4})/);
   if (!m) return null;
   const [, a, b, c] = m;
   const iso = a.length === 4;
-  const y = Number(iso ? a : c);
-  const mo = Number(b);
-  const d = Number(iso ? c : a);
+  return anchorNoon(Number(iso ? a : c), Number(b), Number(iso ? c : a));
+}
+
+/** Ancora ao meio-dia local (mesmo padrão de `parseOfx`) e rejeita data
+ *  inexistente — `new Date` normaliza 31/02 para março em silêncio. */
+function anchorNoon(y: number, mo: number, d: number): Date | null {
   if (y < 1900 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
   const date = new Date(y, mo - 1, d, 12, 0, 0);
-  // Guarda contra data válida na forma mas inexistente (31/02 rola pra março).
   if (date.getFullYear() !== y || date.getMonth() !== mo - 1 || date.getDate() !== d) return null;
   return date;
 }
@@ -192,12 +255,21 @@ function parseWiseDate(raw: string | null | undefined): Date | null {
  * parser, e do texto aproveitamos só a hora, que desempata lançamentos do
  * mesmo dia. Sem hora legível, meia-noite — a ordem do arquivo desempata.
  */
-function rowTimestamp(date: Date, dateTime: string | null): number {
-  const m = dateTime?.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+function rowTimestamp(date: Date, dateTime: unknown): number {
+  const base = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+  // Serial do Excel: a PARTE FRACIONÁRIA é a hora do dia. Vem antes do ramo de
+  // texto porque a planilha entrega número, não string.
+  if (typeof dateTime === 'number' && Number.isFinite(dateTime)) {
+    const frac = dateTime - Math.floor(dateTime);
+    return base + Math.round(frac * 86_400_000);
+  }
+  if (dateTime instanceof Date) {
+    return base + (dateTime.getHours() * 3600 + dateTime.getMinutes() * 60 + dateTime.getSeconds()) * 1000;
+  }
+  const m = typeof dateTime === 'string' ? dateTime.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?/) : null;
   if (!m) return date.getTime();
   const seconds = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3] || 0);
-  // `date` está ancorada ao meio-dia; zeramos para somar o horário real.
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() + seconds * 1000;
+  return base + seconds * 1000;
 }
 
 /**
@@ -239,12 +311,37 @@ interface RawRow {
   isConversionRow: boolean;
 }
 
-function firstNonEmpty(row: Record<string, string>, keys: string[]): string | null {
-  for (const k of keys) {
-    const v = row[k];
-    if (v != null && v.trim() !== '') return v.trim();
+/** Linha genérica: CSV entrega tudo string, XLSX entrega number/Date/string. */
+export type WiseRow = Record<string, unknown>;
+
+/**
+ * Valor de uma coluna pelos seus apelidos, na primeira que existir e não
+ * estiver vazia. Casa o nome ignorando caixa e espaços das pontas — a Wise
+ * varia isso entre exportações.
+ */
+function cell(row: WiseRow, aliases: readonly string[]): unknown {
+  for (const alias of aliases) {
+    if (alias in row) {
+      const v = row[alias];
+      if (v !== null && v !== undefined && v !== '') return v;
+    }
+  }
+  const lookup = new Map(Object.keys(row).map((k) => [k.trim().toLowerCase(), k]));
+  for (const alias of aliases) {
+    const key = lookup.get(alias.toLowerCase());
+    if (key === undefined) continue;
+    const v = row[key];
+    if (v !== null && v !== undefined && v !== '') return v;
   }
   return null;
+}
+
+/** Texto de uma coluna, já aparado. `null` quando vazia. */
+function text(row: WiseRow, aliases: readonly string[]): string | null {
+  const v = cell(row, aliases);
+  if (v === null) return null;
+  const s = String(v).trim();
+  return s === '' ? null : s;
 }
 
 /**
@@ -252,21 +349,28 @@ function firstNonEmpty(row: Record<string, string>, keys: string[]): string | nu
  * o encoding (a Wise exporta UTF-8; ver o roteador no `ImportModal`).
  */
 export function parseWiseCsv(text: string): WiseParseResult {
-  const warnings: string[] = [];
   const parsed = Papa.parse<Record<string, string>>(text, {
     header: true,
     skipEmptyLines: true,
     transformHeader: (h) => h.trim(),
   });
+  return parseWiseRows(parsed.data);
+}
 
+/**
+ * Núcleo do parser: recebe as linhas já desserializadas (CSV via Papa ou
+ * planilha via `sheet_to_json`) e devolve os lançamentos normalizados.
+ */
+export function parseWiseRows(data: WiseRow[]): WiseParseResult {
+  const warnings: string[] = [];
   const rows: RawRow[] = [];
   let skipped = 0;
   let currency: string | null = null;
 
-  parsed.data.forEach((row, i) => {
-    const id = firstNonEmpty(row, ['TransferWise ID', 'ID']);
-    const amount = parseLooseNumber(firstNonEmpty(row, ['Amount']));
-    const date = parseWiseDate(firstNonEmpty(row, ['Date', 'Date Time']));
+  data.forEach((row, i) => {
+    const id = text(row, COLUMNS.id);
+    const amount = parseLooseNumber(cell(row, COLUMNS.amount));
+    const date = parseWiseDate(cell(row, COLUMNS.date) ?? cell(row, COLUMNS.dateTime));
     if (!id || amount === null || !date) {
       // Linha em branco no fim do arquivo é comum e não é erro — só conta.
       if (id || amount !== null || date) {
@@ -275,20 +379,20 @@ export function parseWiseCsv(text: string): WiseParseResult {
       skipped++;
       return;
     }
-    const detailsType = (firstNonEmpty(row, ['Transaction Details Type']) || '').toUpperCase();
-    const exchangeFrom = firstNonEmpty(row, ['Exchange From']);
-    const rowCurrency = firstNonEmpty(row, ['Currency']);
+    const detailsType = (text(row, COLUMNS.detailsType) || '').toUpperCase();
+    const exchangeFrom = text(row, COLUMNS.exchangeFrom);
+    const rowCurrency = text(row, COLUMNS.currency);
     if (rowCurrency && !currency) currency = rowCurrency;
     rows.push({
       index: i,
       id,
       date,
-      sortTs: rowTimestamp(date, firstNonEmpty(row, ['Date Time'])),
+      sortTs: rowTimestamp(date, cell(row, COLUMNS.dateTime)),
       amount,
-      runningBalance: parseLooseNumber(firstNonEmpty(row, ['Running Balance'])),
-      description: firstNonEmpty(row, ['Description']) || '',
-      merchant: firstNonEmpty(row, ['Merchant']),
-      cardLast4: firstNonEmpty(row, ['Card Last Four Digits']),
+      runningBalance: parseLooseNumber(cell(row, COLUMNS.runningBalance)),
+      description: text(row, COLUMNS.description) || '',
+      merchant: text(row, COLUMNS.merchant),
+      cardLast4: text(row, COLUMNS.cardLast4),
       exchangeFrom,
       currency: rowCurrency,
       isConversionRow: detailsType === 'CONVERSION',

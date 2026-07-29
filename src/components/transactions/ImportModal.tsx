@@ -5,7 +5,7 @@ import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
 import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account, CategoryRule, Project, FxWallet } from '../../types';
 import { parseOfx, type OfxParseMeta } from '../../lib/parseOfx';
-import { parseWiseCsv, isWiseCsv, type WiseParseResult } from '../../lib/parseWiseCsv';
+import { parseWiseCsv, parseWiseRows, isWiseCsv, isWiseHeader, type WiseParseResult } from '../../lib/parseWiseStatement';
 import { buildFxLedger, type FxCarry, type FxLedgerResult } from '../../lib/fxLedger';
 import { NoteTag } from '../shared/NoteTag';
 import {
@@ -480,10 +480,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     // se o cabeçalho é OFX, mandamos pro parser determinístico. Só olhamos os
     // bytes quando a extensão não é uma das conhecidas de IA (csv/xlsx/xls/pdf),
     // pra não ler à toa quem já se identificou pela extensão.
-    // `.csv` é ambíguo: pode ser planilha qualquer (caminho de IA) ou extrato
-    // de conta em moeda estrangeira, que tem parser próprio e determinístico.
-    // A extensão não distingue — só o cabeçalho. Sniff barato, sem ler o
-    // arquivo inteiro, e a falha cai no caminho de IA de sempre.
+    // `.csv`/`.xlsx` são ambíguos: podem ser planilha qualquer (caminho de IA)
+    // ou extrato de conta em moeda estrangeira, que tem parser próprio e
+    // determinístico. A extensão não distingue — só o cabeçalho. Sniff barato,
+    // e qualquer falha cai no caminho de IA de sempre.
     if (ext === 'csv') {
       try {
         const head = new TextDecoder('utf-8').decode(await file.slice(0, 2048).arrayBuffer());
@@ -493,6 +493,20 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         }
       } catch {
         // Cabeçalho ilegível → segue pro caminho padrão.
+      }
+    }
+    if (ext === 'xlsx' || ext === 'xls') {
+      try {
+        const sheet = await readFirstSheet(file);
+        // `header: 1` na primeira linha: só os NOMES das colunas, sem montar
+        // objeto pra planilha inteira antes de saber se é o extrato certo.
+        const header = (XLSX.utils.sheet_to_json(sheet, { header: 1, range: 0 })[0] || []) as string[];
+        if (isWiseHeader(header)) {
+          handleParseFx(file, sheet);
+          return;
+        }
+      } catch {
+        // Planilha ilegível aqui → o caminho de IA reporta o erro.
       }
     }
 
@@ -517,7 +531,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // Só faz o PARSE aqui. As linhas do preview nascem do efeito abaixo, que
   // depende também do custo do saldo inicial — e esse o usuário ainda vai
   // informar (ou vem da carteira guardada).
-  async function handleParseFx(file: File) {
+  /** Primeira aba da planilha. Compartilhada pelo sniff e pelo parse — ler
+   *  duas vezes o mesmo arquivo seria desperdício num extrato de centenas de
+   *  linhas. */
+  async function readFirstSheet(file: File) {
+    const wb = XLSX.read(await file.arrayBuffer(), { type: 'array', cellDates: true });
+    return wb.Sheets[wb.SheetNames[0]];
+  }
+
+  async function handleParseFx(file: File, sheet?: XLSX.WorkSheet) {
     setError('');
     setFileName(file.name);
     setDeclaredTotal(null);
@@ -529,9 +551,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     setFxParsing(true);
 
     try {
-      // A Wise exporta UTF-8 (acento nas descrições em pt-BR).
-      const text = new TextDecoder('utf-8').decode(await file.arrayBuffer());
-      const result = parseWiseCsv(text);
+      // Planilha: as linhas já vêm desserializadas (com número e Date nas
+      // células), e o núcleo do parser aceita as duas formas. CSV: a Wise
+      // exporta UTF-8 (acento nas descrições em pt-BR).
+      const result = sheet
+        ? parseWiseRows(XLSX.utils.sheet_to_json(sheet, { defval: '' }))
+        : parseWiseCsv(new TextDecoder('utf-8').decode(await file.arrayBuffer()));
 
       if (result.entries.length === 0) {
         setError(
@@ -1256,7 +1281,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 >
                   <Sparkles size={32} className="mx-auto mb-3 text-accent" />
                   <p className="text-body font-bold text-text-primary mb-1">Arrastar arquivo ou clicar</p>
-                  <p className="text-caption text-text-secondary mb-3">Extrato de conta corrente (.ofx) e extrato Wise em moeda estrangeira (.csv) entram sem IA · fatura de cartão a IA detecta transacoes, parcelas, titulares e categorias</p>
+                  <p className="text-caption text-text-secondary mb-3">Extrato de conta corrente (.ofx) e extrato Wise em moeda estrangeira (.csv/.xlsx) entram sem IA · fatura de cartão a IA detecta transacoes, parcelas, titulares e categorias</p>
                   <p className="text-caption text-text-secondary">.ofx .ofc .xlsx .xls .csv .pdf</p>
                 </div>
               )}

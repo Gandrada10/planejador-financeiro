@@ -45,7 +45,7 @@
  * de lançamentos.
  */
 
-import type { WiseEntry } from './parseWiseCsv';
+import type { WiseEntry } from './parseWiseStatement';
 
 /** Saldo de moeda e o que ele custou em BRL. Atravessa importações. */
 export interface FxCarry {
@@ -115,7 +115,7 @@ const fromCents = (c: number): number => c / 100;
 /**
  * Apreça os lançamentos de um extrato.
  *
- * @param entries  saída de `parseWiseCsv`, em ordem cronológica crescente
+ * @param entries  saída de `parseWiseStatement`, em ordem cronológica crescente
  *                 (o FIFO depende disso: um gasto nunca pode consumir um lote
  *                 comprado depois dele).
  * @param opening  saldo/custo herdado do extrato anterior. `balanceFx` sai do
