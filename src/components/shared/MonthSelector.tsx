@@ -2,12 +2,24 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { getMonthLabel, getMonthYear, getMonthYearOffset } from '../../lib/utils';
 
+/** Valor especial de "sem recorte de mês". Só existe quando `allowAll`. */
+export const ALL_MONTHS = 'all';
+
 interface Props {
-  value: string; // "YYYY-MM"
+  /** "YYYY-MM", ou `ALL_MONTHS` quando `allowAll` está ligado. */
+  value: string;
   onChange: (monthYear: string) => void;
   /** Meses com lançamento ("YYYY-MM"): ficam plenos no calendário (os demais
    *  esmaecem) e definem até onde a paginação de ano alcança. */
   months?: string[];
+  /**
+   * Habilita "Todos os meses" — o recorte que a tela de Transações precisa e
+   * as demais não: lá se procura um lançamento específico, se confere um
+   * projeto que cruza meses, se busca por valor. Sem isso, aquela tela teria
+   * de manter um `<select>` próprio e ficar sendo a única com um seletor de
+   * mês diferente do resto do app.
+   */
+  allowAll?: boolean;
 }
 
 const MONTH_ABBR = [
@@ -33,17 +45,23 @@ const MONTH_ABBR = [
  * lista única, que só cresce com o tempo. O calendário é limitado por
  * construção: paginar ano é o único movimento, e 12 células cabem sem rolagem.
  */
-export function MonthSelector({ value, onChange, months }: Props) {
+export function MonthSelector({ value, onChange, months, allowAll }: Props) {
   const [open, setOpen] = useState(false);
-  const [viewYear, setViewYear] = useState(() => Number(value.slice(0, 4)));
+  const isAll = value === ALL_MONTHS;
+  // Âncora para tudo que precisa de um mês concreto (ano exibido no
+  // calendário, passo das setas). Em "todos os meses" não há mês selecionado,
+  // então o calendário abre no mês corrente — `Number('all'.slice(0,4))`
+  // seria NaN e envenenaria a paginação de ano em silêncio.
+  const anchor = isAll ? getMonthYear() : value;
+  const [viewYear, setViewYear] = useState(() => Number(anchor.slice(0, 4)));
   const rootRef = useRef<HTMLDivElement>(null);
 
   const monthSet = useMemo(() => new Set(months), [months]);
   const { minYear, maxYear } = useMemo(() => {
     const years = (months ?? []).map((m) => Number(m.slice(0, 4)));
-    years.push(Number(value.slice(0, 4)), Number(getMonthYear().slice(0, 4)));
+    years.push(Number(anchor.slice(0, 4)), Number(getMonthYear().slice(0, 4)));
     return { minYear: Math.min(...years), maxYear: Math.max(...years) };
-  }, [months, value]);
+  }, [months, anchor]);
 
   useEffect(() => {
     if (!open) return;
@@ -68,8 +86,9 @@ export function MonthSelector({ value, onChange, months }: Props) {
   return (
     <div ref={rootRef} className="relative flex items-center gap-1 sm:gap-2">
       <button
-        onClick={() => onChange(getMonthYearOffset(value, -1))}
-        className="tap flex items-center justify-center rounded-control text-text-secondary hover:text-text-primary active:bg-elevated transition-colors"
+        onClick={() => onChange(getMonthYearOffset(anchor, -1))}
+        disabled={isAll}
+        className="tap flex items-center justify-center rounded-control text-text-secondary hover:text-text-primary active:bg-elevated disabled:opacity-30 disabled:pointer-events-none transition-colors"
         title="Mês anterior"
         aria-label="Mês anterior"
       >
@@ -79,20 +98,25 @@ export function MonthSelector({ value, onChange, months }: Props) {
       <button
         type="button"
         onClick={() => {
-          setViewYear(Number(value.slice(0, 4)));
+          setViewYear(Number(anchor.slice(0, 4)));
           setOpen((o) => !o);
         }}
         aria-haspopup="dialog"
         aria-expanded={open}
         title="Escolher mês"
-        className="tap text-body text-text-primary bg-bg-secondary border border-border rounded-control px-2 py-1 capitalize min-w-[150px] sm:min-w-[160px] text-center cursor-pointer hover:border-accent/50 focus:outline-none focus:border-accent transition-colors"
+        /* `first-letter:uppercase` e não `capitalize`: este último maiúsculiza
+           TODA palavra, e `getMonthLabel` devolve "julho de 2026" — virava
+           "Julho De 2026". Só a primeira letra é o que o português pede, e é
+           o que também deixa "Todos os meses" sair certo. */
+        className="tap text-body text-text-primary bg-bg-secondary border border-border rounded-control px-2 py-1 first-letter:uppercase min-w-[150px] sm:min-w-[160px] text-center cursor-pointer hover:border-accent/50 focus:outline-none focus:border-accent transition-colors"
       >
-        {getMonthLabel(value)}
+        {isAll ? 'Todos os meses' : getMonthLabel(value)}
       </button>
 
       <button
-        onClick={() => onChange(getMonthYearOffset(value, 1))}
-        className="tap flex items-center justify-center rounded-control text-text-secondary hover:text-text-primary active:bg-elevated transition-colors"
+        onClick={() => onChange(getMonthYearOffset(anchor, 1))}
+        disabled={isAll}
+        className="tap flex items-center justify-center rounded-control text-text-secondary hover:text-text-primary active:bg-elevated disabled:opacity-30 disabled:pointer-events-none transition-colors"
         title="Próximo mês"
         aria-label="Próximo mês"
       >
@@ -159,6 +183,19 @@ export function MonthSelector({ value, onChange, months }: Props) {
               );
             })}
           </div>
+
+          {allowAll && (
+            <button
+              type="button"
+              onClick={() => { onChange(ALL_MONTHS); setOpen(false); }}
+              aria-pressed={isAll}
+              className={`tap w-full rounded-control py-1.5 text-body transition-colors border-t border-border/60 mt-1 pt-2 ${
+                isAll ? 'text-accent font-semibold' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              Todos os meses
+            </button>
+          )}
         </div>
       )}
     </div>

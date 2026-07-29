@@ -18,6 +18,7 @@ import { CategorizationHistoryListModal } from './CategorizationHistoryListModal
 import { CategoryFilterCombobox } from '../shared/CategoryFilterCombobox';
 import { getMonthYear, getMonthLabel, cn, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
 import { useSearchParams } from 'react-router-dom';
+import { MonthSelector, ALL_MONTHS } from '../shared/MonthSelector';
 import { toggleCategoryRule } from '../../lib/categoryRules';
 import type { CategorizationSession, Transaction } from '../../types';
 
@@ -116,7 +117,7 @@ export function TransactionsPage() {
 
   const filtered = useMemo(() => {
     let list = transactions;
-    if (filterMonth !== 'all') {
+    if (filterMonth !== ALL_MONTHS) {
       list = list.filter((t) => getMonthYear(t.date) === filterMonth);
     }
     if (filterTitular === 'none') {
@@ -408,16 +409,17 @@ export function TransactionsPage() {
             ))}
           </select>
         )}
-        <select
-          value={filterMonth}
-          onChange={(e) => setFilterMonth(e.target.value)}
-          className={cn(baseFieldClass, isActive.month ? activeFieldClass : inactiveFieldClass)}
-        >
-          <option value="all">Todos os meses</option>
-          {months.map((m) => (
-            <option key={m} value={m}>{getMonthLabel(m)}</option>
-          ))}
-        </select>
+        {/* Mesmo seletor do dashboard (setas + calendário com paginação por
+            ano), agora com "Todos os meses" — o recorte que só esta tela usa.
+            Era o único lugar do app com um `<select>` de mês: uma lista chapada
+            que só cresce com o tempo, sem passo a passo e sem sinal de quais
+            meses têm lançamento. */}
+        <div className={cn(
+          'flex items-center px-2 py-1 border rounded-control',
+          isActive.month ? activeFieldClass : inactiveFieldClass
+        )}>
+          <MonthSelector value={filterMonth} onChange={setFilterMonth} months={months} allowAll />
+        </div>
         <CategoryFilterCombobox
           categories={categories}
           value={filterCategory}
