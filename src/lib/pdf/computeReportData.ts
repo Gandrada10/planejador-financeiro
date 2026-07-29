@@ -304,6 +304,7 @@ function computeProjects(deps: ReportDeps, period: ResolvedPeriod): ProjectSumma
         // `countsInTotals` daqui de cima, então os dois coincidem — usar o
         // contado deixa a intenção explícita se isso mudar.
         count: stats.countedCount,
+        byCurrency: stats.byCurrency.map((c) => ({ currency: c.currency, amount: c.amount })),
       };
     })
     .filter((p) => p.count > 0);

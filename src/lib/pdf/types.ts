@@ -75,6 +75,11 @@ export interface ProjectSummary {
   income: number;
   balance: number;
   count: number;
+  /** Gasto na moeda estrangeira em que ele foi feito, quando houver — o que
+   *  responde "a viagem custou quantos euros" num relatório arquivado. NUNCA
+   *  se soma ao `spent`, que é em reais; são leituras paralelas do mesmo
+   *  gasto (ver os satélites em `Transaction`). Vazio em projeto doméstico. */
+  byCurrency: { currency: string; amount: number }[];
 }
 
 export interface ReportCategoryGroup {

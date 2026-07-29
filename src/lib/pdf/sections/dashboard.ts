@@ -162,5 +162,78 @@ export function drawDashboardSection(
       },
       margin: { left: T.layout.marginX, right: T.layout.marginX },
     });
+    // @ts-expect-error autoTable augments doc.lastAutoTable at runtime
+    y = (doc.lastAutoTable?.finalY ?? y) + 4;
+  }
+
+  // Projetos. O resumo já era CALCULADO e viajava dentro do `ReportData`, mas
+  // nenhuma seção o desenhava — dado morto desde que a página de Projetos
+  // existe. Aqui ele finalmente sai impresso, e com a coluna de moeda: um
+  // relatório de viagem arquivado sem o valor em euro perde justamente a
+  // informação que não dá para reconstruir depois, porque a cotação do dia
+  // não é o custo real (ver `fxLedger`).
+  if (data.dashboard.projects.length > 0) {
+    y = ensureSpace(doc, y, 50, sectionTitle, data.period.label);
+    y = drawSubtitle(doc, y, 'Projetos');
+
+    // A coluna de moeda só aparece se ALGUM projeto tiver gasto em moeda —
+    // num relatório sem viagem ela seria uma coluna inteira de traços.
+    const anyFx = data.dashboard.projects.some((p) => p.byCurrency.length > 0);
+    const head = anyFx
+      ? ['Projeto', 'Lançamentos', 'Gasto', 'Em moeda', 'Saldo']
+      : ['Projeto', 'Lançamentos', 'Gasto', 'Saldo'];
+
+    autoTable(doc, {
+      startY: y,
+      head: [head],
+      body: data.dashboard.projects.map((p) => {
+        const row = [p.name, String(p.count), fmtBRL(p.spent)];
+        if (anyFx) {
+          row.push(
+            p.byCurrency.length > 0
+              ? p.byCurrency
+                  .map((c) => `${c.currency} ${c.amount.toLocaleString('pt-BR', {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}`)
+                  .join(' · ')
+              : '—'
+          );
+        }
+        row.push(fmtBRL(p.balance));
+        return row;
+      }),
+      theme: 'plain',
+      styles: {
+        font: T.font.family,
+        fontSize: 9,
+        cellPadding: 2,
+        textColor: T.rgb.navy as unknown as [number, number, number],
+      },
+      headStyles: {
+        fillColor: T.rgb.navy as unknown as [number, number, number],
+        textColor: T.rgb.white as unknown as [number, number, number],
+        fontStyle: 'bold',
+        fontSize: 8,
+      },
+      alternateRowStyles: {
+        fillColor: T.rgb.zebra as unknown as [number, number, number],
+      },
+      columnStyles: anyFx
+        ? {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 24, halign: 'right' },
+            2: { cellWidth: 32, halign: 'right' },
+            3: { cellWidth: 38, halign: 'right' },
+            4: { cellWidth: 32, halign: 'right' },
+          }
+        : {
+            0: { cellWidth: 'auto' },
+            1: { cellWidth: 28, halign: 'right' },
+            2: { cellWidth: 38, halign: 'right' },
+            3: { cellWidth: 38, halign: 'right' },
+          },
+      margin: { left: T.layout.marginX, right: T.layout.marginX },
+    });
   }
 }
