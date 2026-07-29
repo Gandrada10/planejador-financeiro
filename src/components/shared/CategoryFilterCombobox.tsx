@@ -133,7 +133,7 @@ export function CategoryFilterCombobox({ categories, value, onChange, className 
         onClick={openDropdown}
         title={currentLabel}
         className={cn(
-          'w-full flex items-center justify-between gap-1.5 px-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none transition-colors',
+          'w-full flex items-center justify-between gap-1.5 px-3 py-2 bg-bg-secondary border rounded-control text-body focus:outline-none transition-colors',
           active ? 'border-accent bg-accent/10' : 'border-border'
         )}
       >
@@ -147,7 +147,7 @@ export function CategoryFilterCombobox({ categories, value, onChange, className 
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 left-0 min-w-full w-max max-w-[calc(100vw-2rem)] sm:max-w-[22rem] bg-[#1a1a1a] border border-border rounded-lg shadow-xl overflow-hidden">
+        <div className="absolute z-50 mt-1 left-0 min-w-full w-max max-w-[calc(100vw-2rem)] sm:max-w-[22rem] bg-elevated border border-border rounded-card shadow-xl overflow-hidden">
           <div className="p-1.5 border-b border-border">
             <input
               ref={inputRef}
@@ -160,7 +160,7 @@ export function CategoryFilterCombobox({ categories, value, onChange, className 
               }}
               onKeyDown={handleKeyDown}
               placeholder="Digitar categoria..."
-              className="w-full bg-bg-secondary border border-border rounded px-2 py-1.5 text-text-primary text-xs focus:outline-none focus:border-accent placeholder:text-text-secondary/50"
+              className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1.5 text-text-primary text-body focus:outline-none focus:border-accent placeholder:text-text-secondary/50"
             />
           </div>
 
@@ -169,7 +169,7 @@ export function CategoryFilterCombobox({ categories, value, onChange, className 
               <button
                 onClick={() => select('all')}
                 className={cn(
-                  'w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-accent/10 hover:text-text-primary',
+                  'w-full text-left px-3 py-1.5 text-body transition-colors hover:bg-accent/10 hover:text-text-primary',
                   value === 'all' ? 'text-accent font-semibold' : 'text-text-secondary'
                 )}
               >
@@ -178,7 +178,7 @@ export function CategoryFilterCombobox({ categories, value, onChange, className 
               <button
                 onClick={() => select('uncategorized')}
                 className={cn(
-                  'w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-accent/10 hover:text-text-primary',
+                  'w-full text-left px-3 py-1.5 text-body transition-colors hover:bg-accent/10 hover:text-text-primary',
                   value === 'uncategorized' ? 'text-accent font-semibold' : 'text-text-secondary'
                 )}
               >
@@ -189,14 +189,14 @@ export function CategoryFilterCombobox({ categories, value, onChange, className 
 
           <div ref={listRef} className="max-h-56 overflow-y-auto">
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-text-secondary text-center">Nenhuma encontrada</div>
+              <div className="px-3 py-2 text-body text-text-secondary text-center">Nenhuma encontrada</div>
             ) : (
               filtered.map((opt, i) => (
                 <button
                   key={opt.id}
                   onClick={() => select(opt.id)}
                   className={cn(
-                    'w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center justify-between gap-1',
+                    'w-full text-left px-3 py-1.5 text-body transition-colors flex items-center justify-between gap-1',
                     i === highlighted ? 'bg-accent/20 text-text-primary' : 'hover:bg-accent/10 hover:text-text-primary',
                     opt.isChild && 'pl-5',
                     value === opt.id && 'bg-accent/10'
@@ -205,7 +205,7 @@ export function CategoryFilterCombobox({ categories, value, onChange, className 
                 >
                   <span className="truncate">{opt.isChild ? `↳ ${opt.label}` : opt.label}</span>
                   {opt.isChild && opt.parentLabel && (
-                    <span className="flex-shrink-0 text-[10px] text-text-secondary/60 italic">{opt.parentLabel}</span>
+                    <span className="flex-shrink-0 text-caption text-text-secondary/60 italic">{opt.parentLabel}</span>
                   )}
                 </button>
               ))

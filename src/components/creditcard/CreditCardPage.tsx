@@ -252,17 +252,17 @@ export function CreditCardPage() {
   }, [rules, addRule, deleteRule]);
 
   if (loadingTx || loadingAccounts) {
-    return <div className="text-accent text-sm animate-pulse">Carregando cartoes...</div>;
+    return <div className="text-accent text-body animate-pulse">Carregando cartoes...</div>;
   }
 
   if (cardAccounts.length === 0) {
     return (
       <div className="space-y-4">
         <h2 className="text-lg font-bold text-text-primary">Cartoes de Credito</h2>
-        <div className="bg-bg-card border border-border rounded-lg p-8 text-center">
+        <div className="bg-bg-card border border-border rounded-card p-10 text-center">
           <CreditCard size={32} className="mx-auto mb-3 text-text-secondary" />
-          <p className="text-sm text-text-secondary">Nenhum cartao de credito cadastrado.</p>
-          <p className="text-xs text-text-secondary mt-1">Cadastre um cartao do tipo "Cartao de Credito" em Configuracoes.</p>
+          <p className="text-body text-text-secondary">Nenhum cartao de credito cadastrado.</p>
+          <p className="text-caption text-text-secondary mt-1">Cadastre um cartao do tipo "Cartao de Credito" em Configuracoes.</p>
         </div>
       </div>
     );
@@ -278,7 +278,7 @@ export function CreditCardPage() {
           <select
             value={activeCardId}
             onChange={(e) => setSelectedCardId(e.target.value)}
-            className="px-3 py-1.5 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="px-3 py-1.5 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
           >
             {cardAccounts.map((a) => (
               <option key={a.id} value={a.id}>{a.name}{a.dueDay ? ` (venc. dia ${a.dueDay})` : ''}</option>
@@ -300,7 +300,7 @@ export function CreditCardPage() {
           </div>
         )}
         {activeCard?.dueDay && (
-          <span className="text-[10px] text-text-secondary">Vencimento: dia {activeCard.dueDay}</span>
+          <span className="text-caption text-text-secondary">Vencimento: dia {activeCard.dueDay}</span>
         )}
       </div>
 
@@ -327,12 +327,12 @@ export function CreditCardPage() {
           )}
 
           {/* Other open invoices */}
-          <div className="bg-bg-card border border-border rounded-lg p-4 space-y-3">
-            <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider flex items-center gap-2">
+          <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
+            <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
               <LockOpen size={13} className="text-accent-green" /> Outras faturas em aberto
             </h3>
             {otherOpenInvoices.length === 0 ? (
-              <p className="text-[11px] text-text-secondary">Nenhuma outra fatura em aberto.</p>
+              <p className="text-caption text-text-secondary">Nenhuma outra fatura em aberto.</p>
             ) : (
               <div className="space-y-1.5">
                 {otherOpenInvoices.map((inv) => {
@@ -344,13 +344,13 @@ export function CreditCardPage() {
                         if (!isSameCard) setSelectedCardId(inv.accountId);
                         setMonthYear(inv.monthYear);
                       }}
-                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-bg-secondary rounded border border-border/40 hover:border-accent text-left transition-colors"
+                      className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-bg-secondary rounded-control border border-border/40 hover:border-accent text-left transition-colors"
                     >
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold text-text-primary truncate">{inv.accountName}</p>
-                        <p className="text-[10px] text-text-secondary capitalize">{getMonthLabel(inv.monthYear)}</p>
+                        <p className="text-body font-bold text-text-primary truncate">{inv.accountName}</p>
+                        <p className="text-caption text-text-secondary capitalize">{getMonthLabel(inv.monthYear)}</p>
                       </div>
-                      <span className={`text-[11px] font-bold tnum flex-shrink-0 ${inv.total < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
+                      <span className={`text-body font-bold tnum flex-shrink-0 ${inv.total < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
                         {formatBRL(inv.total)}
                       </span>
                     </button>

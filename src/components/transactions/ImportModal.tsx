@@ -899,15 +899,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const rootCats = categories.filter((c) => !c.parentId);
   const subCats = (pid: string) => categories.filter((c) => c.parentId === pid);
 
-  const inputClass = 'w-full px-2 py-1 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent';
+  const inputClass = 'w-full px-2 py-1 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent';
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-lg w-full max-w-5xl max-h-[90vh] flex flex-col">
+      <div className="bg-bg-card border border-border rounded-card w-full max-w-5xl max-h-[90vh] flex flex-col">
 
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-sm font-bold text-text-primary">Importar Extrato</h3>
+          <h3 className="text-title font-semibold text-text-primary">Importar Extrato</h3>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
         </div>
 
@@ -917,18 +917,18 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           {step === 'upload' && (
             <div className="space-y-4">
               {(aiParsing || ofxParsing) ? (
-                <div className="border-2 border-dashed border-accent rounded-lg p-12 text-center">
+                <div className="border-2 border-dashed border-accent rounded-card p-12 text-center">
                   <Sparkles size={32} className="mx-auto mb-3 text-accent animate-pulse" />
-                  <p className="text-sm text-text-primary mb-1">
+                  <p className="text-body text-text-primary mb-1">
                     {ofxParsing ? 'Lendo extrato OFX...' : 'Analisando extrato com IA...'}
                   </p>
-                  <p className="text-xs text-text-secondary">Isso pode levar alguns segundos</p>
+                  <p className="text-caption text-text-secondary">Isso pode levar alguns segundos</p>
                 </div>
               ) : (
                 <div
                   onDrop={handleDrop}
                   onDragOver={(e) => e.preventDefault()}
-                  className="border-2 border-dashed border-accent/50 rounded-lg p-12 text-center hover:border-accent transition-colors cursor-pointer bg-accent/5"
+                  className="border-2 border-dashed border-accent/50 rounded-card p-12 text-center hover:border-accent transition-colors cursor-pointer bg-accent/5"
                   onClick={() => {
                     const input = document.createElement('input');
                     input.type = 'file';
@@ -941,12 +941,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   }}
                 >
                   <Sparkles size={32} className="mx-auto mb-3 text-accent" />
-                  <p className="text-sm font-bold text-text-primary mb-1">Arrastar arquivo ou clicar</p>
-                  <p className="text-xs text-text-secondary mb-3">Extrato de conta corrente (.ofx) entra sem IA · fatura de cartão a IA detecta transacoes, parcelas, titulares e categorias</p>
-                  <p className="text-[10px] text-text-secondary">.ofx .ofc .xlsx .xls .csv .pdf</p>
+                  <p className="text-body font-bold text-text-primary mb-1">Arrastar arquivo ou clicar</p>
+                  <p className="text-caption text-text-secondary mb-3">Extrato de conta corrente (.ofx) entra sem IA · fatura de cartão a IA detecta transacoes, parcelas, titulares e categorias</p>
+                  <p className="text-caption text-text-secondary">.ofx .ofc .xlsx .xls .csv .pdf</p>
                 </div>
               )}
-              {error && <p role="alert" className="text-accent-red text-xs mt-3">{error}</p>}
+              {error && <p role="alert" className="text-accent-red text-body mt-3">{error}</p>}
             </div>
           )}
 
@@ -958,16 +958,16 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               <div className="flex items-center justify-between flex-wrap gap-2">
                 <div className="flex items-center gap-2">
                   <FileSpreadsheet size={16} className="text-accent" />
-                  <span className="text-xs text-text-primary font-bold">{fileName}</span>
-                  <span className="text-xs text-text-secondary">— {items.length} transacoes encontradas</span>
+                  <span className="text-body text-text-primary font-bold">{fileName}</span>
+                  <span className="text-body text-text-secondary">— {items.length} transacoes encontradas</span>
                   {duplicateCount > 0 && (
-                    <span className="flex items-center gap-1 text-xs text-status-warn">
+                    <span className="flex items-center gap-1 text-body text-status-warn">
                       <AlertTriangle size={12} /> {duplicateCount} possiveis duplicatas
                     </span>
                   )}
                 </div>
                 {aiUsage && (
-                  <span className="text-[10px] text-text-secondary flex items-center gap-1">
+                  <span className="text-caption text-text-secondary flex items-center gap-1">
                     <Sparkles size={10} /> IA ({aiUsage.input_tokens + aiUsage.output_tokens} tokens)
                   </span>
                 )}
@@ -976,17 +976,17 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               {/* Placar do lote — confere antes de gravar (soma das selecionadas).
                   role=status + aria-live: o leitor de tela anuncia a mudança
                   quando linhas são (des)marcadas (WCAG 4.1.3). */}
-              <div className="flex items-center gap-2 flex-wrap text-xs" role="status" aria-live="polite" aria-atomic="true">
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border rounded">
+              <div className="flex items-center gap-2 flex-wrap text-body" role="status" aria-live="polite" aria-atomic="true">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-secondary border border-border rounded-control">
                   <span className="text-text-secondary">{scoreLabels.neg}</span>
                   <span className="font-bold text-accent-red tnum">{formatBRL(totals.compras)}</span>
                 </div>
-                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border ${totals.estornos > 0 ? 'bg-accent-green/10 border-accent-green/40' : 'bg-bg-secondary border-border'}`}>
+                <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border ${totals.estornos > 0 ? 'bg-accent-green/10 border-accent-green/40' : 'bg-bg-secondary border-border'}`}>
                   {totals.estornos > 0 && <AlertTriangle size={12} className="text-accent-green shrink-0" />}
                   <span className="text-text-secondary">{scoreLabels.pos}</span>
                   <span className="font-bold text-accent-green tnum">{formatBRL(totals.estornos)}</span>
                 </div>
-                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-accent/40 rounded">
+                <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-accent/40 rounded-control">
                   <span className="text-text-secondary">{scoreLabels.net}</span>
                   <span className={`font-bold tnum ${totals.liquido < 0 ? 'text-accent-red' : 'text-accent-green'}`}>{formatBRL(totals.liquido)}</span>
                 </div>
@@ -998,28 +998,28 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   const diff = Math.abs(declared - Math.abs(totals.liquido));
                   const mismatch = diff > 1;
                   return (
-                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded border ${mismatch ? 'bg-accent-red/10 border-accent-red/50' : 'bg-accent-green/10 border-accent-green/40'}`}>
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-control border ${mismatch ? 'bg-accent-red/10 border-accent-red/50' : 'bg-accent-green/10 border-accent-green/40'}`}>
                       {mismatch ? <AlertTriangle size={12} className="text-accent-red shrink-0" /> : <Check size={12} className="text-accent-green shrink-0" />}
                       <span className="text-text-secondary">Declarado</span>
                       <span className={`font-bold tnum ${mismatch ? 'text-accent-red' : 'text-accent-green'}`}>{formatBRL(declared)}</span>
-                      {mismatch && <span className="text-[10px] text-accent-red whitespace-nowrap">dif. {formatBRL(diff)}</span>}
+                      {mismatch && <span className="text-caption text-accent-red whitespace-nowrap">dif. {formatBRL(diff)}</span>}
                     </div>
                   );
                 })()}
-                <span className="text-[10px] text-text-secondary">
+                <span className="text-caption text-text-secondary">
                   {selected.size} de {items.length} selecionada{items.length !== 1 ? 's' : ''}
                 </span>
               </div>
 
               {/* Credit card billing month = mês de PAGAMENTO/vencimento (caixa) */}
               {isCreditCard && (
-                <div className="bg-accent/5 border border-accent/30 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+                <div className="bg-accent/5 border border-accent/30 rounded-card p-3 flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
                     <CreditCard size={16} className="text-accent" />
-                    <span className="text-xs font-bold text-text-primary">Fatura de cartao detectada</span>
+                    <span className="text-body font-bold text-text-primary">Fatura de cartao detectada</span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <label htmlFor="billing-month" className="text-xs text-text-secondary whitespace-nowrap">Mês de pagamento:</label>
+                    <label htmlFor="billing-month" className="text-caption text-text-secondary whitespace-nowrap">Mês de pagamento:</label>
                     <select
                       id="billing-month"
                       value={billingMonth}
@@ -1032,7 +1032,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     </select>
                   </div>
                   <div className="flex items-center gap-2">
-                    <label htmlFor="billing-dueday" className="text-xs text-text-secondary whitespace-nowrap">Vence dia:</label>
+                    <label htmlFor="billing-dueday" className="text-caption text-text-secondary whitespace-nowrap">Vence dia:</label>
                     <input
                       id="billing-dueday"
                       type="number"
@@ -1048,7 +1048,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       recebem — evita o tropeço de achar que forçou um mês e não
                       forçou (A1), e deixa claro que o mês = pagamento (caixa). */}
                   {resolvedInvoiceDate && (
-                    <p aria-live="polite" className="w-full text-[11px] text-text-secondary flex items-start gap-1.5 pt-1 border-t border-accent/15">
+                    <p aria-live="polite" className="w-full text-caption text-text-secondary flex items-start gap-1.5 pt-1 border-t border-accent/15">
                       <CalendarClock size={13} className="text-accent shrink-0 mt-0.5" />
                       <span>
                         As {selected.size} transações selecionadas entram no fluxo de caixa em{' '}
@@ -1064,9 +1064,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   vencimento resolvido (nem cadastrado no cartão, nem digitado
                   acima), avisa em destaque em vez de só um texto cinza discreto. */}
               {isCreditCard && billingMonth && !effectiveDueDay && (
-                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-lg p-3 flex items-start gap-2.5">
+                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-card p-3 flex items-start gap-2.5">
                   <AlertTriangle size={16} className="text-status-warn shrink-0 mt-0.5" />
-                  <div className="text-xs text-text-primary leading-relaxed">
+                  <div className="text-body text-text-primary leading-relaxed">
                     <p className="font-bold text-status-warn">Sem dia de vencimento — as transações cairão no dia 1º</p>
                     <p className="text-text-secondary mt-0.5">
                       Cadastre o vencimento deste cartão em <b className="text-text-primary">Configurações</b>, ou
@@ -1081,12 +1081,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   branco por padrão) — só um resumo do parse + escolha de
                   conta (reaproveita o seletor "Aplicar em lote" abaixo). */}
               {importKind === 'ofx' && ofxMeta && (
-                <div className="bg-accent/5 border border-accent/30 rounded-lg p-3 flex items-center gap-3 flex-wrap">
+                <div className="bg-accent/5 border border-accent/30 rounded-card p-3 flex items-center gap-3 flex-wrap">
                   <div className="flex items-center gap-2">
                     <Landmark size={16} className="text-accent" />
-                    <span className="text-xs font-bold text-text-primary">Extrato OFX (conta corrente)</span>
+                    <span className="text-body font-bold text-text-primary">Extrato OFX (conta corrente)</span>
                   </div>
-                  <p className="text-[11px] text-text-secondary">
+                  <p className="text-caption text-text-secondary">
                     {ofxMeta.parsedCount} lançamento{ofxMeta.parsedCount !== 1 ? 's' : ''}
                     {ofxMeta.dtStart && ofxMeta.dtEnd && (
                       <> · período {formatDate(ofxMeta.dtStart)}–{formatDate(ofxMeta.dtEnd)}</>
@@ -1099,7 +1099,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     )}
                   </p>
                   {rowAccountNames.length === 0 && (
-                    <span className="w-full text-[11px] text-status-warn">
+                    <span className="w-full text-caption text-status-warn">
                       Nenhuma conta corrente cadastrada — cadastre uma em Configurações antes de importar.
                     </span>
                   )}
@@ -1109,8 +1109,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               {/* Warnings do parser OFX (FITID ausente, TRNTYPE divergente,
                   linhas descartadas) — informativo, não bloqueia a importação. */}
               {importKind === 'ofx' && ofxMeta && ofxMeta.warnings.length > 0 && (
-                <div className="bg-status-warn/10 border border-status-warn/30 rounded-lg p-3 space-y-1">
-                  <p className="flex items-center gap-1.5 text-[11px] font-bold text-status-warn">
+                <div className="bg-status-warn/10 border border-status-warn/30 rounded-card p-3 space-y-1">
+                  <p className="flex items-center gap-1.5 text-caption font-bold text-status-warn">
                     <AlertTriangle size={12} className="shrink-0" />
                     Avisos do parser OFX ({ofxMeta.warnings.length})
                   </p>
@@ -1118,7 +1118,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     role="status"
                     tabIndex={0}
                     aria-label={`Avisos do parser OFX: ${ofxMeta.warnings.length} ${ofxMeta.warnings.length === 1 ? 'aviso' : 'avisos'}. Role para ver todos.`}
-                    className="text-[11px] text-text-secondary space-y-0.5 max-h-24 overflow-y-auto focus:outline-none focus:ring-1 focus:ring-status-warn/60 rounded"
+                    className="text-caption text-text-secondary space-y-0.5 max-h-24 overflow-y-auto focus:outline-none focus:ring-1 focus:ring-status-warn/60 rounded"
                   >
                     {ofxMeta.warnings.map((w, i) => <p key={i}>{w}</p>)}
                   </div>
@@ -1128,7 +1128,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               {/* Conta detectada: casamento do cabeçalho do arquivo com uma conta
                   cadastrada. Já vem pré-preenchida nas linhas; é só um aviso. */}
               {detectedAccount && (
-                <div className="flex items-center gap-2 text-[11px] bg-accent/5 border border-accent/30 rounded-lg p-2.5">
+                <div className="flex items-center gap-2 text-caption bg-accent/5 border border-accent/30 rounded-card p-2.5">
                   <CreditCard size={13} className="text-accent shrink-0" />
                   <span className="text-text-secondary">
                     Conta detectada pela fatura: <b className="text-text-primary">{detectedAccount}</b> — já apliquei em todas as linhas. Se não for essa, troque em "Aplicar em lote" abaixo.
@@ -1137,12 +1137,12 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               )}
 
               {/* Batch controls */}
-              <div className="bg-bg-secondary border border-border rounded-lg p-3">
-                <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-2">Aplicar em lote nas selecionadas</p>
+              <div className="bg-bg-secondary border border-border rounded-card p-3">
+                <p className="text-caption text-ink-3 uppercase tracking-wider mb-2">Aplicar em lote nas selecionadas</p>
                 <div className="flex gap-2 flex-wrap items-end">
                   {rowAccountNames.length > 0 && (
                     <div className="flex-1 min-w-[140px]">
-                      <label htmlFor="batch-account" className="block text-[10px] text-text-secondary mb-1">Conta</label>
+                      <label htmlFor="batch-account" className="block text-caption text-text-secondary mb-1">Conta</label>
                       <select id="batch-account" value={batchAccount} onChange={(e) => setBatchAccount(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
                         {rowAccountNames.map((a) => <option key={a} value={a}>{a}</option>)}
@@ -1151,7 +1151,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   )}
                   {categories.length > 0 && (
                     <div className="flex-1 min-w-[140px]">
-                      <label htmlFor="batch-category" className="block text-[10px] text-text-secondary mb-1">Categoria</label>
+                      <label htmlFor="batch-category" className="block text-caption text-text-secondary mb-1">Categoria</label>
                       <select id="batch-category" value={batchCategory} onChange={(e) => setBatchCategory(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
                         {rootCats.map((cat) => {
@@ -1168,7 +1168,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   )}
                   {memberOptions.length > 0 && (
                     <div className="flex-1 min-w-[120px]">
-                      <label htmlFor="batch-member" className="block text-[10px] text-text-secondary mb-1">Membro</label>
+                      <label htmlFor="batch-member" className="block text-caption text-text-secondary mb-1">Membro</label>
                       <select id="batch-member" value={batchMember} onChange={(e) => setBatchMember(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
                         {memberOptions.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -1177,7 +1177,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   )}
                   {projects.length > 0 && (
                     <div className="flex-1 min-w-[120px]">
-                      <label htmlFor="batch-project" className="block text-[10px] text-text-secondary mb-1">Projeto</label>
+                      <label htmlFor="batch-project" className="block text-caption text-text-secondary mb-1">Projeto</label>
                       <select id="batch-project" value={batchProject} onChange={(e) => setBatchProject(e.target.value)} className={inputClass}>
                         <option value="">— sem alterar —</option>
                         {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -1187,7 +1187,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   <button
                     onClick={applyBatch}
                     disabled={!batchAccount && !batchCategory && !batchMember && !batchProject}
-                    className="px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-40 flex items-center gap-1"
+                    className="px-3 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-40 flex items-center gap-1"
                   >
                     <Check size={12} /> Aplicar
                   </button>
@@ -1197,9 +1197,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               {/* Blindagem de titular: aviso quando há lançamentos com titular
                   cru não vinculado a um membro cadastrado. */}
               {hasUnresolved && (
-                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-lg p-3 flex items-start gap-2.5">
+                <div role="alert" className="bg-status-warn/10 border border-status-warn/40 rounded-card p-3 flex items-start gap-2.5">
                   <UserX size={16} className="text-status-warn shrink-0 mt-0.5" />
-                  <div className="text-xs text-text-primary leading-relaxed">
+                  <div className="text-body text-text-primary leading-relaxed">
                     <p className="font-bold text-status-warn">
                       {unresolvedIndices.length} lançamento{unresolvedIndices.length > 1 ? 's' : ''} com titular não reconhecido
                     </p>
@@ -1213,10 +1213,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
               )}
 
               {/* Preview table */}
-              <div className="overflow-auto max-h-[45vh] border border-border rounded">
-                <table className="w-full text-xs">
+              <div className="overflow-auto max-h-[45vh] border border-border rounded-card">
+                <table className="w-full text-body">
                   <thead className="sticky top-0 bg-bg-card z-10">
-                    <tr className="border-b border-border text-text-secondary">
+                    <tr className="border-b border-border text-caption text-text-secondary">
                       <th className="p-2 text-left w-8">
                         <input type="checkbox" checked={selected.size === items.length && items.length > 0} onChange={toggleAll} className="accent-accent" />
                       </th>
@@ -1250,11 +1250,11 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                 updateInstallmentConfig(i, { date: new Date(e.target.value + 'T12:00:00') });
                               }
                             }}
-                            className="px-1 py-0.5 bg-bg-secondary border border-border rounded text-text-secondary text-xs focus:outline-none focus:border-accent w-[110px]"
+                            className="px-1 py-0.5 bg-bg-secondary border border-border rounded-control text-text-secondary text-body focus:outline-none focus:border-accent w-[110px]"
                           />
                         </td>
                         <td className="p-2 text-text-primary max-w-[180px] truncate" title={item.description}>{item.description}</td>
-                        <td className={`p-2 text-right font-bold whitespace-nowrap ${item.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                        <td className={`p-2 text-right font-bold tnum whitespace-nowrap ${item.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                           {formatBRL(item.amount)}
                         </td>
                         <td className="p-1 text-center">
@@ -1281,7 +1281,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                 setEditingInstallment(i);
                               }
                             }}
-                            className={`px-2 py-1 rounded text-xs border transition-colors ${
+                            className={`px-2 py-1 rounded-control text-body border transition-colors ${
                               item.installmentType === 'parcelada'
                                 ? 'bg-accent/10 border-accent/30 text-accent'
                                 : item.totalInstallments && item.totalInstallments > 1
@@ -1351,7 +1351,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                   onClick={() => onCreateRule(item.description, item.categoryId!)}
                                   className={`flex-shrink-0 transition-colors ${
                                     hasRule
-                                      ? 'text-yellow-400 hover:text-yellow-300'
+                                      ? 'text-status-warn hover:text-status-warn/80'
                                       : 'text-text-secondary/30 hover:text-text-secondary'
                                   }`}
                                 >
@@ -1388,7 +1388,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                     <option value="__none__">Sem membro</option>
                                   </select>
                                   {unresolved && (
-                                    <span className="text-[10px] text-status-warn/90 truncate" title={item.titular}>
+                                    <span className="text-caption text-status-warn/90 truncate" title={item.titular}>
                                       extrato: “{item.titular}”
                                     </span>
                                   )}
@@ -1442,10 +1442,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   <>
                     <div className="fixed inset-0 z-[60]" onClick={() => { setEditingInstallment(null); setInstallmentPopupPos(null); }} />
                     <div
-                      className="fixed z-[70] bg-bg-card border border-border rounded-lg shadow-lg p-3 w-[240px] max-h-[80vh] overflow-y-auto"
+                      className="fixed z-[70] bg-bg-card border border-border rounded-card shadow-lg p-3 w-[240px] max-h-[80vh] overflow-y-auto"
                       style={{ top: installmentPopupPos.top, left: installmentPopupPos.left }}
                     >
-                      <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-2">Tipo de parcela</p>
+                      <p className="text-caption text-ink-3 uppercase tracking-wider mb-2">Tipo de parcela</p>
                       <div className="flex gap-2 mb-3">
                         <button
                           onClick={() => updateInstallmentConfig(idx, {
@@ -1454,7 +1454,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             totalInstallments: null,
                             installmentAmount: null,
                           })}
-                          className={`flex-1 px-2 py-1 rounded text-xs border ${
+                          className={`flex-1 px-2 py-1 rounded-control text-body border ${
                             item.installmentType === 'unica'
                               ? 'bg-accent text-bg-primary border-accent'
                               : 'bg-bg-secondary text-text-secondary border-border'
@@ -1470,7 +1470,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             installmentAmount: item.installmentAmount ?? item.amount,
                             periodicity: item.periodicity || 1,
                           })}
-                          className={`flex-1 px-2 py-1 rounded text-xs border ${
+                          className={`flex-1 px-2 py-1 rounded-control text-body border ${
                             item.installmentType === 'parcelada'
                               ? 'bg-accent text-bg-primary border-accent'
                               : 'bg-bg-secondary text-text-secondary border-border'
@@ -1486,7 +1486,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         return (
                           <div className="space-y-2">
                             <div>
-                              <label className="text-[10px] text-text-secondary">Periodicidade</label>
+                              <label className="text-caption text-text-secondary">Periodicidade</label>
                               <select
                                 value={item.periodicity}
                                 onChange={(e) => updateInstallmentConfig(idx, { periodicity: Number(e.target.value) })}
@@ -1498,7 +1498,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               </select>
                             </div>
                             <div>
-                              <label className="text-[10px] text-text-secondary">Numero total de parcelas</label>
+                              <label className="text-caption text-text-secondary">Numero total de parcelas</label>
                               <input
                                 type="number"
                                 min={2}
@@ -1515,7 +1515,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               />
                             </div>
                             <div>
-                              <label className="text-[10px] text-text-secondary">Parcela atual</label>
+                              <label className="text-caption text-text-secondary">Parcela atual</label>
                               <input
                                 type="number"
                                 min={1}
@@ -1526,7 +1526,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               />
                             </div>
                             <div>
-                              <label className="text-[10px] text-text-secondary">Valor da parcela</label>
+                              <label className="text-caption text-text-secondary">Valor da parcela</label>
                               <input
                                 type="number"
                                 step="0.01"
@@ -1538,7 +1538,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                                 className={inputClass}
                               />
                             </div>
-                            <div className="text-[10px] text-text-secondary mt-1 space-y-0.5">
+                            <div className="text-caption text-text-secondary mt-1 space-y-0.5">
                               <p>Parcela {currentInst}/{totalInst} — {remaining > 0 ? `${remaining} parcelas futuras serao criadas` : 'ultima parcela'}</p>
                               <p>Total: {formatBRL((item.installmentAmount ?? item.amount) * totalInst)}</p>
                             </div>
@@ -1547,7 +1547,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                       })()}
                       <button
                         onClick={() => { setEditingInstallment(null); setInstallmentPopupPos(null); }}
-                        className="mt-2 w-full px-2 py-1 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+                        className="mt-2 w-full px-2 py-1 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90"
                       >
                         OK
                       </button>
@@ -1556,7 +1556,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 );
               })()}
 
-              {error && <p className="text-accent-red text-xs">{error}</p>}
+              {error && <p className="text-accent-red text-body">{error}</p>}
             </div>
           )}
 
@@ -1565,8 +1565,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
             <div className="py-8 space-y-6">
               <div className="text-center">
                 <Check size={32} className="mx-auto mb-3 text-accent-green" />
-                <p className="text-sm text-text-primary">Importacao concluida!</p>
-                <p className="text-xs text-text-secondary mt-1">{selected.size} transacoes importadas</p>
+                <p className="text-body text-text-primary">Importacao concluida!</p>
+                <p className="text-caption text-text-secondary mt-1">{selected.size} transacoes importadas</p>
               </div>
             </div>
           )}
@@ -1575,7 +1575,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         {/* Footer */}
         {step === 'preview' && (
           <div className="p-4 border-t border-border flex items-center justify-between gap-3">
-            <span className="text-xs text-text-secondary">
+            <span className="text-body text-text-secondary">
               {hasUnresolved ? (
                 <span className="flex items-center gap-1.5 text-status-warn">
                   <UserX size={13} /> {unresolvedIndices.length} titular{unresolvedIndices.length > 1 ? 'es' : ''} a resolver
@@ -1587,7 +1587,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
             <div className="flex gap-2">
               <button
                 onClick={() => { setStep('upload'); setItems([]); setError(''); setAiUsage(null); setDeclaredTotal(null); setOfxMeta(null); }}
-                className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
+                className="px-3 py-1.5 text-body text-text-secondary hover:text-text-primary"
               >
                 Voltar
               </button>
@@ -1595,7 +1595,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                 onClick={handleImport}
                 disabled={selected.size === 0 || importing || hasUnresolved}
                 title={hasUnresolved ? 'Resolva os titulares não reconhecidos antes de importar' : undefined}
-                className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+                className="px-4 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50"
               >
                 {importing ? 'Importando...' : `Importar ${selected.size} transacoes`}
               </button>
@@ -1605,7 +1605,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
         {step === 'done' && (
           <div className="p-4 border-t border-border flex justify-end">
-            <button onClick={onClose} className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90">
+            <button onClick={onClose} className="px-4 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90">
               Fechar
             </button>
           </div>

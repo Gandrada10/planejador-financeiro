@@ -73,7 +73,7 @@ export function ProjectsPage() {
   const archived = projects.filter((p) => p.status === 'archived');
 
   if (loading) {
-    return <div className="text-accent text-sm animate-pulse">Carregando projetos...</div>;
+    return <div className="text-accent text-body animate-pulse">Carregando projetos...</div>;
   }
 
   return (
@@ -84,14 +84,14 @@ export function ProjectsPage() {
           {archived.length > 0 && (
             <button
               onClick={() => setShowArchived(!showArchived)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-secondary text-xs rounded hover:border-accent"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-secondary text-body rounded-control hover:border-accent"
             >
               <Archive size={14} /> {showArchived ? 'Ocultar encerrados' : `Encerrados (${archived.length})`}
             </button>
           )}
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90"
           >
             <Plus size={14} /> Novo Projeto
           </button>
@@ -99,20 +99,20 @@ export function ProjectsPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-bg-card border border-accent/30 rounded-lg p-4 space-y-3">
-          <p className="text-xs font-bold text-text-primary">Novo projeto</p>
+        <form onSubmit={handleSubmit} className="bg-bg-card border border-accent/30 rounded-card p-4 space-y-3">
+          <p className="text-title font-semibold text-text-primary">Novo projeto</p>
           <div>
-            <label className="text-xs text-text-secondary block mb-1">Nome</label>
+            <label className="text-caption text-text-secondary block mb-1">Nome</label>
             <input
               autoFocus
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Reforma cozinha, Viagem Europa..."
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
             />
           </div>
           <div>
-            <label className="text-xs text-text-secondary block mb-1">Cor</label>
+            <label className="text-caption text-text-secondary block mb-1">Cor</label>
             <div className="flex gap-2">
               {PROJECT_COLORS.map((c) => (
                 <button key={c} type="button" onClick={() => setColor(c)}
@@ -124,26 +124,26 @@ export function ProjectsPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-text-secondary block mb-1">Data de início</label>
+              <label className="text-caption text-text-secondary block mb-1">Data de início</label>
               <input
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               />
             </div>
             <div>
-              <label className="text-xs text-text-secondary block mb-1">Data de fim</label>
+              <label className="text-caption text-text-secondary block mb-1">Data de fim</label>
               <input
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               />
             </div>
           </div>
           <div>
-            <label className="text-xs text-text-secondary block mb-1">
+            <label className="text-caption text-text-secondary block mb-1">
               Orçamento total <span className="text-ink-3">(opcional)</span>
             </label>
             <input
@@ -152,24 +152,24 @@ export function ProjectsPage() {
               value={budget}
               onChange={(e) => setBudget(e.target.value)}
               placeholder="Ex: 120000"
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
             />
-            <p className="text-[11px] text-ink-3 mt-1">
+            <p className="text-caption text-ink-3 mt-1">
               Vira a régua de orçado x executado no dashboard. Sem orçamento, o projeto aparece
               só com o gasto acumulado.
             </p>
           </div>
           <div className="flex gap-2">
-            <button type="submit" className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90">Criar</button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-1.5 bg-bg-secondary border border-border text-text-secondary text-xs rounded">Cancelar</button>
+            <button type="submit" className="px-4 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90">Criar</button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-1.5 bg-bg-secondary border border-border text-text-secondary text-body rounded-control">Cancelar</button>
           </div>
         </form>
       )}
 
       {active.length === 0 && !showForm ? (
-        <div className="bg-bg-card border border-border rounded-lg p-8 text-center">
-          <p className="text-sm text-text-secondary">Nenhum projeto em andamento.</p>
-          <p className="text-xs text-text-secondary mt-1">Crie projetos para agrupar despesas e receitas (ex: reforma, viagem, evento).</p>
+        <div className="bg-bg-card border border-border rounded-card p-8 text-center">
+          <p className="text-body text-text-secondary">Nenhum projeto em andamento.</p>
+          <p className="text-caption text-text-secondary mt-1">Crie projetos para agrupar despesas e receitas (ex: reforma, viagem, evento).</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -181,7 +181,7 @@ export function ProjectsPage() {
 
       {showArchived && archived.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-xs font-bold text-text-secondary uppercase tracking-wider">Encerrados</h3>
+          <h3 className="text-title font-semibold text-text-secondary">Encerrados</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {archived.map((p) => (
               <ProjectCard key={p.id} project={p} totals={getProjectTotals(p.id)} projectTransactions={getProjectTransactions(p.id)} categories={categories} onUpdate={updateProject} onDelete={deleteProject} />
@@ -237,7 +237,7 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
   }
 
   return (
-    <div className={`bg-bg-card border rounded-lg overflow-hidden ${isArchived ? 'border-border/40 opacity-70' : 'border-border'}`}>
+    <div className={`bg-bg-card border rounded-card overflow-hidden ${isArchived ? 'border-border/40 opacity-70' : 'border-border'}`}>
       <div className="p-4 space-y-3">
         {/* Header */}
         <div className="flex items-start justify-between gap-2">
@@ -248,7 +248,7 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                className="w-full bg-bg-secondary border border-accent rounded px-2 py-1 text-xs text-text-primary focus:outline-none"
+                className="w-full bg-bg-secondary border border-accent rounded-control px-2 py-1 text-body text-text-primary focus:outline-none"
               />
               <div className="flex gap-1.5">
                 {PROJECT_COLORS.map((c) => (
@@ -260,30 +260,30 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-text-secondary block mb-0.5">Início</label>
+                  <label className="text-caption text-text-secondary block mb-0.5">Início</label>
                   <input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)}
-                    className="w-full bg-bg-secondary border border-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
+                    className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1 text-body text-text-primary focus:outline-none focus:border-accent"
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] text-text-secondary block mb-0.5">Fim</label>
+                  <label className="text-caption text-text-secondary block mb-0.5">Fim</label>
                   <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)}
-                    className="w-full bg-bg-secondary border border-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
+                    className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1 text-body text-text-primary focus:outline-none focus:border-accent"
                   />
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-text-secondary block mb-0.5">Orçamento total (opcional)</label>
+                <label className="text-caption text-text-secondary block mb-0.5">Orçamento total (opcional)</label>
                 <input type="text" inputMode="decimal" value={editBudget} placeholder="Ex: 120000"
                   onChange={(e) => setEditBudget(e.target.value)}
-                  className="w-full bg-bg-secondary border border-border rounded px-2 py-1 text-xs text-text-primary focus:outline-none focus:border-accent"
+                  className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1 text-body text-text-primary focus:outline-none focus:border-accent"
                 />
               </div>
             </div>
           ) : (
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
-              <span className="text-sm font-bold text-text-primary truncate">{project.name}</span>
+              <span className="text-title font-semibold text-text-primary truncate">{project.name}</span>
             </div>
           )}
 
@@ -316,12 +316,12 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
             <span className={`w-1.5 h-1.5 rounded-full ${isArchived ? 'bg-text-secondary' : 'bg-accent-green'}`} />
             {isArchived ? 'Encerrado' : 'Em andamento'}
           </span>
-          <span className="text-[10px] text-text-secondary">{totals.count} transações</span>
+          <span className="text-caption text-text-secondary">{totals.count} transações</span>
         </div>
 
         {/* Dates */}
         {(project.startDate || project.endDate) && (
-          <div className="flex items-center gap-1.5 text-[10px] text-text-secondary">
+          <div className="flex items-center gap-1.5 text-caption text-text-secondary">
             <Calendar size={10} className="flex-shrink-0" />
             {project.startDate && <span>{project.startDate.toLocaleDateString('pt-BR')}</span>}
             {project.startDate && project.endDate && <span>—</span>}
@@ -330,19 +330,19 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
         )}
 
         {/* Totals */}
-        <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-border/40">
+        <div className="grid grid-cols-2 gap-2 text-body pt-1 border-t border-border/40">
           <div>
-            <span className="text-text-secondary text-[10px]">Receitas</span>
-            <p className="text-accent-green font-bold">{formatBRL(totals.income)}</p>
+            <span className="text-text-secondary text-caption">Receitas</span>
+            <p className="text-accent-green font-bold tnum">{formatBRL(totals.income)}</p>
           </div>
           <div>
-            <span className="text-text-secondary text-[10px]">Despesas</span>
-            <p className="text-accent-red font-bold">{formatBRL(totals.expense)}</p>
+            <span className="text-text-secondary text-caption">Despesas</span>
+            <p className="text-accent-red font-bold tnum">{formatBRL(totals.expense)}</p>
           </div>
         </div>
 
         <div className="flex items-center justify-between pt-0.5">
-          <span className={`text-xs font-bold ${totals.balance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+          <span className={`text-body font-bold tnum ${totals.balance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
             Saldo: {formatBRL(totals.balance)}
           </span>
         </div>
@@ -357,7 +357,7 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
         <div className="flex gap-2 pt-1 border-t border-border/40">
           <button
             onClick={() => onUpdate(project.id, { status: isArchived ? 'active' : 'archived' })}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded border transition-colors flex-1 justify-center ${
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-body rounded-control border transition-colors flex-1 justify-center ${
               isArchived
                 ? 'border-accent-green/40 text-accent-green hover:bg-accent-green/10'
                 : 'border-border text-text-secondary hover:border-accent-red/60 hover:text-accent-red'
@@ -368,7 +368,7 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
           {totals.count > 0 && (
             <button
               onClick={() => setShowTxs(!showTxs)}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs rounded border border-border text-text-secondary hover:border-accent hover:text-accent transition-colors"
+              className="flex items-center gap-1 px-3 py-1.5 text-body rounded-control border border-border text-text-secondary hover:border-accent hover:text-accent transition-colors"
             >
               {showTxs ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               Ver lançamentos
@@ -384,12 +384,12 @@ function ProjectCard({ project, totals, projectTransactions, categories, onUpdat
             {projectTransactions.map((tx) => (
               <div key={tx.id} className="flex items-center justify-between px-4 py-2 border-b border-border/20 last:border-0 gap-2">
                 <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-xs text-text-primary truncate">{tx.description}</span>
-                  <span className="text-[10px] text-text-secondary">
+                  <span className="text-body text-text-primary truncate">{tx.description}</span>
+                  <span className="text-caption text-text-secondary">
                     {tx.date.toLocaleDateString('pt-BR')} · {getCategoryName(tx.categoryId)}
                   </span>
                 </div>
-                <span className={`text-xs font-bold flex-shrink-0 ${tx.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                <span className={`text-body font-bold tnum flex-shrink-0 ${tx.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                   {formatBRL(tx.amount)}
                 </span>
               </div>

@@ -115,13 +115,13 @@ export function BatchEditModal({
       onClick={onClose}
     >
       <div
-        className="bg-bg-card border border-border rounded-lg w-full max-w-md shadow-xl"
+        className="bg-bg-card border border-border rounded-card w-full max-w-md shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div>
-            <h3 className="text-sm font-bold text-text-primary">Edicao em lote</h3>
-            <p className="text-[11px] text-text-secondary mt-0.5">
+            <h3 className="text-title font-semibold text-text-primary">Edicao em lote</h3>
+            <p className="text-caption text-text-secondary mt-0.5">
               {count} lancamento{count === 1 ? '' : 's'} selecionado{count === 1 ? '' : 's'}
             </p>
           </div>
@@ -134,17 +134,17 @@ export function BatchEditModal({
         </div>
 
         <div className="p-4 space-y-3">
-          <p className="text-[11px] text-text-secondary">
+          <p className="text-caption text-text-secondary">
             Apenas os campos alterados serao aplicados aos itens selecionados.
           </p>
 
           {fields.includes('categoryId') && (
             <div>
-              <label className="block text-[11px] text-text-secondary mb-1">Categoria</label>
+              <label className="block text-caption text-text-secondary mb-1">Categoria</label>
               <select
                 value={categoryId}
                 onChange={(e) => setCategoryId(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               >
                 <option value={SENTINEL_KEEP}>— Nao alterar —</option>
                 <option value={SENTINEL_CLEAR}>Sem categoria</option>
@@ -159,11 +159,11 @@ export function BatchEditModal({
 
           {fields.includes('account') && accountNames.length > 0 && (
             <div>
-              <label className="block text-[11px] text-text-secondary mb-1">Conta</label>
+              <label className="block text-caption text-text-secondary mb-1">Conta</label>
               <select
                 value={account}
                 onChange={(e) => setAccount(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               >
                 <option value={SENTINEL_KEEP}>— Nao alterar —</option>
                 {accountNames.map((n) => (
@@ -175,12 +175,12 @@ export function BatchEditModal({
 
           {fields.includes('familyMember') && (
             <div>
-              <label className="block text-[11px] text-text-secondary mb-1">Membro</label>
+              <label className="block text-caption text-text-secondary mb-1">Membro</label>
               {memberNames.length > 0 ? (
                 <select
                   value={familyMember}
                   onChange={(e) => setFamilyMember(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
                 >
                   <option value={SENTINEL_KEEP}>— Nao alterar —</option>
                   <option value={SENTINEL_CLEAR}>Sem membro</option>
@@ -194,7 +194,7 @@ export function BatchEditModal({
                   value={familyMember === SENTINEL_KEEP ? '' : familyMember}
                   onChange={(e) => setFamilyMember(e.target.value)}
                   placeholder="Nome do membro (vazio = nao alterar)"
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
                 />
               )}
             </div>
@@ -202,11 +202,11 @@ export function BatchEditModal({
 
           {fields.includes('projectId') && (
             <div>
-              <label className="block text-[11px] text-text-secondary mb-1">Projeto</label>
+              <label className="block text-caption text-text-secondary mb-1">Projeto</label>
               <select
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               >
                 <option value={SENTINEL_KEEP}>— Nao alterar —</option>
                 <option value={SENTINEL_CLEAR}>Sem projeto</option>
@@ -221,14 +221,14 @@ export function BatchEditModal({
         <div className="flex items-center justify-end gap-2 p-4 border-t border-border">
           <button
             onClick={onClose}
-            className="px-3 py-1.5 text-xs text-text-secondary hover:text-text-primary"
+            className="px-3 py-1.5 text-body text-text-secondary hover:text-text-primary"
           >
             Cancelar
           </button>
           <button
             onClick={handleApply}
             disabled={applying || changeCount === 0}
-            className="px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-40"
+            className="px-3 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-40"
           >
             {applying ? 'Aplicando...' : `Aplicar${changeCount > 0 ? ` (${changeCount})` : ''}`}
           </button>

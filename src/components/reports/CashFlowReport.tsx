@@ -134,7 +134,7 @@ export function CashFlowReport() {
     doc.save(`fluxo_caixa_${fileSuffix}.pdf`);
   }
 
-  if (loading) return <div className="text-accent text-sm animate-pulse">Carregando...</div>;
+  if (loading) return <div className="text-accent text-body animate-pulse">Carregando...</div>;
 
   const totalResultado = totalEntradas + totalSaidas;
   const hasData = rows.some((r) => !r.empty);
@@ -143,15 +143,15 @@ export function CashFlowReport() {
   return (
     <div className="space-y-3">
       {/* Range bar */}
-      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-lg">
-        <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-card">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Intervalo:</span>
           <div className="flex gap-1">
             {(['mensal', 'anual'] as Interval[]).map((opt) => (
               <button
                 key={opt}
                 onClick={() => handleIntervalChange(opt)}
-                className={`px-2.5 py-1 text-xs rounded border transition-colors capitalize ${
+                className={`px-2.5 py-1 text-body rounded-control border transition-colors capitalize ${
                   interval === opt
                     ? 'bg-accent/10 text-accent border-accent/30'
                     : 'bg-bg-card border-border text-text-secondary hover:text-text-primary'
@@ -163,14 +163,14 @@ export function CashFlowReport() {
           </div>
         </div>
         <span className="text-border hidden sm:block">|</span>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Inicio:</span>
           {interval === 'mensal' ? (
             <input
               type="month"
               value={startPeriod}
               onChange={(e) => e.target.value && setStartPeriod(e.target.value)}
-              className="bg-transparent text-text-primary text-xs focus:outline-none cursor-pointer border-none"
+              className="bg-transparent text-text-primary text-body focus:outline-none cursor-pointer border-none"
             />
           ) : (
             <input
@@ -183,12 +183,12 @@ export function CashFlowReport() {
                 if (!v) return;
                 setStartPeriod(v);
               }}
-              className="w-20 bg-bg-card border border-border rounded px-2 py-0.5 text-text-primary text-xs focus:outline-none focus:border-accent"
+              className="w-20 bg-bg-card border border-border rounded-control px-2 py-0.5 text-text-primary text-body focus:outline-none focus:border-accent"
             />
           )}
         </div>
         <span className="text-border hidden sm:block">|</span>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Qtde:</span>
           <input
             type="number"
@@ -200,7 +200,7 @@ export function CashFlowReport() {
               if (Number.isNaN(n)) return;
               setNumPeriods(Math.min(Math.max(1, n), maxCount));
             }}
-            className="w-14 bg-bg-card border border-border rounded px-2 py-0.5 text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="w-14 bg-bg-card border border-border rounded-control px-2 py-0.5 text-text-primary text-body focus:outline-none focus:border-accent"
           />
           <span className="text-text-secondary">{interval === 'mensal' ? `meses (máx ${maxCount})` : `anos (máx ${maxCount})`}</span>
         </div>
@@ -208,7 +208,7 @@ export function CashFlowReport() {
           <button
             onClick={exportExcel}
             disabled={!hasData}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-30"
             title="Exportar Excel"
           >
             <FileSpreadsheet size={13} /> Excel
@@ -216,7 +216,7 @@ export function CashFlowReport() {
           <button
             onClick={exportPDF}
             disabled={!hasData}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-30"
             title="Exportar PDF"
           >
             <Download size={13} /> PDF
@@ -226,22 +226,22 @@ export function CashFlowReport() {
 
       {/* Table */}
       {!hasData ? (
-        <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-sm">
+        <div className="bg-bg-card border border-border rounded-card p-8 text-center text-text-secondary text-body">
           Nenhum lancamento no periodo selecionado.
         </div>
       ) : (
         <div>
           {/* Saldo anterior - banner compacto */}
-          <div className="flex items-center justify-between px-3 py-1.5 bg-bg-secondary/40 border border-border border-b-0 rounded-t-lg text-xs">
+          <div className="flex items-center justify-between px-3 py-1.5 bg-bg-secondary/40 border border-border border-b-0 rounded-t-card text-body">
             <span className="text-text-secondary">Saldo anterior ao período</span>
-            <span className={`font-bold tabular-nums ${saldoAnterior >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+            <span className={`font-bold tnum ${saldoAnterior >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
               {formatBRL(saldoAnterior)}
             </span>
           </div>
-          <div className="overflow-x-auto bg-bg-card border border-border rounded-b-lg">
-            <table className="w-full text-xs">
+          <div className="overflow-x-auto bg-bg-card border border-border rounded-b-card">
+            <table className="w-full text-body">
               <thead>
-                <tr className="border-b border-border text-text-secondary text-[10px] uppercase tracking-wider">
+                <tr className="border-b border-border text-ink-3 text-caption uppercase tracking-wider">
                   <th className="px-3 py-2 text-left min-w-[160px]">Periodo</th>
                   <th className="px-3 py-2 text-right min-w-[130px]">Entradas (R$)</th>
                   <th className="px-3 py-2 text-right min-w-[130px]">Saidas (R$)</th>
@@ -257,16 +257,16 @@ export function CashFlowReport() {
                     className={`border-b border-border/20 transition-colors hover:bg-bg-secondary/20 ${row.empty ? 'opacity-40' : ''}`}
                   >
                     <td className="px-3 py-2 text-text-primary capitalize">{row.label}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-accent-green">
+                    <td className="px-3 py-2 text-right tnum text-accent-green">
                       {row.entradas > 0 ? formatBRL(row.entradas) : <span className="text-text-secondary">—</span>}
                     </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-accent-red">
+                    <td className="px-3 py-2 text-right tnum text-accent-red">
                       {row.saidas < 0 ? formatBRL(row.saidas) : <span className="text-text-secondary">—</span>}
                     </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${row.resultado === 0 ? 'text-text-secondary' : row.resultado > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    <td className={`px-3 py-2 text-right tnum ${row.resultado === 0 ? 'text-text-secondary' : row.resultado > 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                       {row.resultado === 0 ? '—' : formatBRL(row.resultado)}
                     </td>
-                    <td className={`px-3 py-2 text-right font-bold tabular-nums ${row.saldo >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                    <td className={`px-3 py-2 text-right font-bold tnum ${row.saldo >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                       {formatBRL(row.saldo)}
                     </td>
                   </tr>
@@ -274,10 +274,10 @@ export function CashFlowReport() {
 
                 {/* Total row */}
                 <tr className="border-t-2 border-border bg-bg-secondary/60">
-                  <td className="px-3 py-2 font-bold text-text-primary uppercase text-[10px] tracking-wider">Total</td>
-                  <td className="px-3 py-2 text-right font-bold tabular-nums text-accent-green">{formatBRL(totalEntradas)}</td>
-                  <td className="px-3 py-2 text-right font-bold tabular-nums text-accent-red">{formatBRL(totalSaidas)}</td>
-                  <td className={`px-3 py-2 text-right font-bold tabular-nums ${totalResultado >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                  <td className="px-3 py-2 font-bold text-text-primary uppercase text-caption tracking-wider">Total</td>
+                  <td className="px-3 py-2 text-right font-bold tnum text-accent-green">{formatBRL(totalEntradas)}</td>
+                  <td className="px-3 py-2 text-right font-bold tnum text-accent-red">{formatBRL(totalSaidas)}</td>
+                  <td className={`px-3 py-2 text-right font-bold tnum ${totalResultado >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                     {formatBRL(totalResultado)}
                   </td>
                   <td className="px-3 py-2 text-right text-text-secondary">—</td>

@@ -63,10 +63,10 @@ export function Layout() {
           )}
         >
           <div className={cn('min-w-0', collapsed && 'lg:hidden')}>
-            <h1 className="text-accent font-bold text-sm tracking-wider">
+            <h1 className="text-accent font-bold text-body tracking-wider">
               PLANEJADOR
             </h1>
-            <p className="text-text-secondary text-[10px] tracking-widest">
+            <p className="text-text-secondary text-caption tracking-widest">
               FINANCEIRO FAMILIAR
             </p>
           </div>
@@ -116,7 +116,7 @@ export function Layout() {
           </div>
           <div
             className={cn(
-              'text-[10px] text-text-secondary truncate mb-2',
+              'text-caption text-text-secondary truncate mb-2',
               collapsed && 'lg:hidden'
             )}
           >
@@ -127,7 +127,7 @@ export function Layout() {
             title={collapsed ? 'Sair' : undefined}
             aria-label="Sair"
             className={cn(
-              'flex items-center gap-2 text-xs text-text-secondary hover:text-accent-red transition-colors',
+              'flex items-center gap-2 text-body text-text-secondary hover:text-accent-red transition-colors',
               collapsed && 'lg:justify-center lg:w-full'
             )}
           >

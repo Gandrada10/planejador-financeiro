@@ -141,11 +141,11 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
           onClick={() => setOpen(false)}
         >
           <div
-            className="bg-bg-card border border-border rounded-lg w-full max-w-3xl max-h-[85vh] flex flex-col mt-2 sm:mt-6"
+            className="bg-bg-card border border-border rounded-card w-full max-w-3xl max-h-[85vh] flex flex-col mt-2 sm:mt-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+              <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
                 <Bell size={16} className={count > 0 ? 'text-accent-red' : 'text-text-secondary'} />
                 Alertas de notas
                 <span className="text-text-secondary font-normal">({count})</span>
@@ -161,7 +161,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
 
             <div className="overflow-y-auto p-3 space-y-2">
               {count === 0 ? (
-                <div className="p-10 text-center text-text-secondary text-sm">
+                <div className="p-10 text-center text-text-secondary text-body">
                   Nenhum alerta ativo.
                   <br />
                   Marque uma nota como <span className="text-accent-red font-semibold">alerta</span> para vê-la aqui.
@@ -170,18 +170,18 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
                 alerts.map((t) => (
                   <div
                     key={t.id}
-                    className="border border-accent-red/30 bg-accent-red/5 rounded-lg overflow-hidden"
+                    className="border border-accent-red/30 bg-accent-red/5 rounded-card overflow-hidden"
                   >
                     {/* Nota (destaque vermelho) + desmarcar */}
                     <div className="flex items-start gap-2 p-3 border-b border-accent-red/20">
                       <AlertTriangle size={15} className="text-accent-red flex-shrink-0 mt-0.5" />
-                      <p className="flex-1 text-sm text-text-primary whitespace-pre-wrap break-words min-w-0">
+                      <p className="flex-1 text-body text-text-primary whitespace-pre-wrap break-words min-w-0">
                         {t.notes}
                       </p>
                       <button
                         onClick={() => updateTransaction(t.id, { noteAlert: false })}
                         title="Desmarcar alerta — remove do sininho"
-                        className="flex-shrink-0 text-[10px] font-bold px-2 py-1 rounded border border-accent-red/40 text-accent-red hover:bg-accent-red/10 flex items-center gap-1"
+                        className="flex-shrink-0 text-body font-bold px-2 py-1 rounded-control border border-accent-red/40 text-accent-red hover:bg-accent-red/10 flex items-center gap-1"
                       >
                         <X size={11} /> Desmarcar
                       </button>
@@ -196,12 +196,12 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
                       title="Editar lançamento"
                       className="w-full text-left p-3 hover:bg-bg-secondary/60 transition-colors flex items-center gap-3"
                     >
-                      <span className="text-text-secondary text-xs w-14 flex-shrink-0 tnum">
+                      <span className="text-text-secondary text-caption w-14 flex-shrink-0 tnum">
                         {formatDate(t.date)}
                       </span>
                       <span className="flex-1 min-w-0">
-                        <span className="block text-text-primary text-xs truncate">{t.description}</span>
-                        <span className="block text-text-secondary text-[10px] truncate">
+                        <span className="block text-text-primary text-body truncate">{t.description}</span>
+                        <span className="block text-text-secondary text-caption truncate">
                           {categoryLabel(categories, t.categoryId)}
                           {t.account ? ` · ${t.account}` : ''}
                           {t.familyMember ? ` · ${t.familyMember}` : ''}
@@ -209,7 +209,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
                       </span>
                       <span
                         className={cn(
-                          'text-xs font-bold tnum flex-shrink-0',
+                          'text-body font-bold tnum flex-shrink-0',
                           t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'
                         )}
                       >
@@ -223,7 +223,7 @@ export function AlertsProvider({ children }: { children: ReactNode }) {
             </div>
 
             {count > 0 && (
-              <div className="p-3 border-t border-border text-[10px] text-text-secondary">
+              <div className="p-3 border-t border-border text-caption text-text-secondary">
                 Clique na linha para editar o lançamento. Para tirar do sininho, desmarque o alerta — aqui ou na
                 própria nota.
               </div>
@@ -273,7 +273,7 @@ export function AlertBell({ collapsed = false, variant = 'sidebar' }: BellProps)
     return (
       <span
         className={cn(
-          'absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-0.5 items-center justify-center rounded-full bg-accent-red text-white text-[9px] font-bold leading-none',
+          'absolute -top-1.5 -right-1.5 min-w-[15px] h-[15px] px-0.5 items-center justify-center rounded-full bg-accent-red text-text-primary text-[10px] font-bold leading-none',
           displayClass
         )}
       >
@@ -305,7 +305,7 @@ export function AlertBell({ collapsed = false, variant = 'sidebar' }: BellProps)
       title={count > 0 ? `${count} alerta${count !== 1 ? 's' : ''}` : 'Alertas'}
       aria-label={count > 0 ? `Alertas (${count})` : 'Alertas'}
       className={cn(
-        'flex items-center gap-3 py-2 text-xs rounded transition-colors w-full',
+        'flex items-center gap-3 py-2 text-body rounded-control transition-colors w-full',
         collapsed ? 'px-3 lg:px-0 lg:justify-center' : 'px-3',
         count > 0
           ? 'text-accent-red hover:bg-accent-red/10'
@@ -320,7 +320,7 @@ export function AlertBell({ collapsed = false, variant = 'sidebar' }: BellProps)
       <span className={cn('flex items-center gap-2', collapsed && 'lg:hidden')}>
         Alertas
         {count > 0 && (
-          <span className="ml-auto min-w-[16px] px-1 h-4 flex items-center justify-center rounded-full bg-accent-red/20 text-accent-red text-[9px] font-bold">
+          <span className="ml-auto min-w-[16px] px-1 h-4 flex items-center justify-center rounded-full bg-accent-red/20 text-accent-red text-[10px] font-bold">
             {count}
           </span>
         )}

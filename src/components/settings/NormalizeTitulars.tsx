@@ -226,12 +226,12 @@ export function NormalizeTitulars() {
 
   // ─── Render ──────────────────────────────────────────────────────────────
   if (loading || loadingMembers) {
-    return <p className="text-xs text-text-secondary animate-pulse">Carregando lançamentos...</p>;
+    return <p className="text-body text-text-secondary animate-pulse">Carregando lançamentos...</p>;
   }
 
   if (memberNames.length === 0) {
     return (
-      <p className="text-[11px] text-text-secondary flex items-center gap-1.5">
+      <p className="text-caption text-text-secondary flex items-center gap-1.5">
         <AlertTriangle size={12} className="text-status-warn" />
         Cadastre os membros da família (seção acima) antes de normalizar os titulares.
       </p>
@@ -245,7 +245,7 @@ export function NormalizeTitulars() {
       {/* Banner de guarda-corpo */}
       <div className="flex items-start gap-2 bg-accent-red/5 border border-accent-red/40 rounded p-2.5">
         <ShieldAlert size={14} className="text-accent-red flex-shrink-0 mt-0.5" aria-hidden="true" />
-        <p className="text-[11px] text-text-secondary leading-snug">
+        <p className="text-caption text-text-secondary leading-snug">
           <strong className="text-text-primary">Faça um backup antes</strong> (Configurações → Backup e
           Restauração → Gerar backup completo). Esta ação <strong className="text-text-primary">altera
           lançamentos existentes</strong>, unificando os nomes de titular/membro. Pré-visualize primeiro; nada é
@@ -254,7 +254,7 @@ export function NormalizeTitulars() {
       </div>
 
       {error && (
-        <p className="text-[11px] font-bold text-accent-red flex items-center gap-1" role="alert">
+        <p className="text-caption font-bold text-accent-red flex items-center gap-1" role="alert">
           <AlertTriangle size={12} /> {error}
         </p>
       )}
@@ -263,7 +263,7 @@ export function NormalizeTitulars() {
       {phase === 'idle' && (
         <button
           onClick={handlePreview}
-          className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+          className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
         >
           <Users size={13} /> Pré-visualizar duplicatas de titular
         </button>
@@ -272,13 +272,13 @@ export function NormalizeTitulars() {
       {/* Resultado final */}
       {phase === 'done' && result && (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-accent-green flex items-center gap-1">
+          <p className="text-caption font-bold text-accent-green flex items-center gap-1">
             <Check size={12} /> {result.updated} lançamento(s) atualizado(s), {result.groups} grupo(s)
             consolidado(s).
           </p>
           <button
             onClick={reset}
-            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
           >
             <RefreshCw size={13} /> Rodar de novo
           </button>
@@ -288,7 +288,7 @@ export function NormalizeTitulars() {
       {/* Progresso */}
       {phase === 'applying' && (
         <div className="space-y-2">
-          <p className="text-xs text-text-primary flex items-center gap-2">
+          <p className="text-body text-text-primary flex items-center gap-2">
             <RefreshCw size={13} className="animate-spin text-accent" />
             Aplicando... {progress.current} / {progress.total}
           </p>
@@ -305,13 +305,13 @@ export function NormalizeTitulars() {
       {phase === 'previewed' && (
         <div className="space-y-3">
           {noPending ? (
-            <p className="text-[11px] text-accent-green font-bold flex items-center gap-1">
+            <p className="text-caption text-accent-green font-bold flex items-center gap-1">
               <Check size={12} /> Nenhuma duplicata pendente — os titulares já estão consistentes.
             </p>
           ) : (
             <>
               <div className="flex items-center justify-between flex-wrap gap-2">
-                <p className="text-[11px] text-text-secondary">
+                <p className="text-caption text-text-secondary">
                   <strong className="text-text-primary">{pendingGroups.length} grupo(s)</strong> a consolidar ·{' '}
                   <strong className="text-text-primary">{plan.totalAffected}</strong> lançamento(s) afetado(s)
                   {plan.conflicts > 0 && (
@@ -339,7 +339,7 @@ export function NormalizeTitulars() {
                           aria-label={`Alvo canônico para ${g.variants.map((v) => v.value).join(', ')}`}
                           value={ov.skip ? '' : ov.target}
                           onChange={(e) => setGroupTarget(g, e.target.value)}
-                          className={`px-1.5 py-1 text-[11px] rounded bg-bg-card border ${
+                          className={`px-1.5 py-1 text-body rounded-control bg-bg-card border ${
                             inactive ? 'border-border text-text-secondary' : 'border-accent text-text-primary'
                           } max-w-[220px] font-bold`}
                         >
@@ -351,12 +351,12 @@ export function NormalizeTitulars() {
                           ))}
                         </select>
                         {!inactive && (
-                          <span className="text-[10px] text-text-secondary">
+                          <span className="text-caption text-text-secondary">
                             {affected} lançamento(s)
                           </span>
                         )}
                         {!g.isMatched && (
-                          <span className="text-[9px] uppercase tracking-wide text-status-warn font-bold">
+                          <span className="text-caption uppercase tracking-wide text-status-warn font-bold">
                             não reconhecido
                           </span>
                         )}
@@ -379,7 +379,7 @@ export function NormalizeTitulars() {
           )}
 
           {plan.conflicts > 0 && (
-            <p className="text-[10px] text-text-secondary flex items-start gap-1.5">
+            <p className="text-caption text-text-secondary flex items-start gap-1.5">
               <AlertTriangle size={11} className="text-status-warn flex-shrink-0 mt-0.5" />
               Conflitos: lançamentos cujos campos apontam para dois membros diferentes não são tocados — ajuste-os
               manualmente na aba Lançamentos.
@@ -388,7 +388,7 @@ export function NormalizeTitulars() {
 
           {/* Guarda-corpo: confirmação de backup */}
           {!noPending && (
-            <label className="flex items-start gap-2 text-[11px] text-text-secondary cursor-pointer select-none">
+            <label className="flex items-start gap-2 text-caption text-text-secondary cursor-pointer select-none">
               <input
                 type="checkbox"
                 checked={acknowledged}
@@ -404,14 +404,14 @@ export function NormalizeTitulars() {
               <button
                 onClick={() => setConfirmOpen(true)}
                 disabled={!acknowledged || plan.totalAffected === 0}
-                className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Check size={13} /> Aplicar ({plan.totalAffected})
               </button>
             )}
             <button
               onClick={reset}
-              className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+              className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
             >
               <X size={13} /> {noPending ? 'Fechar' : 'Cancelar'}
             </button>

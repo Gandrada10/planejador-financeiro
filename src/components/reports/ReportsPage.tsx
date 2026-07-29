@@ -323,7 +323,7 @@ export function ReportsPage() {
   }
 
   if (loading) {
-    return <div className="text-accent text-sm animate-pulse">Carregando...</div>;
+    return <div className="text-accent text-body animate-pulse">Carregando...</div>;
   }
 
   return (
@@ -343,7 +343,7 @@ export function ReportsPage() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs rounded-t transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-body rounded-t-control transition-colors border-b-2 -mb-px ${
               activeTab === tab
                 ? 'text-accent border-accent bg-accent/5'
                 : 'text-text-secondary border-transparent hover:text-text-primary hover:border-border'
@@ -365,22 +365,22 @@ export function ReportsPage() {
       {activeTab === 'categorias' && <>
 
       {/* Range bar */}
-      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-lg">
-        <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-card">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Mes:</span>
           <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
         </div>
         <div className="ml-auto flex gap-1 flex-wrap">
           <button
             onClick={expandAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent"
             title="Expandir tudo"
           >
             <ChevronsUpDown size={13} /> Expandir tudo
           </button>
           <button
             onClick={collapseAll}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent"
             title="Recolher tudo"
           >
             <ChevronsDownUp size={13} /> Recolher tudo
@@ -388,7 +388,7 @@ export function ReportsPage() {
           <button
             onClick={exportExcel}
             disabled={filteredTransactions.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-30"
             title="Exportar Excel"
           >
             <FileSpreadsheet size={13} /> Excel
@@ -396,7 +396,7 @@ export function ReportsPage() {
           <button
             onClick={exportPDF}
             disabled={filteredTransactions.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-30"
             title="Exportar PDF"
           >
             <Download size={13} /> PDF
@@ -404,7 +404,7 @@ export function ReportsPage() {
           <button
             onClick={() => setFullReportOpen(true)}
             disabled={transactions.length === 0}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-30"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-30"
             title="Gerar PDF consolidado com dashboard + relatórios no padrão McKinsey"
           >
             <FileBarChart size={13} /> Exportar Relatório Completo
@@ -417,25 +417,25 @@ export function ReportsPage() {
         {/* Left column - Summary */}
         <div className="space-y-3 w-[330px] flex-shrink-0">
           {/* Summary card */}
-          <div className="bg-bg-card border border-border rounded-lg p-4 space-y-2">
-            <div className="flex justify-between text-xs">
+          <div className="bg-bg-card border border-border rounded-card p-4 space-y-2">
+            <div className="flex justify-between text-body">
               <span className="text-text-secondary">Receitas</span>
-              <span className="text-accent-green font-bold">{formatBRL(totalEntries)}</span>
+              <span className="text-accent-green font-bold tnum">{formatBRL(totalEntries)}</span>
             </div>
-            <div className="flex justify-between text-xs">
+            <div className="flex justify-between text-body">
               <span className="text-text-secondary">Despesas</span>
-              <span className="text-accent-red font-bold">{formatBRL(totalExits)}</span>
+              <span className="text-accent-red font-bold tnum">{formatBRL(totalExits)}</span>
             </div>
-            <div className="border-t border-border pt-2 flex justify-between text-xs">
+            <div className="border-t border-border pt-2 flex justify-between text-body">
               <span className="text-text-secondary">Total</span>
-              <span className={`font-bold ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+              <span className={`font-bold tnum ${totalBalance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                 {formatBRL(totalBalance)}
               </span>
             </div>
           </div>
 
           {/* Transaction count */}
-          <div className="text-xs text-text-secondary">
+          <div className="text-caption text-text-secondary">
             {filteredTransactions.length} lancamentos em {grouped.length} categorias
           </div>
         </div>
@@ -443,7 +443,7 @@ export function ReportsPage() {
         {/* Right column - Categories */}
         <div className="flex-1 min-w-0">
           {grouped.length === 0 ? (
-            <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-sm">
+            <div className="bg-bg-card border border-border rounded-card p-8 text-center text-text-secondary text-body">
               Nenhum lancamento neste periodo.
             </div>
           ) : (
@@ -453,7 +453,7 @@ export function ReportsPage() {
                 const isCatExpanded = expandedCats.has(catKey);
 
                 return (
-                  <div key={catKey} className="bg-bg-card border border-border rounded-lg overflow-hidden">
+                  <div key={catKey} className="bg-bg-card border border-border rounded-card overflow-hidden">
                     {/* Category header */}
                     <button
                       onClick={() => toggleCat(catKey)}
@@ -461,9 +461,9 @@ export function ReportsPage() {
                     >
                       {isCatExpanded ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronRight size={14} className="text-text-secondary" />}
                       <CategoryIcon icon={group.icon} size={16} style={{ color: group.category?.color || 'var(--text-primary)' }} />
-                      <span className="text-xs text-text-primary">{group.label}</span>
-                      <span className="text-[10px] text-text-secondary">({group.percentage.toFixed(1)}%)</span>
-                      <span className={`ml-auto text-xs font-bold tnum ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                      <span className="text-body text-text-primary">{group.label}</span>
+                      <span className="text-caption text-text-secondary">({group.percentage.toFixed(1)}%)</span>
+                      <span className={`ml-auto text-body font-bold tnum ${group.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                         {formatBRL(group.total)}
                       </span>
                     </button>
@@ -484,9 +484,9 @@ export function ReportsPage() {
                             >
                               {isSubExpanded ? <ChevronDown size={12} className="text-text-secondary" /> : <ChevronRight size={12} className="text-text-secondary" />}
                               <CategoryIcon icon={sub.icon} size={14} style={{ color: sub.category?.color || 'var(--text-primary)' }} />
-                              <span className="text-xs text-text-primary">{sub.label}</span>
-                              <span className="text-[10px] text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
-                              <span className={`ml-auto text-xs font-bold tnum ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                              <span className="text-body text-text-primary">{sub.label}</span>
+                              <span className="text-caption text-text-secondary">({sub.percentage.toFixed(1)}%)</span>
+                              <span className={`ml-auto text-body font-bold tnum ${sub.total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                 {formatBRL(sub.total)}
                               </span>
                             </button>
@@ -500,15 +500,15 @@ export function ReportsPage() {
                                 return (
                                   <div
                                     key={t.id}
-                                    className="w-full flex items-center gap-3 px-4 pr-6 py-1 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-xs text-left cursor-pointer transition-colors"
+                                    className="w-full flex items-center gap-3 px-4 pr-6 py-1 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-body text-left cursor-pointer transition-colors"
                                   >
-                                    <span className="text-text-secondary w-[72px] flex-shrink-0 tabular-nums">
+                                    <span className="text-text-secondary w-[72px] flex-shrink-0 tnum">
                                       {formatDate(t.date)}
                                     </span>
                                     <span className="text-text-primary flex-1 min-w-0 truncate">
                                       {t.description}
                                     </span>
-                                    <span className={`font-bold w-[100px] flex-shrink-0 text-right tabular-nums ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+                                    <span className={`font-bold w-[100px] flex-shrink-0 text-right tnum ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                       {formatBRL(t.amount)}
                                     </span>
                                     <span className="w-[56px] flex-shrink-0 text-center">
@@ -520,14 +520,14 @@ export function ReportsPage() {
                                         <span className="text-text-secondary/40">—</span>
                                       )}
                                     </span>
-                                    <span className="text-[10px] text-text-secondary w-[90px] flex-shrink-0 truncate">
+                                    <span className="text-caption text-text-secondary w-[90px] flex-shrink-0 truncate">
                                       {t.account || '—'}
                                     </span>
-                                    <span className="text-[10px] text-text-secondary w-[90px] flex-shrink-0 truncate">
+                                    <span className="text-caption text-text-secondary w-[90px] flex-shrink-0 truncate">
                                       {t.familyMember || t.titular || '—'}
                                     </span>
                                     <span
-                                      className="text-[10px] w-[100px] flex-shrink-0 truncate"
+                                      className="text-caption w-[100px] flex-shrink-0 truncate"
                                       style={{ color: project?.color || 'var(--color-text-secondary)' }}
                                     >
                                       {project?.name || '—'}

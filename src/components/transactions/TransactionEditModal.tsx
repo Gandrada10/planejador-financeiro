@@ -110,8 +110,8 @@ export function TransactionEditModal({
     onClose();
   }
 
-  const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent';
-  const labelClass = 'block text-[10px] text-text-secondary mb-1 uppercase tracking-wider';
+  const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent';
+  const labelClass = 'block text-caption text-text-secondary mb-1 uppercase tracking-wider';
 
   return (
     <div
@@ -119,11 +119,11 @@ export function TransactionEditModal({
       onClick={onClose}
     >
       <div
-        className="bg-bg-card border border-border rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto"
+        className="bg-bg-card border border-border rounded-card w-full max-w-md max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-bg-card z-10">
-          <h3 className="text-sm font-bold text-text-primary">Editar Lançamento</h3>
+          <h3 className="text-title font-semibold text-text-primary">Editar Lançamento</h3>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
             <X size={18} />
           </button>
@@ -134,28 +134,28 @@ export function TransactionEditModal({
             <button
               type="button"
               onClick={() => setType('despesa')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded ${type === 'despesa' ? 'bg-accent-red text-white' : 'bg-bg-secondary text-text-secondary'}`}
+              className={`flex-1 py-1.5 text-body font-bold rounded-control ${type === 'despesa' ? 'bg-accent-red text-white' : 'bg-bg-secondary text-text-secondary'}`}
             >
               Despesa
             </button>
             <button
               type="button"
               onClick={() => setType('receita')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded ${type === 'receita' ? 'bg-accent-green text-white' : 'bg-bg-secondary text-text-secondary'}`}
+              className={`flex-1 py-1.5 text-body font-bold rounded-control ${type === 'receita' ? 'bg-accent-green text-white' : 'bg-bg-secondary text-text-secondary'}`}
             >
               Receita
             </button>
           </div>
 
           {type === 'receita' && (
-            <label className="flex items-start gap-2 px-3 py-2 bg-bg-secondary/50 border border-border rounded cursor-pointer">
+            <label className="flex items-start gap-2 px-3 py-2 bg-bg-secondary/50 border border-border rounded-control cursor-pointer">
               <input
                 type="checkbox"
                 checked={isReimbursement}
                 onChange={(e) => setIsReimbursement(e.target.checked)}
                 className="mt-0.5 accent-accent"
               />
-              <span className="text-[11px] text-text-secondary leading-snug">
+              <span className="text-caption text-text-secondary leading-snug">
                 <span className="font-semibold text-text-primary">É reembolso</span> — recuperação de um gasto (ex.: alguém te pagou de volta). Abate a despesa nos totais, em vez de contar como receita. Categorize com a categoria do gasto.
               </span>
             </label>
@@ -282,7 +282,7 @@ export function TransactionEditModal({
                 onChange={(e) => setNoteAlert(e.target.checked)}
                 style={{ accentColor: 'var(--color-accent-red)' }}
               />
-              <span className={`text-[11px] flex items-center gap-1 ${noteAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
+              <span className={`text-caption flex items-center gap-1 ${noteAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
                 <AlertTriangle size={12} className={noteAlert ? 'text-accent-red' : 'text-text-secondary'} />
                 Marcar nota como alerta (aparece no sininho)
               </span>
@@ -292,7 +292,7 @@ export function TransactionEditModal({
           <div className="flex gap-2 pt-1">
             <button
               type="submit"
-              className="flex-1 py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90 flex items-center justify-center gap-2"
+              className="flex-1 py-2 bg-accent text-bg-primary font-bold text-body rounded-control hover:opacity-90 flex items-center justify-center gap-2"
             >
               <Check size={16} />
               Salvar
@@ -301,7 +301,7 @@ export function TransactionEditModal({
               <button
                 type="button"
                 onClick={handleDelete}
-                className="px-3 py-2 border border-accent-red/40 text-accent-red text-sm rounded hover:bg-accent-red/10 flex items-center gap-1.5"
+                className="px-3 py-2 border border-accent-red/40 text-accent-red text-body rounded-control hover:bg-accent-red/10 flex items-center gap-1.5"
                 title="Excluir lançamento"
               >
                 <Trash2 size={14} />

@@ -227,7 +227,7 @@ export function GoalsEvolutionTab() {
 
   if (txLoading || budgetLoading) {
     return (
-      <div className="flex items-center gap-2 text-accent text-sm animate-pulse py-8">
+      <div className="flex items-center gap-2 text-accent text-body animate-pulse py-8">
         <Loader2 size={16} className="animate-spin" />
         Carregando...
       </div>
@@ -237,18 +237,18 @@ export function GoalsEvolutionTab() {
   return (
     <div className="space-y-4">
       {/* Controls */}
-      <div className="flex items-center gap-4 flex-wrap px-4 py-3 bg-bg-secondary border border-border rounded-lg">
-        <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-4 flex-wrap px-4 py-3 bg-bg-secondary border border-border rounded-card">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Intervalo:</span>
           <select
             disabled
-            className="bg-bg-card border border-border rounded px-2 py-1 text-xs text-text-primary"
+            className="bg-bg-card border border-border rounded-control px-2 py-1 text-body text-text-primary"
           >
             <option>Mensal</option>
           </select>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Inicio:</span>
           <select
             value={startMonth}
@@ -256,7 +256,7 @@ export function GoalsEvolutionTab() {
               setStartMonth(e.target.value);
               setLoaded(false);
             }}
-            className="bg-bg-card border border-border rounded px-2 py-1 text-xs text-text-primary capitalize"
+            className="bg-bg-card border border-border rounded-control px-2 py-1 text-body text-text-primary capitalize"
           >
             {availableStartMonths.map((m) => (
               <option key={m} value={m} className="capitalize">
@@ -266,7 +266,7 @@ export function GoalsEvolutionTab() {
           </select>
         </div>
 
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Periodo:</span>
           <select
             value={periodCount}
@@ -274,7 +274,7 @@ export function GoalsEvolutionTab() {
               setPeriodCount(Number(e.target.value));
               setLoaded(false);
             }}
-            className="bg-bg-card border border-border rounded px-2 py-1 text-xs text-text-primary"
+            className="bg-bg-card border border-border rounded-control px-2 py-1 text-body text-text-primary"
           >
             {[3, 6, 9, 12].map((n) => (
               <option key={n} value={n}>
@@ -286,7 +286,7 @@ export function GoalsEvolutionTab() {
 
         <button
           onClick={handleLoad}
-          className="px-4 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:bg-accent/90 transition-colors"
+          className="px-4 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:bg-accent/90 transition-colors"
         >
           Carregar
         </button>
@@ -294,34 +294,34 @@ export function GoalsEvolutionTab() {
 
       {/* Evolution table */}
       {!loaded ? (
-        <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-sm">
+        <div className="bg-bg-card border border-border rounded-card p-8 text-center text-text-secondary text-body">
           Selecione o periodo e clique em "Carregar" para visualizar a evolucao.
         </div>
       ) : rows.length === 0 ? (
-        <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-sm">
+        <div className="bg-bg-card border border-border rounded-card p-8 text-center text-text-secondary text-body">
           Nenhuma meta definida no periodo selecionado.
         </div>
       ) : (
-        <div className="bg-bg-card border border-border rounded-lg overflow-x-auto">
-          <table className="w-full text-xs">
+        <div className="bg-bg-card border border-border rounded-card overflow-x-auto">
+          <table className="w-full text-body">
             <thead>
               <tr className="bg-bg-secondary border-b border-border">
-                <th className="text-left px-3 py-2 text-text-secondary font-normal w-32 sticky left-0 bg-bg-secondary z-10" />
-                <th className="text-left px-3 py-2 text-text-secondary font-normal w-24 sticky left-32 bg-bg-secondary z-10">
+                <th className="text-left px-3 py-2 text-caption text-text-secondary font-normal w-32 sticky left-0 bg-bg-secondary z-10" />
+                <th className="text-left px-3 py-2 text-caption text-text-secondary font-normal w-24 sticky left-32 bg-bg-secondary z-10">
                   Realizado
                 </th>
                 {months.map((m) => (
                   <th
                     key={m}
-                    className="text-right px-3 py-2 text-text-secondary font-normal min-w-[90px]"
+                    className="text-right px-3 py-2 text-caption text-text-secondary font-normal min-w-[90px]"
                   >
                     {shortMonthLabel(m)}
                   </th>
                 ))}
-                <th className="text-right px-3 py-2 text-text-secondary font-normal min-w-[90px]">
+                <th className="text-right px-3 py-2 text-caption text-text-secondary font-normal min-w-[90px]">
                   Media
                 </th>
-                <th className="text-right px-3 py-2 text-text-secondary font-normal min-w-[90px]">
+                <th className="text-right px-3 py-2 text-caption text-text-secondary font-normal min-w-[90px]">
                   Total
                 </th>
               </tr>

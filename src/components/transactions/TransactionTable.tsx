@@ -201,7 +201,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
 
   if (sorted.length === 0) {
     return (
-      <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
+      <div className="bg-bg-card border border-border rounded-card p-6 text-center text-text-secondary text-body">
         Nenhuma transacao ainda. Importe um extrato ou adicione manualmente.
       </div>
     );
@@ -213,7 +213,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   return (
     <div className="space-y-2">
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 p-2 bg-bg-secondary rounded text-xs flex-wrap">
+        <div className="flex items-center gap-3 p-2 bg-bg-secondary rounded-card text-body flex-wrap">
           <span className="text-text-secondary">{selectedIds.size} selecionadas</span>
           {onBatchReconcile && (() => {
             const selectedList = sorted.filter((t) => selectedIds.has(t.id));
@@ -278,8 +278,8 @@ export function TransactionTable({ transactions, categories, projects = [], acco
           então a barra de rolagem horizontal fica sempre alcançável no rodapé
           (antes ela existia, mas só aparecia depois de TODAS as linhas). As
           colunas comprimem até o piso do colgroup; abaixo do min-w, rola. */}
-      <div className="overflow-auto bg-bg-card border border-border rounded-lg max-h-[calc(100vh-190px)]">
-        <table className="w-full min-w-[1086px] text-xs table-fixed">
+      <div className="overflow-auto bg-bg-card border border-border rounded-card max-h-[calc(100vh-190px)]">
+        <table className="w-full min-w-[1086px] text-body table-fixed">
           <colgroup>
             <col style={{ width: 28 }} />  {/* dot */}
             <col style={{ width: 75 }} />  {/* data */}
@@ -296,7 +296,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
           <thead>
             {/* sticky vai nos th (não funciona em thead/tr); a "borda" de baixo
                 é sombra interna porque borda em th sticky some com border-collapse */}
-            <tr className="text-text-secondary uppercase tracking-wider text-[10px] [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-bg-card [&>th]:shadow-[inset_0_-1px_0_var(--color-border)]">
+            <tr className="text-ink-3 uppercase tracking-wider text-caption [&>th]:sticky [&>th]:top-0 [&>th]:z-10 [&>th]:bg-bg-card [&>th]:shadow-[inset_0_-1px_0_var(--color-border)]">
               <th className="p-2 text-center">
                 <div
                   className={`w-3 h-3 rounded-full border mx-auto cursor-pointer transition-colors ${
@@ -312,7 +312,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 title="Data de pagamento/vencimento — define o mês do lançamento no fluxo de caixa (quando o dinheiro sai)"
               >
                 <span className="flex items-center gap-1">Data <SortIcon field="date" /></span>
-                <span className="block text-[10px] font-normal normal-case text-text-secondary">pagamento / vencimento</span>
+                <span className="block text-caption font-normal normal-case text-ink-3">pagamento / vencimento</span>
               </th>
               <th
                 className="p-2 text-left cursor-pointer select-none hover:text-text-primary"
@@ -320,7 +320,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 title="Data em que a compra foi efetivamente feita (competência). Referência — não define o mês."
               >
                 <span className="flex items-center gap-1">Competência <SortIcon field="purchaseDate" /></span>
-                <span className="block text-[10px] font-normal normal-case text-text-secondary">data da compra</span>
+                <span className="block text-caption font-normal normal-case text-ink-3">data da compra</span>
               </th>
               <th className="p-2 text-left">Descricao</th>
               <th className="p-2 text-left">Categoria</th>
@@ -377,7 +377,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onChange={(e) => setEditValue(e.target.value)}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded-control px-1 py-0.5 text-text-primary text-body focus:outline-none"
                     />
                   ) : formatDate(t.date)}
                 </td>
@@ -396,7 +396,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onChange={(e) => setEditValue(e.target.value)}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded-control px-1 py-0.5 text-text-primary text-body focus:outline-none"
                     />
                   ) : t.purchaseDate ? formatDate(t.purchaseDate) : '—'}
                 </td>
@@ -414,7 +414,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onChange={(e) => setEditValue(e.target.value)}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded-control px-1 py-0.5 text-text-primary text-body focus:outline-none"
                     />
                   ) : (
                     <div className="flex items-center gap-1 min-w-0">
@@ -464,7 +464,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                           onClick={() => onCreateRule(t.description, t.categoryId!)}
                           className={`flex-shrink-0 transition-colors ${
                             hasRule
-                              ? 'text-yellow-400 hover:text-yellow-300'
+                              ? 'text-status-warn hover:text-status-warn/80'
                               : 'text-text-secondary/30 hover:text-text-secondary'
                           }`}
                         >
@@ -508,7 +508,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                 {/* Valor - editable */}
                 <td
                   data-tab-cell
-                  className={`p-2 text-right font-bold truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
+                  className={`p-2 text-right font-bold tnum truncate overflow-hidden ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editableCell}`}
                   onClick={() => startEdit(t.id, 'amount', t.amount < 0
                     ? '-' + applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
                     : applyMoneyMask(String(Math.round(Math.abs(t.amount) * 100)))
@@ -522,7 +522,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded-control px-1 py-0.5 text-text-primary text-body text-right focus:outline-none"
                     />
                   ) : (
                     formatBRL(t.amount)
@@ -543,7 +543,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onBlur={commitEdit}
                       onKeyDown={handleKeyDown}
                       placeholder="1/12"
-                      className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-center focus:outline-none"
+                      className="w-full bg-bg-secondary border border-accent rounded-control px-1 py-0.5 text-text-primary text-body text-center focus:outline-none"
                     />
                   ) : t.totalInstallments ? (
                     <span className="px-1.5 py-0.5 bg-accent/10 text-accent rounded text-[10px] tnum">
@@ -563,7 +563,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       if (!ok) { e.target.value = t.account; return; }
                       onUpdate(t.id, { account: val });
                     }}
-                    className="w-full bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
+                    className="w-full bg-transparent border-none text-body text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary"
                   >
                     <option value="">—</option>
                     {accountNames.map((name) => (
@@ -584,7 +584,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                         if (!ok) { e.target.value = t.familyMember || ''; return; }
                         onUpdate(t.id, { familyMember: val });
                       }}
-                      className="w-full bg-transparent border-none text-xs text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary truncate"
+                      className="w-full bg-transparent border-none text-body text-text-secondary cursor-pointer focus:outline-none hover:text-text-primary truncate"
                     >
                       <option value="">—</option>
                       {memberNames.map((name) => (
@@ -607,7 +607,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                           onChange={(e) => setEditValue(e.target.value)}
                           onBlur={commitEdit}
                           onKeyDown={handleKeyDown}
-                          className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                          className="w-full bg-bg-secondary border border-accent rounded-control px-1 py-0.5 text-text-primary text-body focus:outline-none"
                         />
                       ) : (
                         t.familyMember || '—'
@@ -627,12 +627,12 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       if (!ok) return;
                       onUpdate(t.id, { projectId: value || null });
                     }}
-                    className="w-full bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary truncate"
+                    className="w-full bg-transparent border-none text-body cursor-pointer focus:outline-none hover:text-text-primary truncate"
                     style={{ color: projects.find((p) => p.id === t.projectId)?.color || 'var(--color-text-secondary)' }}
                   >
-                    <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>—</option>
+                    <option value="" style={{ backgroundColor: '#1b1b1e', color: '#f5f4f2' }}>—</option>
                     {projects.filter((p) => p.status === 'active').map((p) => (
-                      <option key={p.id} value={p.id} style={{ backgroundColor: '#111111', color: p.color }}>{p.name}</option>
+                      <option key={p.id} value={p.id} style={{ backgroundColor: '#1b1b1e', color: p.color }}>{p.name}</option>
                     ))}
                   </select>
                 </td>

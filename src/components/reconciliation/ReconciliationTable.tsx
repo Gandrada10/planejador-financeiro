@@ -11,7 +11,7 @@ interface Props {
 export function ReconciliationTable({ transactions, categories, onToggleReconciled }: Props) {
   if (transactions.length === 0) {
     return (
-      <div className="bg-bg-card border border-border rounded-lg p-8 text-center text-text-secondary text-xs">
+      <div className="bg-bg-card border border-border rounded-card p-10 text-center text-text-secondary text-body">
         Nenhuma transacao encontrada para este periodo e conta.
       </div>
     );
@@ -26,10 +26,10 @@ export function ReconciliationTable({ transactions, categories, onToggleReconcil
   }
 
   return (
-    <div className="overflow-auto bg-bg-card border border-border rounded-lg">
-      <table className="w-full text-xs">
+    <div className="overflow-auto bg-bg-card border border-border rounded-card">
+      <table className="w-full text-body">
         <thead>
-          <tr className="border-b border-border text-text-secondary uppercase tracking-wider text-[10px]">
+          <tr className="border-b border-border text-caption text-ink-3 uppercase tracking-wider">
             <th className="p-2 w-10 text-center">Status</th>
             <th className="p-2 text-left">Data</th>
             <th className="p-2 text-left">Descricao</th>
@@ -69,7 +69,7 @@ export function ReconciliationTable({ transactions, categories, onToggleReconcil
               <td className="p-2 text-text-secondary truncate max-w-[150px]">
                 {getCategoryName(t.categoryId)}
               </td>
-              <td className={`p-2 text-right font-bold whitespace-nowrap ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+              <td className={`p-2 text-right font-bold tnum whitespace-nowrap ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                 {formatBRL(t.amount)}
               </td>
             </tr>

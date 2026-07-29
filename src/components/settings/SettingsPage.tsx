@@ -179,22 +179,22 @@ export function SettingsPage() {
   }
 
   if (loading || loadingMembers || loadingAccounts) {
-    return <div className="text-accent text-sm animate-pulse">Carregando configuracoes...</div>;
+    return <div className="text-accent text-body animate-pulse">Carregando configuracoes...</div>;
   }
 
-  const inputClass = 'px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent';
+  const inputClass = 'px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent';
 
   return (
     <div className="space-y-6">
       <h2 className="text-lg font-bold text-text-primary">Configuracoes</h2>
 
       {/* Family Members */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <Users size={16} className="text-accent" /> Familia
           </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
+          <p className="text-caption text-text-secondary mt-1">
             Cadastre os membros da familia. Esses nomes serao usados no mapeamento de titulares e na atribuicao de transacoes.
           </p>
         </div>
@@ -207,16 +207,16 @@ export function SettingsPage() {
           <input type="text" value={newMemberName} onChange={(e) => setNewMemberName(e.target.value)}
             placeholder="Nome completo do membro" className={`${inputClass} flex-1 min-w-[200px]`} />
           <button type="submit" disabled={!newMemberName.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50">
             <Plus size={14} /> Adicionar
           </button>
         </form>
         {members.length === 0 ? (
-          <p className="text-xs text-text-secondary">Nenhum membro cadastrado.</p>
+          <p className="text-body text-text-secondary">Nenhum membro cadastrado.</p>
         ) : (
           <div className="space-y-1">
             {members.map((m) => (
-              <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
+              <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-body">
                 <span className="text-text-primary font-bold">{m.name}</span>
                 <button onClick={() => deleteMember(m.id)} className="text-text-secondary hover:text-accent-red">
                   <Trash2 size={14} />
@@ -228,12 +228,12 @@ export function SettingsPage() {
       </div>
 
       {/* Accounts */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <Wallet size={16} className="text-accent" /> Contas e Cartoes
           </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
+          <p className="text-caption text-text-secondary mt-1">
             Cadastre suas contas bancarias e cartoes. Elas aparecerao como opcoes ao registrar transacoes.
           </p>
         </div>
@@ -247,7 +247,7 @@ export function SettingsPage() {
             <input type="text" value={accountBank} onChange={(e) => setAccountBank(e.target.value)}
               placeholder="Banco (opcional)" className={`${inputClass} w-36`} />
             <button type="submit" disabled={!accountName.trim()}
-              className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
+              className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50">
               <Plus size={14} /> Adicionar
             </button>
           </div>
@@ -259,41 +259,41 @@ export function SettingsPage() {
                 <input type="text" inputMode="decimal" value={accountCreditLimit} onChange={(e) => setAccountCreditLimit(applyMoneyMask(e.target.value))}
                   placeholder="Limite (R$)" className={`${inputClass} w-36`} />
               </div>
-              <p className="text-[10px] text-text-secondary">
+              <p className="text-caption text-text-secondary">
                 O <b className="text-text-primary">dia de vencimento</b> vira a data dos lançamentos ao importar a fatura — é o dia em que o gasto entra no fluxo de caixa do mês. Não pedimos o dia de fechamento aqui (ele varia mês a mês); ajuste pontual é feito no override durante o import.
               </p>
             </div>
           )}
         </form>
         {accounts.length === 0 ? (
-          <p className="text-xs text-text-secondary">Nenhuma conta cadastrada.</p>
+          <p className="text-body text-text-secondary">Nenhuma conta cadastrada.</p>
         ) : (
           <div className="space-y-1">
             {accounts.map((a) => (
-              <div key={a.id} className="px-3 py-2 bg-bg-secondary rounded text-xs space-y-1.5">
+              <div key={a.id} className="px-3 py-2 bg-bg-secondary rounded text-body space-y-1.5">
                 {editingAccountId === a.id ? (
                   <div className="space-y-2 py-0.5">
                     <div className="flex gap-2 flex-wrap">
                       <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)}
-                        placeholder="Nome" aria-label="Nome da conta" className={`${inputClass} flex-1 min-w-[130px] !py-1 !text-xs`} />
+                        placeholder="Nome" aria-label="Nome da conta" className={`${inputClass} flex-1 min-w-[130px] !py-1`} />
                       <select value={editType} onChange={(e) => setEditType(e.target.value as Account['type'])}
-                        aria-label="Tipo da conta" className={`${inputClass} w-44 !py-1 !text-xs`}>
+                        aria-label="Tipo da conta" className={`${inputClass} w-44 !py-1`}>
                         {ACCOUNT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
                       </select>
                       <input type="text" value={editBank} onChange={(e) => setEditBank(e.target.value)}
-                        placeholder="Banco (opcional)" aria-label="Banco" className={`${inputClass} w-32 !py-1 !text-xs`} />
+                        placeholder="Banco (opcional)" aria-label="Banco" className={`${inputClass} w-32 !py-1`} />
                     </div>
                     {editType === 'cartao' && (
                       <div className="flex gap-2 flex-wrap">
                         <input type="number" value={editDueDay} onChange={(e) => setEditDueDay(e.target.value)}
-                          placeholder="Dia venc." min={1} max={28} aria-label="Dia de vencimento" className={`${inputClass} w-28 !py-1 !text-xs`} />
+                          placeholder="Dia venc." min={1} max={28} aria-label="Dia de vencimento" className={`${inputClass} w-28 !py-1`} />
                         <input type="text" inputMode="decimal" value={editCreditLimit} onChange={(e) => setEditCreditLimit(applyMoneyMask(e.target.value))}
-                          placeholder="Limite (R$)" aria-label="Limite" className={`${inputClass} w-32 !py-1 !text-xs`} />
+                          placeholder="Limite (R$)" aria-label="Limite" className={`${inputClass} w-32 !py-1`} />
                       </div>
                     )}
                     <div className="flex items-center gap-1">
                       <button onClick={() => saveEditAccount(a.id)} disabled={!editName.trim()}
-                        className="flex items-center gap-1 px-2.5 py-1 bg-accent text-bg-primary text-[11px] font-bold rounded hover:opacity-90 disabled:opacity-50">
+                        className="flex items-center gap-1 px-2.5 py-1 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50">
                         <Check size={13} /> Salvar
                       </button>
                       <button onClick={() => setEditingAccountId(null)} className="text-text-secondary hover:text-accent-red p-1" title="Cancelar" aria-label={`Cancelar edição de ${a.name}`}><X size={14} /></button>
@@ -303,10 +303,10 @@ export function SettingsPage() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-wrap min-w-0">
                       <span className="text-text-primary font-bold">{a.name}</span>
-                      <span className="text-[10px] text-text-secondary uppercase">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
+                      <span className="text-caption text-text-secondary uppercase tracking-wider">{ACCOUNT_TYPES.find((t) => t.value === a.type)?.label}</span>
                       {a.bank && <span className="text-text-secondary">({a.bank})</span>}
                       {a.type === 'cartao' && (
-                        <span className={`text-[10px] ${a.dueDay ? 'text-text-secondary' : 'text-accent'}`}>
+                        <span className={`text-caption ${a.dueDay ? 'text-text-secondary' : 'text-accent'}`}>
                           Venc. dia {a.dueDay || 'não definido'}
                         </span>
                       )}
@@ -328,12 +328,12 @@ export function SettingsPage() {
       </div>
 
       {/* Anthropic API Key */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <KeyRound size={16} className="text-accent" /> Chave API (Importacao com IA)
           </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
+          <p className="text-caption text-text-secondary mt-1">
             Informe sua chave da Anthropic para usar a importacao de extratos por IA (PDF, Excel). A chave e salva apenas neste navegador.
           </p>
         </div>
@@ -344,7 +344,7 @@ export function SettingsPage() {
               value={anthropicKey}
               onChange={(e) => { setAnthropicKey(e.target.value); setKeySaved(false); }}
               placeholder="sk-ant-..."
-              className={`${inputClass} w-full pr-9 text-xs`}
+              className={`${inputClass} w-full pr-9`}
             />
             <button
               type="button"
@@ -360,7 +360,7 @@ export function SettingsPage() {
               setKeySaved(true);
             }}
             disabled={!anthropicKey.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50"
           >
             {keySaved ? <><Check size={14} /> Salvo</> : 'Salvar'}
           </button>
@@ -374,22 +374,22 @@ export function SettingsPage() {
           )}
         </div>
         {keySaved && (
-          <p className="text-[10px] text-accent-green">Chave salva. A importacao com IA ja pode ser usada.</p>
+          <p className="text-caption text-accent-green">Chave salva. A importacao com IA ja pode ser usada.</p>
         )}
         {!anthropicKey && (
-          <p className="text-[10px] text-accent">
+          <p className="text-caption text-accent">
             Sem chave configurada — importacao com IA retornara erro. Obtenha sua chave em console.anthropic.com.
           </p>
         )}
       </div>
 
       {/* Titular Mappings */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <CreditCard size={16} className="text-accent" /> Mapeamento de Titulares
           </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
+          <p className="text-caption text-text-secondary mt-1">
             Associe os ultimos 4 digitos do cartao ao nome do titular para identificacao automatica na importacao.
           </p>
         </div>
@@ -406,16 +406,16 @@ export function SettingsPage() {
               placeholder="Cadastre membros na secao Familia primeiro" className={`${inputClass} flex-1 min-w-[150px]`} disabled />
           )}
           <button type="submit" disabled={cardDigits.length !== 4 || !titularName.trim()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50">
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50">
             <Plus size={14} /> Adicionar
           </button>
         </form>
         {mappings.length === 0 ? (
-          <p className="text-xs text-text-secondary">Nenhum mapeamento cadastrado.</p>
+          <p className="text-body text-text-secondary">Nenhum mapeamento cadastrado.</p>
         ) : (
           <div className="space-y-1">
             {mappings.map((m) => (
-              <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-xs">
+              <div key={m.id} className="flex items-center justify-between px-3 py-2 bg-bg-secondary rounded text-body">
                 <div className="flex items-center gap-3">
                   <span className="text-accent tnum font-bold">**** {m.cardLastDigits}</span>
                   <span className="text-text-secondary">→</span>
@@ -431,18 +431,18 @@ export function SettingsPage() {
       </div>
 
       {/* Backup & Restore */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <Database size={16} className="text-accent" /> Backup e Restauracao
           </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
+          <p className="text-caption text-text-secondary mt-1">
             Exporte um arquivo JSON com <strong>todos</strong> os seus dados (lancamentos, categorias, contas, cartoes, orcamentos, projetos, ciclos de fatura, familia, mapeamentos de titular e configuracoes locais). Guarde esse arquivo em local seguro — se o sistema perder o banco de dados, voce pode recarrega-lo por aqui e voltar exatamente de onde parou.
           </p>
         </div>
 
-        <div className="bg-bg-secondary rounded p-3 space-y-1 text-[10px] text-text-secondary">
-          <p className="font-bold text-text-primary text-xs">O que o backup inclui:</p>
+        <div className="bg-bg-secondary rounded p-3 space-y-1 text-caption text-text-secondary">
+          <p className="font-bold text-text-primary text-body">O que o backup inclui:</p>
           <p>• Todas as transacoes ({USER_COLLECTIONS.join(', ')})</p>
           <p>• Chaves e credenciais salvas neste navegador (Anthropic)</p>
           <p>• IDs originais dos documentos — ao restaurar, as referencias entre lancamentos e categorias/projetos continuam validas</p>
@@ -452,7 +452,7 @@ export function SettingsPage() {
           <button
             onClick={handleExportBackup}
             disabled={backupBusy || restoreBusy}
-            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50"
           >
             {backupBusy ? <RefreshCw size={13} className="animate-spin" /> : <Download size={13} />}
             Gerar backup completo
@@ -468,14 +468,14 @@ export function SettingsPage() {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={backupBusy || restoreBusy}
-            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-50"
           >
             <Upload size={13} /> Restaurar de arquivo...
           </button>
         </div>
 
         {backupMsg && (
-          <p className={`text-[11px] font-bold ${backupMsg.type === 'ok' ? 'text-accent-green' : 'text-accent-red'}`}>
+          <p className={`text-caption font-bold ${backupMsg.type === 'ok' ? 'text-accent-green' : 'text-accent-red'}`}>
             {backupMsg.type === 'ok' ? '✓' : '✗'} {backupMsg.text}
           </p>
         )}
@@ -485,16 +485,16 @@ export function SettingsPage() {
             <div className="flex items-start gap-2">
               <AlertTriangle size={14} className="text-accent-red flex-shrink-0 mt-0.5" />
               <div className="flex-1 space-y-1">
-                <p className="text-xs font-bold text-text-primary">Confirmar restauracao</p>
-                <p className="text-[10px] text-text-secondary">
+                <p className="text-body font-bold text-text-primary">Confirmar restauracao</p>
+                <p className="text-caption text-text-secondary">
                   Esta acao vai <strong>apagar todos os dados atuais</strong> da sua conta e substituir pelos dados do arquivo. Nao pode ser desfeita. Tenha certeza de que o arquivo esta correto antes de continuar.
                 </p>
                 {pendingBackup.exportedAt && (
-                  <p className="text-[10px] text-text-secondary">
+                  <p className="text-caption text-text-secondary">
                     Backup gerado em: <strong>{new Date(pendingBackup.exportedAt).toLocaleString('pt-BR')}</strong>
                   </p>
                 )}
-                <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-text-secondary">
+                <div className="mt-1.5 grid grid-cols-2 gap-x-3 gap-y-0.5 text-caption text-text-secondary">
                   {summarizeBackup(pendingBackup).map((row) => (
                     <div key={row.collection} className="flex justify-between">
                       <span>{row.collection}</span>
@@ -508,7 +508,7 @@ export function SettingsPage() {
               <button
                 onClick={handleConfirmRestore}
                 disabled={restoreBusy}
-                className="flex items-center gap-1.5 px-3 py-2 bg-accent-red text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-2 bg-accent-red text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50"
               >
                 {restoreBusy ? <RefreshCw size={13} className="animate-spin" /> : <Check size={13} />}
                 Sim, apagar e restaurar
@@ -516,13 +516,13 @@ export function SettingsPage() {
               <button
                 onClick={handleCancelRestore}
                 disabled={restoreBusy}
-                className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-50"
+                className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-50"
               >
                 <X size={13} /> Cancelar
               </button>
             </div>
             {restoreBusy && restoreProgress && (
-              <p className="text-[10px] text-text-secondary flex items-center gap-1.5 pt-0.5">
+              <p className="text-caption text-text-secondary flex items-center gap-1.5 pt-0.5">
                 <RefreshCw size={11} className="animate-spin flex-shrink-0" />
                 {restoreProgress}
               </p>
@@ -532,12 +532,12 @@ export function SettingsPage() {
       </div>
 
       {/* Normalizar titulares / membros (ferramenta one-time) */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <UserCheck size={16} className="text-accent" /> Normalizar Titulares
           </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
+          <p className="text-caption text-text-secondary mt-1">
             Consolida nomes de titular/membro duplicados que vieram da importação ou da migração (ex.: "Juliana",
             "kuhn coutinho" e "coutinho" viram o mesmo membro cadastrado). Ferramenta de uso pontual, com
             pré-visualização antes de gravar. A atribuição feita a mão no cadastro de lançamento já usa o membro
@@ -548,12 +548,12 @@ export function SettingsPage() {
       </div>
 
       {/* Preencher conta/membro a partir da fatura (ferramenta one-time) */}
-      <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+      <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
         <div>
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <FileSpreadsheet size={16} className="text-accent" /> Preencher conta/membro pela fatura
           </h3>
-          <p className="text-[10px] text-text-secondary mt-1">
+          <p className="text-caption text-text-secondary mt-1">
             Reimporta os campos <b className="text-text-primary">conta, membro e número do cartão</b> que
             faltaram no import original, lendo as faturas (.xlsx) exportadas do Meu Dinheiro Web e casando cada
             lançamento por descrição, valor e data. Só escreve onde o campo está <b className="text-text-primary">vazio</b>;

@@ -107,14 +107,14 @@ export function ExportFullReportModal({ open, onClose }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-bg-card border border-border rounded-lg w-full max-w-md max-h-[90vh] overflow-y-auto"
+        className="bg-bg-card border border-border rounded-card w-full max-w-md max-h-[90vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <div className="flex items-center gap-2">
             <FileBarChart size={16} className="text-accent" />
-            <h3 className="text-sm font-bold text-text-primary">
+            <h3 className="text-title font-semibold text-text-primary">
               Exportar Relatório Completo
             </h3>
           </div>
@@ -129,14 +129,14 @@ export function ExportFullReportModal({ open, onClose }: Props) {
 
         {/* Body */}
         <div className="p-5 space-y-5">
-          <p className="text-xs text-text-secondary">
+          <p className="text-body text-text-secondary">
             Gera um PDF consolidado com capa, sumário executivo, dashboard e os 3
             relatórios (categorias, fluxo de caixa e evolução) no padrão McKinsey.
           </p>
 
           {/* Period kind selector */}
           <div>
-            <label className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-2 block">
+            <label className="text-caption text-text-secondary uppercase tracking-wider font-bold mb-2 block">
               Período
             </label>
             <div className="grid grid-cols-4 gap-1">
@@ -151,7 +151,7 @@ export function ExportFullReportModal({ open, onClose }: Props) {
                 <button
                   key={value}
                   onClick={() => setKind(value)}
-                  className={`px-2 py-1.5 text-xs rounded border transition-colors ${
+                  className={`px-2 py-1.5 text-body rounded-control border transition-colors ${
                     kind === value
                       ? 'bg-accent/10 text-accent border-accent/40'
                       : 'bg-bg-secondary border-border text-text-secondary hover:text-text-primary'
@@ -166,13 +166,13 @@ export function ExportFullReportModal({ open, onClose }: Props) {
           {/* Kind-specific inputs */}
           {kind === 'month' && (
             <div>
-              <label className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-2 block">
+              <label className="text-caption text-text-secondary uppercase tracking-wider font-bold mb-2 block">
                 Mês
               </label>
               <select
                 value={monthYear}
                 onChange={(e) => setMonthYear(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs capitalize focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body capitalize focus:outline-none focus:border-accent"
               >
                 {availableMonths.map((m) => (
                   <option key={m} value={m} className="capitalize">
@@ -186,13 +186,13 @@ export function ExportFullReportModal({ open, onClose }: Props) {
           {kind === 'quarter' && (
             <div className="space-y-3">
               <div>
-                <label className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-2 block">
+                <label className="text-caption text-text-secondary uppercase tracking-wider font-bold mb-2 block">
                   Ano
                 </label>
                 <select
                   value={year}
                   onChange={(e) => setYear(Number(e.target.value))}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
                 >
                   {availableYears.map((y) => (
                     <option key={y} value={y}>
@@ -202,7 +202,7 @@ export function ExportFullReportModal({ open, onClose }: Props) {
                 </select>
               </div>
               <div>
-                <label className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-2 block">
+                <label className="text-caption text-text-secondary uppercase tracking-wider font-bold mb-2 block">
                   Trimestre
                 </label>
                 <div className="grid grid-cols-4 gap-1">
@@ -210,7 +210,7 @@ export function ExportFullReportModal({ open, onClose }: Props) {
                     <button
                       key={q}
                       onClick={() => setQuarter(q)}
-                      className={`px-2 py-1.5 text-xs rounded border transition-colors ${
+                      className={`px-2 py-1.5 text-body rounded-control border transition-colors ${
                         quarter === q
                           ? 'bg-accent/10 text-accent border-accent/40'
                           : 'bg-bg-secondary border-border text-text-secondary hover:text-text-primary'
@@ -226,13 +226,13 @@ export function ExportFullReportModal({ open, onClose }: Props) {
 
           {kind === 'year' && (
             <div>
-              <label className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-2 block">
+              <label className="text-caption text-text-secondary uppercase tracking-wider font-bold mb-2 block">
                 Ano
               </label>
               <select
                 value={year}
                 onChange={(e) => setYear(Number(e.target.value))}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               >
                 {availableYears.map((y) => (
                   <option key={y} value={y}>
@@ -246,32 +246,32 @@ export function ExportFullReportModal({ open, onClose }: Props) {
           {kind === 'custom' && (
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-2 block">
+                <label className="text-caption text-text-secondary uppercase tracking-wider font-bold mb-2 block">
                   Início
                 </label>
                 <input
                   type="month"
                   value={customStart}
                   onChange={(e) => e.target.value && setCustomStart(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
                 />
               </div>
               <div>
-                <label className="text-[10px] text-text-secondary uppercase tracking-wider font-bold mb-2 block">
+                <label className="text-caption text-text-secondary uppercase tracking-wider font-bold mb-2 block">
                   Fim
                 </label>
                 <input
                   type="month"
                   value={customEnd}
                   onChange={(e) => e.target.value && setCustomEnd(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
                 />
               </div>
             </div>
           )}
 
           {error && (
-            <div className="px-3 py-2 bg-accent-red/10 border border-accent-red/30 rounded text-xs text-accent-red">
+            <div className="px-3 py-2 bg-accent-red/10 border border-accent-red/30 rounded-control text-body text-accent-red">
               {error}
             </div>
           )}
@@ -282,14 +282,14 @@ export function ExportFullReportModal({ open, onClose }: Props) {
           <button
             onClick={onClose}
             disabled={generating}
-            className="px-4 py-2 text-xs text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-body text-text-secondary hover:text-text-primary transition-colors disabled:opacity-50"
           >
             Cancelar
           </button>
           <button
             onClick={handleGenerate}
             disabled={generating || transactions.length === 0}
-            className="flex items-center gap-2 px-4 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:bg-accent/90 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:bg-accent/90 transition-colors disabled:opacity-50"
           >
             {generating ? (
               <>

@@ -342,11 +342,11 @@ export function BackfillInvoiceFields() {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   if (loading || loadingAccounts || loadingMembers) {
-    return <p className="text-xs text-text-secondary animate-pulse">Carregando lançamentos...</p>;
+    return <p className="text-body text-text-secondary animate-pulse">Carregando lançamentos...</p>;
   }
 
   const inputClass =
-    'px-2 py-1.5 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent';
+    'px-2 py-1.5 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent';
   const nothingToDo = phase === 'previewed' && plan.updates.length === 0;
 
   return (
@@ -354,7 +354,7 @@ export function BackfillInvoiceFields() {
       {/* Guarda-corpo */}
       <div className="flex items-start gap-2 bg-accent-red/5 border border-accent-red/40 rounded p-2.5">
         <ShieldAlert size={14} className="text-accent-red flex-shrink-0 mt-0.5" aria-hidden="true" />
-        <p className="text-[11px] text-text-secondary leading-snug">
+        <p className="text-caption text-text-secondary leading-snug">
           <strong className="text-text-primary">Faça um backup antes</strong> (Configurações → Backup e
           Restauração → Gerar backup completo). Esta ação preenche <strong className="text-text-primary">conta,
           membro e número do cartão</strong> nos lançamentos importados — <strong className="text-text-primary">só
@@ -364,7 +364,7 @@ export function BackfillInvoiceFields() {
       </div>
 
       {error && (
-        <p className="text-[11px] font-bold text-accent-red flex items-center gap-1" role="alert">
+        <p className="text-caption font-bold text-accent-red flex items-center gap-1" role="alert">
           <AlertTriangle size={12} /> {error}
         </p>
       )}
@@ -385,11 +385,11 @@ export function BackfillInvoiceFields() {
           />
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
           >
             <Upload size={13} /> Selecionar faturas (.xlsx) do Meu Dinheiro Web
           </button>
-          <p className="text-[10px] text-text-secondary">
+          <p className="text-caption text-text-secondary">
             Pode selecionar as 5 faturas (janeiro a maio) de uma vez. A leitura é local, no seu navegador.
           </p>
         </>
@@ -398,7 +398,7 @@ export function BackfillInvoiceFields() {
       {/* Progresso */}
       {phase === 'applying' && (
         <div className="space-y-2">
-          <p className="text-xs text-text-primary flex items-center gap-2">
+          <p className="text-body text-text-primary flex items-center gap-2">
             <RefreshCw size={13} className="animate-spin text-accent" />
             Aplicando... {progress.current} / {progress.total}
           </p>
@@ -414,13 +414,13 @@ export function BackfillInvoiceFields() {
       {/* Resultado */}
       {phase === 'done' && result && (
         <div className="space-y-2">
-          <p className="text-[11px] font-bold text-accent-green flex items-center gap-1">
+          <p className="text-caption font-bold text-accent-green flex items-center gap-1">
             <Check size={12} /> {result.updated} lançamento(s) atualizado(s) — conta: {result.conta}, membro:{' '}
             {result.membro}, cartão: {result.cartao}.
           </p>
           <button
             onClick={reset}
-            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
           >
             <RefreshCw size={13} /> Rodar de novo
           </button>
@@ -432,11 +432,11 @@ export function BackfillInvoiceFields() {
         <div className="space-y-3">
           {/* Arquivos lidos */}
           <div className="bg-bg-secondary rounded p-2.5 space-y-1">
-            <p className="text-[11px] font-bold text-text-primary flex items-center gap-1.5">
+            <p className="text-caption font-bold text-text-primary flex items-center gap-1.5">
               <FileSpreadsheet size={12} className="text-accent" /> {parsedFiles.length} arquivo(s) ·{' '}
               {parsedRows.length} linha(s) de fatura
             </p>
-            {detectedCard && <p className="text-[10px] text-text-secondary">Cartão na fatura: {detectedCard}</p>}
+            {detectedCard && <p className="text-caption text-text-secondary">Cartão na fatura: {detectedCard}</p>}
             <div className="flex flex-wrap gap-1 pt-0.5">
               {parsedFiles.map((f) => (
                 <span key={f.name} className="text-[10px] px-1.5 py-0.5 rounded bg-bg-card border border-border text-text-secondary">
@@ -448,7 +448,7 @@ export function BackfillInvoiceFields() {
 
           {/* Conta-alvo */}
           <div className="flex items-center gap-2 flex-wrap">
-            <label htmlFor="backfill-account" className="text-[11px] text-text-secondary flex items-center gap-1.5">
+            <label htmlFor="backfill-account" className="text-caption text-text-secondary flex items-center gap-1.5">
               <CreditCard size={12} className="text-accent" /> Conta/cartão a preencher:
             </label>
             {cardAccounts.length > 0 ? (
@@ -469,20 +469,20 @@ export function BackfillInvoiceFields() {
                 ))}
               </select>
             ) : (
-              <span className="text-[11px] text-status-warn">
+              <span className="text-caption text-status-warn">
                 Nenhum cartão cadastrado — cadastre em Contas e Cartões para preencher a conta.
               </span>
             )}
           </div>
 
           {nothingToDo ? (
-            <p className="text-[11px] text-accent-green font-bold flex items-center gap-1">
+            <p className="text-caption text-accent-green font-bold flex items-center gap-1">
               <Check size={12} /> Nada a preencher — os lançamentos que batem com as faturas já têm conta e membro.
             </p>
           ) : (
             <>
               {/* Resumo do plano */}
-              <div className="text-[11px] text-text-secondary space-y-0.5">
+              <div className="text-caption text-text-secondary space-y-0.5">
                 <p>
                   <strong className="text-text-primary">{plan.updates.length}</strong> lançamento(s) serão
                   atualizados — conta: <strong className="text-text-primary">{plan.contaFills}</strong>, membro:{' '}
@@ -499,7 +499,7 @@ export function BackfillInvoiceFields() {
                     </>
                   )}
                 </p>
-                <p className="text-[10px]">
+                <p className="text-caption">
                   Só campos vazios são escritos. "Membro" preenche o campo Membro e sincroniza o Titular ao mesmo
                   membro cadastrado (nunca troca por outra pessoa).
                 </p>
@@ -508,7 +508,7 @@ export function BackfillInvoiceFields() {
               {/* Amostra */}
               {plan.updates.length > 0 && (
                 <div className="max-h-56 overflow-y-auto border border-border rounded">
-                  <table className="w-full text-[11px]">
+                  <table className="w-full text-caption">
                     <thead className="sticky top-0 bg-bg-card">
                       <tr className="text-text-secondary border-b border-border">
                         <th className="p-1.5 text-left">Data</th>
@@ -530,7 +530,7 @@ export function BackfillInvoiceFields() {
                     </tbody>
                   </table>
                   {plan.updates.length > 60 && (
-                    <p className="text-[10px] text-text-secondary p-1.5">
+                    <p className="text-caption text-text-secondary p-1.5">
                       … e mais {plan.updates.length - 60} lançamento(s).
                     </p>
                   )}
@@ -538,7 +538,7 @@ export function BackfillInvoiceFields() {
               )}
 
               {/* Ack + aplicar */}
-              <label className="flex items-start gap-2 text-[11px] text-text-secondary cursor-pointer select-none">
+              <label className="flex items-start gap-2 text-caption text-text-secondary cursor-pointer select-none">
                 <input
                   type="checkbox"
                   checked={acknowledged}
@@ -555,14 +555,14 @@ export function BackfillInvoiceFields() {
               <button
                 onClick={() => setConfirmOpen(true)}
                 disabled={!acknowledged || plan.updates.length === 0}
-                className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                className="flex items-center gap-1.5 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Check size={13} /> Aplicar ({plan.updates.length})
               </button>
             )}
             <button
               onClick={reset}
-              className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+              className="flex items-center gap-1.5 px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
             >
               <X size={13} /> {nothingToDo ? 'Fechar' : 'Cancelar'}
             </button>

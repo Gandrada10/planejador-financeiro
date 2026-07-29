@@ -309,7 +309,7 @@ export function ExpenseGoalsTab() {
           />
         </div>
         <span
-          className={`text-[10px] w-12 text-right tnum ${
+          className={`text-caption w-12 text-right tnum ${
             isOver ? 'text-accent-red font-bold' : 'text-text-secondary'
           }`}
         >
@@ -346,7 +346,7 @@ export function ExpenseGoalsTab() {
             />
             <span
               className={`truncate ${
-                indent ? 'text-xs text-text-secondary' : 'text-sm text-text-primary font-medium'
+                indent ? 'text-body text-text-secondary' : 'text-body text-text-primary font-medium'
               }`}
             >
               {row.categoryName}
@@ -368,7 +368,7 @@ export function ExpenseGoalsTab() {
                   if (e.key === 'Enter') saveEdit(row.budgetId);
                   if (e.key === 'Escape') cancelEdit();
                 }}
-                className="w-20 text-right text-xs bg-bg-secondary border border-accent rounded px-1.5 py-1 text-text-primary focus:outline-none"
+                className="w-20 text-right text-body bg-bg-secondary border border-accent rounded-control px-1.5 py-1 text-text-primary focus:outline-none"
               />
               <button
                 onClick={() => saveEdit(row.budgetId)}
@@ -386,7 +386,7 @@ export function ExpenseGoalsTab() {
           ) : (
             <button
               onClick={() => startEdit(row.budgetId, row.meta)}
-              className="text-xs tnum text-text-primary hover:text-accent transition-colors"
+              className="text-body tnum text-text-primary hover:text-accent transition-colors"
               title="Clique para editar"
             >
               {formatBRL(row.meta)}
@@ -397,7 +397,7 @@ export function ExpenseGoalsTab() {
         {/* Realizado */}
         <div className="text-right">
           <span
-            className={`text-xs tnum ${
+            className={`text-body tnum ${
               isOver ? 'text-accent-red font-bold' : 'text-text-primary'
             }`}
           >
@@ -407,7 +407,7 @@ export function ExpenseGoalsTab() {
 
         {/* A realizar */}
         <div className="text-right">
-          <span className="text-xs tnum text-text-secondary">
+          <span className="text-body tnum text-text-secondary">
             {formatBRL(row.aRealizar)}
           </span>
         </div>
@@ -415,7 +415,7 @@ export function ExpenseGoalsTab() {
         {/* Excedente */}
         <div className="text-right">
           <span
-            className={`text-xs tnum ${
+            className={`text-body tnum ${
               row.excedente > 0 ? 'text-accent-red font-bold' : 'text-text-secondary'
             }`}
           >
@@ -441,7 +441,7 @@ export function ExpenseGoalsTab() {
     <div className="flex gap-4 flex-col lg:flex-row">
       {/* Left sidebar - Summary */}
       <div className="lg:w-72 flex-shrink-0 space-y-4">
-        <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
+        <div className="bg-bg-card border border-border rounded-card overflow-hidden">
           <div className="p-3 border-b border-border">
             <MonthSelector
               value={monthYear}
@@ -451,7 +451,7 @@ export function ExpenseGoalsTab() {
           </div>
 
           <div className="p-4 space-y-3">
-            <h3 className="text-xs font-bold text-text-primary uppercase tracking-wider">
+            <h3 className="text-title font-semibold text-text-primary">
               Categorias definidas
             </h3>
 
@@ -465,7 +465,7 @@ export function ExpenseGoalsTab() {
               </div>
             )}
 
-            <div className="space-y-2 text-xs">
+            <div className="space-y-2 text-body">
               <div className="flex justify-between">
                 <span className="text-text-secondary">Total das metas</span>
                 <span className="text-text-primary font-bold tnum">
@@ -495,7 +495,7 @@ export function ExpenseGoalsTab() {
             </div>
 
             <div className="border-t border-border pt-3 space-y-2">
-              <h4 className="text-xs font-bold text-text-primary">
+              <h4 className="text-caption font-bold text-text-primary">
                 Total do mes
               </h4>
               {grandTotalMeta > 0 && (
@@ -506,7 +506,7 @@ export function ExpenseGoalsTab() {
                   )}
                 </div>
               )}
-              <div className="space-y-2 text-xs">
+              <div className="space-y-2 text-body">
                 <div className="flex justify-between">
                   <span className="text-text-secondary">Meta definida</span>
                   <span className="text-text-primary tnum">
@@ -534,7 +534,7 @@ export function ExpenseGoalsTab() {
         <div className="space-y-2">
           <button
             onClick={() => setShowAddForm(true)}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-accent text-bg-primary text-xs font-bold rounded hover:bg-accent/90 transition-colors"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-accent text-bg-primary text-body font-bold rounded-control hover:bg-accent/90 transition-colors"
           >
             <Plus size={14} />
             Adicionar meta
@@ -543,7 +543,7 @@ export function ExpenseGoalsTab() {
           {prevMonthWithBudgets && monthBudgets.length === 0 && (
             <button
               onClick={copyFromPrevMonth}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent transition-colors"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent transition-colors"
             >
               <Copy size={14} />
               Copiar do mes anterior
@@ -554,9 +554,9 @@ export function ExpenseGoalsTab() {
 
       {/* Main area - Budget list */}
       <div className="flex-1 min-w-0">
-        <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
+        <div className="bg-bg-card border border-border rounded-card overflow-hidden">
           {/* Header */}
-          <div className="grid grid-cols-[1fr_repeat(4,_minmax(90px,_120px))_32px] items-center gap-2 px-4 py-2 bg-bg-secondary border-b border-border text-[10px] text-text-secondary uppercase tracking-wider">
+          <div className="grid grid-cols-[1fr_repeat(4,_minmax(90px,_120px))_32px] items-center gap-2 px-4 py-2 bg-bg-secondary border-b border-border text-caption text-ink-3 uppercase tracking-wider">
             <span>Situacao confirmada</span>
             <span className="text-right">Meta</span>
             <span className="text-right">Realizado</span>
@@ -567,10 +567,10 @@ export function ExpenseGoalsTab() {
 
           {/* Budget rows */}
           {budgetGroups.length === 0 ? (
-            <div className="p-8 text-center text-text-secondary text-sm">
+            <div className="p-8 text-center text-text-secondary text-body">
               Nenhuma meta definida para este mes.
               <br />
-              <span className="text-xs">
+              <span className="text-caption">
                 Clique em "Adicionar meta" para comecar.
               </span>
             </div>
@@ -590,7 +590,7 @@ export function ExpenseGoalsTab() {
               {budgetGroups.length > 0 && (
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(90px,_120px))_32px] items-center gap-2 px-4 py-3 bg-bg-secondary/50 border-t border-border">
                   <div className="space-y-1">
-                    <span className="text-sm font-bold text-text-primary">
+                    <span className="text-body font-bold text-text-primary">
                       Total
                     </span>
                     {renderProgressBar(
@@ -599,13 +599,13 @@ export function ExpenseGoalsTab() {
                     )}
                   </div>
                   <div className="text-right">
-                    <span className="text-xs tnum font-bold text-text-primary">
+                    <span className="text-body tnum font-bold text-text-primary">
                       {formatBRL(grandTotalMeta)}
                     </span>
                   </div>
                   <div className="text-right">
                     <span
-                      className={`text-xs tnum font-bold ${
+                      className={`text-body tnum font-bold ${
                         grandTotalRealizado > grandTotalMeta
                           ? 'text-accent-red'
                           : 'text-text-primary'
@@ -615,13 +615,13 @@ export function ExpenseGoalsTab() {
                     </span>
                   </div>
                   <div className="text-right">
-                    <span className="text-xs tnum text-text-secondary">
+                    <span className="text-body tnum text-text-secondary">
                       {formatBRL(grandTotalARealizar)}
                     </span>
                   </div>
                   <div className="text-right">
                     <span
-                      className={`text-xs tnum ${
+                      className={`text-body tnum ${
                         grandTotalExcedente > 0
                           ? 'text-accent-red font-bold'
                           : 'text-text-secondary'
@@ -641,20 +641,20 @@ export function ExpenseGoalsTab() {
       {/* Add budget modal */}
       {showAddForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-bg-card border border-border rounded-lg p-6 w-full max-w-md space-y-4">
-            <h3 className="text-sm font-bold text-text-primary">
+          <div className="bg-bg-card border border-border rounded-card p-6 w-full max-w-md space-y-4">
+            <h3 className="text-title font-semibold text-text-primary">
               Adicionar meta de despesa
             </h3>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-xs text-text-secondary mb-1">
+                <label className="block text-caption text-text-secondary mb-1">
                   Categoria
                 </label>
                 <select
                   value={addCategoryId}
                   onChange={(e) => setAddCategoryId(e.target.value)}
-                  className="w-full text-xs bg-bg-secondary border border-border rounded px-3 py-2 text-text-primary focus:outline-none focus:border-accent"
+                  className="w-full text-body bg-bg-secondary border border-border rounded-control px-3 py-2 text-text-primary focus:outline-none focus:border-accent"
                 >
                   <option value="">Selecione uma categoria</option>
                   {availableCategories.map((cat) => (
@@ -666,7 +666,7 @@ export function ExpenseGoalsTab() {
               </div>
 
               <div>
-                <label className="block text-xs text-text-secondary mb-1">
+                <label className="block text-caption text-text-secondary mb-1">
                   Valor da meta (R$)
                 </label>
                 <input
@@ -677,7 +677,7 @@ export function ExpenseGoalsTab() {
                     if (e.key === 'Enter') handleAdd();
                   }}
                   placeholder="0,00"
-                  className="w-full text-xs bg-bg-secondary border border-border rounded px-3 py-2 text-text-primary focus:outline-none focus:border-accent"
+                  className="w-full text-body bg-bg-secondary border border-border rounded-control px-3 py-2 text-text-primary focus:outline-none focus:border-accent"
                 />
               </div>
             </div>
@@ -689,14 +689,14 @@ export function ExpenseGoalsTab() {
                   setAddCategoryId('');
                   setAddAmount('');
                 }}
-                className="px-4 py-2 text-xs text-text-secondary hover:text-text-primary border border-border rounded transition-colors"
+                className="px-4 py-2 text-body text-text-secondary hover:text-text-primary border border-border rounded-control transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handleAdd}
                 disabled={!addCategoryId || !addAmount || parseMoneyInput(addAmount) <= 0}
-                className="px-4 py-2 text-xs bg-accent text-bg-primary font-bold rounded hover:bg-accent/90 transition-colors disabled:opacity-30"
+                className="px-4 py-2 text-body bg-accent text-bg-primary font-bold rounded-control hover:bg-accent/90 transition-colors disabled:opacity-30"
               >
                 Adicionar
               </button>

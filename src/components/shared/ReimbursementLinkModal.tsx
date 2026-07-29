@@ -102,13 +102,13 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-bg-card border border-border rounded-lg w-full max-w-lg max-h-[85vh] flex flex-col"
+        className="bg-bg-card border border-border rounded-card w-full max-w-lg max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-border">
           <div className="flex items-center gap-2">
             <RefreshCcw size={15} className="text-accent" />
-            <h3 className="text-sm font-bold text-text-primary">Reembolso — abater qual despesa?</h3>
+            <h3 className="text-title font-semibold text-text-primary">Reembolso — abater qual despesa?</h3>
           </div>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
             <X size={18} />
@@ -116,13 +116,13 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
         </div>
 
         <div className="px-4 py-3 border-b border-border space-y-1">
-          <p className="text-[11px] text-text-secondary">
-            Vinculando <span className="font-semibold text-accent-green">{formatBRL(transaction.amount)}</span>
+          <p className="text-caption text-text-secondary">
+            Vinculando <span className="font-semibold text-accent-green tnum">{formatBRL(transaction.amount)}</span>
             {' '}({transaction.description}, {formatDate(transaction.date)}) — ele abaterá o gasto e será
             contabilizado no <span className="font-semibold text-text-primary">mês da despesa</span> escolhida.
           </p>
           {linked && (
-            <p className="text-[11px] text-accent flex items-center gap-1">
+            <p className="text-caption text-accent flex items-center gap-1">
               <RefreshCcw size={11} /> Vinculado a: {linked.description} · {getMonthLabel(getMonthYear(linked.date))}
             </p>
           )}
@@ -136,13 +136,13 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar despesa por descrição ou categoria..."
-              className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+              className="w-full pl-8 pr-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
             />
           </div>
           <select
             value={monthFilter}
             onChange={(e) => setMonthFilter(e.target.value)}
-            className="bg-bg-secondary border border-border rounded px-2 py-2 text-text-primary text-xs focus:outline-none focus:border-accent flex-shrink-0"
+            className="bg-bg-secondary border border-border rounded-control px-2 py-2 text-text-primary text-body focus:outline-none focus:border-accent flex-shrink-0"
             title="Filtrar despesas por mês"
           >
             <option value="">Todos os meses</option>
@@ -154,7 +154,7 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
 
         <div className="flex-1 overflow-y-auto min-h-0">
           {candidates.length === 0 ? (
-            <div className="p-6 text-center text-text-secondary text-xs">Nenhuma despesa encontrada.</div>
+            <div className="p-6 text-center text-text-secondary text-body">Nenhuma despesa encontrada.</div>
           ) : (
             // Agrupa por mês (separadores) para deixar claro que dá para
             // vincular a despesas de QUALQUER mês, não só o atual. As marcadas
@@ -169,7 +169,7 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
                   rows.push(
                     <div
                       key={`h-${key}`}
-                      className="sticky top-0 px-4 py-1 bg-bg-secondary text-[10px] uppercase tracking-wider text-text-secondary border-b border-border/40 z-10"
+                      className="sticky top-0 px-4 py-1 bg-bg-secondary text-caption text-ink-3 uppercase tracking-wider border-b border-border/40 z-10"
                     >
                       {key === '__await' ? 'Aguardando reembolso' : getMonthLabel(getMonthYear(t.date))}
                     </div>
@@ -184,19 +184,19 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
                       isLinked ? 'bg-accent/10' : ''
                     }`}
                   >
-                    <span className="text-text-secondary text-[10px] tabular-nums w-[62px] flex-shrink-0">
+                    <span className="text-text-secondary text-caption tnum w-[62px] flex-shrink-0">
                       {formatDate(t.date)}
                     </span>
                     <span className="flex-1 min-w-0">
-                      <span className="block text-xs text-text-primary truncate flex items-center gap-1.5">
+                      <span className="block text-body text-text-primary truncate flex items-center gap-1.5">
                         {t.awaitingReimbursement && <Clock size={11} className="text-accent flex-shrink-0" />}
                         {t.description}
                       </span>
-                      <span className="block text-[10px] text-text-secondary truncate">
+                      <span className="block text-caption text-text-secondary truncate">
                         {catName(t.categoryId) || 'Sem categoria'}
                       </span>
                     </span>
-                    <span className="text-accent-red font-bold text-xs tabular-nums flex-shrink-0">
+                    <span className="text-accent-red font-bold text-body tnum flex-shrink-0">
                       {formatBRL(t.amount)}
                     </span>
                   </button>
@@ -210,7 +210,7 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
         <div className="p-3 border-t border-border flex items-center justify-between gap-2 flex-wrap">
           <button
             onClick={markWithoutLink}
-            className="text-[11px] text-text-secondary hover:text-text-primary underline decoration-dotted"
+            className="text-caption text-text-secondary hover:text-text-primary underline decoration-dotted"
             title="Marca como reembolso, mas abate no próprio mês (sem ancorar)"
           >
             Marcar sem vincular
@@ -218,7 +218,7 @@ export function ReimbursementLinkModal({ transaction, allTransactions, categorie
           {transaction.isReimbursement && (
             <button
               onClick={removeReimbursement}
-              className="text-[11px] text-accent-red hover:text-accent-red/80"
+              className="text-caption text-accent-red hover:text-accent-red/80"
             >
               Deixar de ser reembolso
             </button>

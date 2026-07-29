@@ -81,18 +81,18 @@ export function InvoiceSummaryPanel({
   }
 
   return (
-    <div className="bg-bg-card border border-border rounded-lg p-4 space-y-4">
+    <div className="bg-bg-card border border-border rounded-card p-4 space-y-4">
       {/* Fatura atual */}
       <div className="text-center border-b border-border pb-3">
-        <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Fatura atual (R$)</p>
-        <p className={`text-2xl font-bold ${totalInvoice >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+        <p className="text-caption text-ink-3 uppercase tracking-wider mb-1">Fatura atual (R$)</p>
+        <p className={`text-2xl font-bold tnum ${totalInvoice >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
           {formatBRL(totalInvoice)}
         </p>
       </div>
 
       {/* Dates */}
       {(closingDay || dueDay) && (
-        <div className="space-y-1 text-xs border-b border-border pb-3">
+        <div className="space-y-1 text-body border-b border-border pb-3">
           {closingDay && (
             <div className="flex justify-between">
               <span className="text-text-secondary">Fechamento</span>
@@ -109,23 +109,23 @@ export function InvoiceSummaryPanel({
       )}
 
       {/* Detalhamento */}
-      <div className="space-y-1 text-xs border-b border-border pb-3">
+      <div className="space-y-1 text-body border-b border-border pb-3">
         <div className="flex justify-between">
           <span className="text-text-secondary">Saldo anterior</span>
-          <span className={previousBalance !== 0 ? 'text-accent-red' : 'text-text-primary'}>{formatBRL(previousBalance)}</span>
+          <span className={previousBalance !== 0 ? 'tnum text-accent-red' : 'tnum text-text-primary'}>{formatBRL(previousBalance)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-text-secondary">Outros creditos</span>
-          <span className="text-accent-green">{formatBRL(totalCredits)}</span>
+          <span className="text-accent-green tnum">{formatBRL(totalCredits)}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-text-secondary">Despesas</span>
-          <span className="text-accent-red">{formatBRL(totalExpenses)}</span>
+          <span className="text-accent-red tnum">{formatBRL(totalExpenses)}</span>
         </div>
         {paidAmount > 0 && (
           <div className="flex justify-between">
             <span className="text-text-secondary">Total pago</span>
-            <span className="text-accent-green">{formatBRL(paidAmount)}</span>
+            <span className="text-accent-green tnum">{formatBRL(paidAmount)}</span>
           </div>
         )}
         <div className="flex justify-between font-bold pt-1 border-t border-border/40">
@@ -133,7 +133,7 @@ export function InvoiceSummaryPanel({
               No credor mostramos o valor absoluto rotulado como "Crédito de"
               (em vez de um número negativo verde, que confundia). */}
           <span className="text-text-primary">{amountDue > 0 ? 'Valor a pagar' : amountDue < 0 ? 'Crédito de' : 'Valor a pagar'}</span>
-          <span className={amountDue > 0 ? 'text-accent-red' : 'text-accent-green'}>{formatBRL(Math.abs(amountDue))}</span>
+          <span className={amountDue > 0 ? 'tnum text-accent-red' : 'tnum text-accent-green'}>{formatBRL(Math.abs(amountDue))}</span>
         </div>
       </div>
 
@@ -144,14 +144,14 @@ export function InvoiceSummaryPanel({
             onClick={() => {
               if (confirm('Encerrar esta fatura?')) onCloseCycle();
             }}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent-red/10 text-accent-red text-xs font-bold rounded hover:bg-accent-red/20"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent-red/10 text-accent-red text-body font-bold rounded-control hover:bg-accent-red/20"
           >
             <Lock size={12} /> Fechar fatura
           </button>
         ) : cycle?.status === 'closed' ? (
           <button
             onClick={onReopenCycle}
-            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent-green/10 text-accent-green text-xs font-bold rounded hover:bg-accent-green/20"
+            className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent-green/10 text-accent-green text-body font-bold rounded-control hover:bg-accent-green/20"
           >
             <LockOpen size={12} /> Reabrir fatura
           </button>
@@ -163,7 +163,7 @@ export function InvoiceSummaryPanel({
             if (!showPayForm) setPayDate(dueDateISO);
             setShowPayForm((v) => !v);
           }}
-          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-xs font-bold rounded hover:bg-accent/20"
+          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 bg-accent/10 text-accent text-body font-bold rounded-control hover:bg-accent/20"
         >
           <DollarSign size={12} /> Lancar pagamento
         </button>
@@ -171,25 +171,25 @@ export function InvoiceSummaryPanel({
 
       {/* Payment form */}
       {showPayForm && (
-        <div className="bg-bg-secondary rounded p-3 space-y-2">
+        <div className="bg-bg-secondary rounded-card p-3 space-y-2">
           <input
             type="text"
             inputMode="decimal"
             value={payAmount}
             onChange={(e) => setPayAmount(applyMoneyMask(e.target.value))}
             placeholder="Valor pago"
-            className="w-full px-2 py-1.5 bg-bg-primary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="w-full px-2 py-1.5 bg-bg-primary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
           />
           <input
             type="date"
             value={payDate}
             onChange={(e) => setPayDate(e.target.value)}
-            className="w-full px-2 py-1.5 bg-bg-primary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="w-full px-2 py-1.5 bg-bg-primary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
           />
           <button
             onClick={handlePay}
             disabled={!/\d/.test(payAmount)}
-            className="w-full px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-50"
+            className="w-full px-3 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-50"
           >
             Confirmar pagamento
           </button>
@@ -198,14 +198,14 @@ export function InvoiceSummaryPanel({
 
       {/* Parcelas futuras */}
       {futureInstallmentsCount > 0 && (
-        <div className="text-xs border-t border-border pt-3">
+        <div className="text-body border-t border-border pt-3">
           <div className="flex justify-between">
             <span className="text-text-secondary">Parcelas futuras</span>
-            <span className="text-text-primary">{futureInstallmentsCount} parcelas</span>
+            <span className="text-text-primary tnum">{futureInstallmentsCount} parcelas</span>
           </div>
           <div className="flex justify-between">
             <span className="text-text-secondary">Total futuro</span>
-            <span className="text-accent-red">{formatBRL(futureInstallmentsTotal)}</span>
+            <span className="text-accent-red tnum">{formatBRL(futureInstallmentsTotal)}</span>
           </div>
         </div>
       )}
@@ -213,11 +213,11 @@ export function InvoiceSummaryPanel({
       {/* Totais por titular */}
       {titularTotals.length > 1 && (
         <div className="border-t border-border pt-3 space-y-1">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Totais por cartao (R$)</p>
+          <p className="text-caption text-ink-3 uppercase tracking-wider mb-1">Totais por cartao (R$)</p>
           {titularTotals.map((t, i) => (
-            <div key={i} className="flex justify-between text-xs">
+            <div key={i} className="flex justify-between text-body">
               <span className="text-text-primary">{t.name || 'Sem titular'}</span>
-              <span className="text-accent-red font-bold">{formatBRL(t.total)}</span>
+              <span className="text-accent-red font-bold tnum">{formatBRL(t.total)}</span>
             </div>
           ))}
         </div>
@@ -226,18 +226,18 @@ export function InvoiceSummaryPanel({
       {/* Limite */}
       {creditLimit != null && creditLimit > 0 && (
         <div className="border-t border-border pt-3 space-y-1">
-          <p className="text-[10px] text-text-secondary uppercase tracking-wider mb-1">Limite</p>
-          <div className="flex justify-between text-xs">
+          <p className="text-caption text-ink-3 uppercase tracking-wider mb-1">Limite</p>
+          <div className="flex justify-between text-body">
             <span className="text-text-secondary">Limite da conta</span>
-            <span className="text-text-primary">{formatBRL(creditLimit)}</span>
+            <span className="text-text-primary tnum">{formatBRL(creditLimit)}</span>
           </div>
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between text-body">
             <span className="text-text-secondary">Utilizado</span>
-            <span className="text-accent-red">{formatBRL(Math.abs(totalInvoice))}</span>
+            <span className="text-accent-red tnum">{formatBRL(Math.abs(totalInvoice))}</span>
           </div>
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between text-body">
             <span className="text-text-secondary">Disponivel</span>
-            <span className="text-accent-green">{formatBRL(creditLimit - Math.abs(totalInvoice))}</span>
+            <span className="text-accent-green tnum">{formatBRL(creditLimit - Math.abs(totalInvoice))}</span>
           </div>
           <div className="w-full h-2 bg-bg-secondary rounded-full overflow-hidden mt-1">
             <div

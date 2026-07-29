@@ -19,7 +19,7 @@ interface Props {
   compact?: boolean;
 }
 
-export function CategoryCombobox({ categories, amount, value, onChange, className = '', textSize = 'text-xs', compact = false }: Props) {
+export function CategoryCombobox({ categories, amount, value, onChange, className = '', textSize = 'text-body', compact = false }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [highlighted, setHighlighted] = useState(-1);
@@ -139,14 +139,14 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
         data-category-trigger
         onClick={openDropdown}
         title={currentLabel || 'Sem categoria'}
-        className={`w-full text-left bg-transparent border-none ${textSize} cursor-pointer focus:outline-none hover:text-text-primary rounded px-1 ${py} truncate`}
+        className={`w-full text-left bg-transparent border-none ${textSize} cursor-pointer focus:outline-none hover:text-text-primary rounded-control px-1 ${py} truncate`}
         style={{ color: currentColor }}
       >
         {currentLabel || <span className="text-text-secondary">Sem categoria</span>}
       </button>
 
       {open && (
-        <div className="absolute z-50 mt-1 min-w-[18rem] max-w-[22rem] bg-[#1a1a1a] border border-border rounded-lg shadow-xl overflow-hidden" style={{ left: 0 }}>
+        <div className="absolute z-50 mt-1 min-w-[18rem] max-w-[22rem] bg-elevated border border-border rounded-card shadow-xl overflow-hidden" style={{ left: 0 }}>
           <div className="p-1.5 border-b border-border">
             <input
               ref={inputRef}
@@ -155,24 +155,24 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder="Digitar categoria..."
-              className="w-full bg-bg-secondary border border-border rounded px-2 py-1.5 text-text-primary text-xs focus:outline-none focus:border-accent placeholder:text-text-secondary/50"
+              className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1.5 text-text-primary text-body focus:outline-none focus:border-accent placeholder:text-text-secondary/50"
             />
           </div>
           <div ref={listRef} className="max-h-48 overflow-y-auto">
             <button
               onClick={() => select(null)}
-              className="w-full text-left px-3 py-1.5 text-xs text-text-secondary hover:bg-accent/10 hover:text-text-primary transition-colors"
+              className="w-full text-left px-3 py-1.5 text-body text-text-secondary hover:bg-accent/10 hover:text-text-primary transition-colors"
             >
               Sem categoria
             </button>
             {filtered.length === 0 ? (
-              <div className="px-3 py-2 text-xs text-text-secondary text-center">Nenhuma encontrada</div>
+              <div className="px-3 py-2 text-body text-text-secondary text-center">Nenhuma encontrada</div>
             ) : (
               filtered.map((opt, i) => (
                 <button
                   key={opt.id}
                   onClick={() => select(opt.id)}
-                  className={`w-full text-left px-3 py-1.5 text-xs transition-colors flex items-center justify-between gap-1 ${
+                  className={`w-full text-left px-3 py-1.5 text-body transition-colors flex items-center justify-between gap-1 ${
                     i === highlighted
                       ? 'bg-accent/20 text-text-primary'
                       : 'text-text-secondary hover:bg-accent/10 hover:text-text-primary'
@@ -181,7 +181,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
                 >
                   <span className="truncate">{opt.isChild ? `↳ ${opt.label}` : opt.label}</span>
                   {opt.isChild && opt.parentLabel && (
-                    <span className="flex-shrink-0 text-[10px] text-text-secondary/60 italic">{opt.parentLabel}</span>
+                    <span className="flex-shrink-0 text-caption text-text-secondary/60 italic">{opt.parentLabel}</span>
                   )}
                 </button>
               ))

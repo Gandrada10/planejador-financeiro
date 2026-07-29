@@ -259,7 +259,7 @@ export function FinancialChat({ transactions, categories, budgets }: Props) {
       {/* Floating button */}
       <button
         onClick={() => setOpen((v) => !v)}
-        className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg font-bold text-sm transition-all ${
+        className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-full shadow-lg font-bold text-body transition-all ${
           open
             ? 'bg-bg-secondary border border-border text-text-secondary'
             : 'bg-accent text-bg-primary hover:opacity-90'
@@ -272,19 +272,19 @@ export function FinancialChat({ transactions, categories, budgets }: Props) {
 
       {/* Chat panel */}
       {open && (
-        <div className="fixed bottom-20 right-6 z-50 w-[380px] h-[520px] bg-bg-card border border-border rounded-xl shadow-2xl flex flex-col overflow-hidden">
+        <div className="fixed bottom-20 right-6 z-50 w-[380px] h-[520px] bg-bg-card border border-border rounded-card shadow-2xl flex flex-col overflow-hidden">
           {/* Header */}
           <div className="flex items-center gap-2.5 px-4 py-3 border-b border-border bg-bg-secondary">
             <div className="w-7 h-7 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
               <Sparkles size={14} className="text-accent" />
             </div>
             <div>
-              <p className="text-xs font-bold text-text-primary">Planejador Financeiro IA</p>
-              <p className="text-[10px] text-text-secondary">Dados atualizados em tempo real</p>
+              <p className="text-title font-semibold text-text-primary">Planejador Financeiro IA</p>
+              <p className="text-caption text-text-secondary">Dados atualizados em tempo real</p>
             </div>
             <button
               onClick={() => setMessages([])}
-              className="ml-auto text-[10px] text-text-secondary hover:text-text-primary"
+              className="ml-auto text-caption text-text-secondary hover:text-text-primary"
               title="Limpar conversa"
             >
               Limpar
@@ -296,7 +296,7 @@ export function FinancialChat({ transactions, categories, budgets }: Props) {
             {messages.map((msg, i) => (
               <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                 <div
-                  className={`max-w-[88%] px-3 py-2 rounded-xl text-xs leading-relaxed whitespace-pre-wrap ${
+                  className={`max-w-[88%] px-3 py-2 rounded-card text-body tnum leading-relaxed whitespace-pre-wrap ${
                     msg.role === 'user'
                       ? 'bg-accent text-bg-primary rounded-br-sm'
                       : 'bg-bg-secondary text-text-primary rounded-bl-sm'
@@ -308,14 +308,14 @@ export function FinancialChat({ transactions, categories, budgets }: Props) {
             ))}
             {loading && (
               <div className="flex justify-start">
-                <div className="bg-bg-secondary px-3 py-2 rounded-xl rounded-bl-sm flex items-center gap-2">
+                <div className="bg-bg-secondary px-3 py-2 rounded-card rounded-bl-sm flex items-center gap-2">
                   <Loader2 size={12} className="text-accent animate-spin" />
-                  <span className="text-[10px] text-text-secondary">Analisando seus dados...</span>
+                  <span className="text-caption text-text-secondary">Analisando seus dados...</span>
                 </div>
               </div>
             )}
             {error && (
-              <p className="text-[10px] text-accent-red text-center px-2">{error}</p>
+              <p className="text-caption text-accent-red text-center px-2">{error}</p>
             )}
             <div ref={messagesEndRef} />
           </div>
@@ -332,7 +332,7 @@ export function FinancialChat({ transactions, categories, budgets }: Props) {
                 <button
                   key={prompt}
                   onClick={() => { setInput(prompt); setTimeout(() => inputRef.current?.focus(), 50); }}
-                  className="px-2 py-1 text-[10px] bg-bg-secondary border border-border rounded-full text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
+                  className="px-2 py-1 text-caption bg-bg-secondary border border-border rounded-full text-text-secondary hover:text-text-primary hover:border-accent transition-colors"
                 >
                   {prompt}
                 </button>
@@ -349,13 +349,13 @@ export function FinancialChat({ transactions, categories, budgets }: Props) {
               onKeyDown={handleKeyDown}
               placeholder="Pergunte sobre suas finanças..."
               rows={1}
-              className="flex-1 resize-none bg-bg-secondary border border-border rounded-lg px-3 py-2 text-xs text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent max-h-24"
+              className="flex-1 resize-none bg-bg-secondary border border-border rounded-control px-3 py-2 text-body text-text-primary placeholder-text-secondary focus:outline-none focus:border-accent max-h-24"
               style={{ minHeight: '36px' }}
             />
             <button
               onClick={sendMessage}
               disabled={!input.trim() || loading}
-              className="p-2 bg-accent text-bg-primary rounded-lg hover:opacity-90 disabled:opacity-40 flex-shrink-0"
+              className="p-2 bg-accent text-bg-primary rounded-control hover:opacity-90 disabled:opacity-40 flex-shrink-0"
             >
               <Send size={14} />
             </button>

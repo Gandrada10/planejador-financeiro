@@ -78,7 +78,7 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
               <CategoryIcon icon={icon} size={13} />
             </span>
           )}
-          <span className="text-xs text-text-primary">{label}</span>
+          <span className="text-body text-text-primary">{label}</span>
         </div>
       </td>
 
@@ -90,30 +90,30 @@ function CatRow({ label, icon, color, indent, monthTotals, months, isExpanded, h
         return (
           <td
             key={m}
-            className="px-2 py-1 text-right tabular-nums whitespace-nowrap align-top min-w-[100px]"
+            className="px-2 py-1 text-right tnum whitespace-nowrap align-top min-w-[100px]"
             style={heatStyle}
           >
             {val !== 0 ? (
               <>
-                <div className={`text-xs ${val >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(val)}</div>
+                <div className={`text-body ${val >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(val)}</div>
                 {sectionTotals && pct > 0 && (
-                  <div className="text-[9px] text-text-secondary">{pct.toFixed(1)}%</div>
+                  <div className="text-caption text-text-secondary">{pct.toFixed(1)}%</div>
                 )}
               </>
-            ) : <span className="text-[10px] text-text-secondary/40">—</span>}
+            ) : <span className="text-caption text-text-secondary/40">—</span>}
           </td>
         );
       })}
 
-      <td className="px-2 py-1 text-right tabular-nums whitespace-nowrap min-w-[100px] bg-bg-secondary/20">
+      <td className="px-2 py-1 text-right tnum whitespace-nowrap min-w-[100px] bg-bg-secondary/20">
         {average !== 0
-          ? <span className={`text-xs ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>
-          : <span className="text-[10px] text-text-secondary/40">—</span>}
+          ? <span className={`text-body ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>
+          : <span className="text-caption text-text-secondary/40">—</span>}
       </td>
-      <td className="px-2 py-1 text-right font-bold tabular-nums whitespace-nowrap min-w-[110px] bg-bg-secondary/30">
+      <td className="px-2 py-1 text-right font-bold tnum whitespace-nowrap min-w-[110px] bg-bg-secondary/30">
         {total !== 0
-          ? <span className={`text-xs ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>
-          : <span className="text-[10px] text-text-secondary/40">—</span>}
+          ? <span className={`text-body ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>
+          : <span className="text-caption text-text-secondary/40">—</span>}
       </td>
     </tr>
   );
@@ -128,21 +128,21 @@ function SectionHeaderRow({ label, months, monthTotals, colorClass }: {
   return (
     <tr className="bg-bg-secondary/60 border-y border-border">
       <td className="px-2 py-1.5 pl-3 sticky left-0 z-10 bg-bg-secondary/60">
-        <span className={`text-xs font-bold uppercase tracking-wider ${colorClass}`}>{label}</span>
+        <span className={`text-caption font-bold uppercase tracking-wider ${colorClass}`}>{label}</span>
       </td>
       {months.map((m) => {
         const val = monthTotals[m] ?? 0;
         return (
-          <td key={m} className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap">
-            {val !== 0 ? <span className={`text-xs ${colorClass}`}>{formatBRL(val)}</span> : <span className="text-[10px] text-text-secondary/40">—</span>}
+          <td key={m} className="px-2 py-1.5 text-right font-bold tnum whitespace-nowrap">
+            {val !== 0 ? <span className={`text-body ${colorClass}`}>{formatBRL(val)}</span> : <span className="text-caption text-text-secondary/40">—</span>}
           </td>
         );
       })}
-      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/20">
-        {average !== 0 && <span className={`text-xs ${colorClass}`}>{formatBRL(average)}</span>}
+      <td className="px-2 py-1.5 text-right font-bold tnum whitespace-nowrap bg-bg-secondary/20">
+        {average !== 0 && <span className={`text-body ${colorClass}`}>{formatBRL(average)}</span>}
       </td>
-      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/40">
-        {total !== 0 && <span className={`text-xs ${colorClass}`}>{formatBRL(total)}</span>}
+      <td className="px-2 py-1.5 text-right font-bold tnum whitespace-nowrap bg-bg-secondary/40">
+        {total !== 0 && <span className={`text-body ${colorClass}`}>{formatBRL(total)}</span>}
       </td>
     </tr>
   );
@@ -159,21 +159,21 @@ function ResultadoRow({ months, receitas, despesas }: {
   return (
     <tr className="bg-bg-secondary/80 border-t-2 border-border">
       <td className="px-2 py-1.5 pl-3 sticky left-0 z-10 bg-bg-secondary/80">
-        <span className="text-xs font-bold uppercase tracking-wider text-text-primary">Resultado</span>
+        <span className="text-caption font-bold uppercase tracking-wider text-text-primary">Resultado</span>
       </td>
       {months.map((m) => {
         const val = resultados[m] ?? 0;
         return (
-          <td key={m} className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap">
-            {val !== 0 ? <span className={`text-xs ${val >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(val)}</span> : <span className="text-[10px] text-text-secondary/40">—</span>}
+          <td key={m} className="px-2 py-1.5 text-right font-bold tnum whitespace-nowrap">
+            {val !== 0 ? <span className={`text-body ${val >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(val)}</span> : <span className="text-caption text-text-secondary/40">—</span>}
           </td>
         );
       })}
-      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/20">
-        {average !== 0 && <span className={`text-xs ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>}
+      <td className="px-2 py-1.5 text-right font-bold tnum whitespace-nowrap bg-bg-secondary/20">
+        {average !== 0 && <span className={`text-body ${average >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(average)}</span>}
       </td>
-      <td className="px-2 py-1.5 text-right font-bold tabular-nums whitespace-nowrap bg-bg-secondary/40">
-        {total !== 0 && <span className={`text-xs ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>}
+      <td className="px-2 py-1.5 text-right font-bold tnum whitespace-nowrap bg-bg-secondary/40">
+        {total !== 0 && <span className={`text-body ${total >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>{formatBRL(total)}</span>}
       </td>
     </tr>
   );
@@ -406,7 +406,7 @@ export function CategoryEvolutionReport() {
     doc.save(`evolucao_categorias_${fileSuffix}.pdf`);
   }
 
-  if (loading) return <div className="text-accent text-sm animate-pulse">Carregando...</div>;
+  if (loading) return <div className="text-accent text-body animate-pulse">Carregando...</div>;
 
   const colCount = periods.length + 3;
   const maxCount = maxCountForInterval(interval);
@@ -414,15 +414,15 @@ export function CategoryEvolutionReport() {
   return (
     <div className="space-y-3">
       {/* Range bar */}
-      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-lg">
-        <div className="flex items-center gap-2 text-xs">
+      <div className="flex items-center gap-4 flex-wrap px-4 py-2.5 bg-bg-secondary border border-border rounded-card">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Intervalo:</span>
           <div className="flex gap-1">
             {(['mensal', 'anual'] as Interval[]).map((opt) => (
               <button
                 key={opt}
                 onClick={() => handleIntervalChange(opt)}
-                className={`px-2.5 py-1 text-xs rounded border transition-colors capitalize ${
+                className={`px-2.5 py-1 text-body rounded-control border transition-colors capitalize ${
                   interval === opt
                     ? 'bg-accent/10 text-accent border-accent/30'
                     : 'bg-bg-card border-border text-text-secondary hover:text-text-primary'
@@ -434,14 +434,14 @@ export function CategoryEvolutionReport() {
           </div>
         </div>
         <span className="text-border hidden sm:block">|</span>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Inicio:</span>
           {interval === 'mensal' ? (
             <input
               type="month"
               value={startPeriod}
               onChange={(e) => e.target.value && setStartPeriod(e.target.value)}
-              className="bg-transparent text-text-primary text-xs focus:outline-none cursor-pointer border-none"
+              className="bg-transparent text-text-primary text-body focus:outline-none cursor-pointer border-none"
             />
           ) : (
             <input
@@ -454,12 +454,12 @@ export function CategoryEvolutionReport() {
                 if (!v) return;
                 setStartPeriod(v);
               }}
-              className="w-20 bg-bg-card border border-border rounded px-2 py-0.5 text-text-primary text-xs focus:outline-none focus:border-accent"
+              className="w-20 bg-bg-card border border-border rounded-control px-2 py-0.5 text-text-primary text-body focus:outline-none focus:border-accent"
             />
           )}
         </div>
         <span className="text-border hidden sm:block">|</span>
-        <div className="flex items-center gap-2 text-xs">
+        <div className="flex items-center gap-2 text-caption">
           <span className="text-text-secondary">Qtde:</span>
           <input
             type="number"
@@ -471,28 +471,28 @@ export function CategoryEvolutionReport() {
               if (Number.isNaN(n)) return;
               setNumPeriods(Math.min(Math.max(1, n), maxCount));
             }}
-            className="w-14 bg-bg-card border border-border rounded px-2 py-0.5 text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="w-14 bg-bg-card border border-border rounded-control px-2 py-0.5 text-text-primary text-body focus:outline-none focus:border-accent"
           />
           <span className="text-text-secondary">{interval === 'mensal' ? `meses (máx ${maxCount})` : `anos (máx ${maxCount})`}</span>
         </div>
         <div className="ml-auto flex items-center gap-1">
-          <button onClick={expandAll} className="px-2.5 py-1 text-[10px] text-text-secondary hover:text-text-primary bg-bg-card border border-border rounded">
+          <button onClick={expandAll} className="px-2.5 py-1 text-body text-text-secondary hover:text-text-primary bg-bg-card border border-border rounded-control">
             Expandir
           </button>
-          <button onClick={() => setExpandedCats(new Set())} className="px-2.5 py-1 text-[10px] text-text-secondary hover:text-text-primary bg-bg-card border border-border rounded">
+          <button onClick={() => setExpandedCats(new Set())} className="px-2.5 py-1 text-body text-text-secondary hover:text-text-primary bg-bg-card border border-border rounded-control">
             Recolher
           </button>
           <span className="w-px h-4 bg-border mx-1 hidden sm:block" />
           <button
             onClick={exportExcel}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent"
             title="Exportar Excel"
           >
             <FileSpreadsheet size={13} /> Excel
           </button>
           <button
             onClick={exportPDF}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-card border border-border text-text-primary text-body rounded-control hover:border-accent"
             title="Exportar PDF"
           >
             <Download size={13} /> PDF
@@ -501,10 +501,10 @@ export function CategoryEvolutionReport() {
       </div>
 
       {/* Table */}
-      <div className="overflow-auto rounded-lg border border-border max-h-[calc(100vh-220px)]">
-        <table className="text-xs border-collapse w-full">
+      <div className="overflow-auto rounded-card border border-border max-h-[calc(100vh-220px)]">
+        <table className="text-body border-collapse w-full">
           <thead className="sticky top-0 z-30">
-            <tr className="bg-bg-secondary border-b border-border text-[11px] text-text-secondary uppercase tracking-wider">
+            <tr className="bg-bg-secondary border-b border-border text-caption text-ink-3 uppercase tracking-wider">
               <th className="px-2 py-1.5 text-left sticky left-0 bg-bg-secondary z-40 min-w-[200px]">Categoria</th>
               {periods.map((p) => (
                 <th key={p} className="px-2 py-1.5 text-right min-w-[100px] whitespace-nowrap bg-bg-secondary">{periodLabel(p)}</th>

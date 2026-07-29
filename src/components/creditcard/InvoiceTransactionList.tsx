@@ -185,20 +185,20 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
   const editable = onUpdate ? 'cursor-pointer hover:bg-bg-secondary/50 transition-colors' : '';
 
   return (
-    <div className="bg-bg-card border border-border rounded-lg overflow-hidden">
+    <div className="bg-bg-card border border-border rounded-card overflow-hidden">
       {/* Header */}
       <div className="px-4 py-3 border-b border-border flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <span className="text-xs font-bold text-text-primary">{totalTransactions} lancamentos</span>
+          <span className="text-body font-bold text-text-primary">{totalTransactions} lancamentos</span>
           {pendingCount > 0 && (
             <button
               onClick={() => setFilterPending(!filterPending)}
-              className={`text-[10px] hover:underline ${filterPending ? 'text-accent font-bold' : 'text-accent'}`}
+              className={`text-caption hover:underline ${filterPending ? 'text-accent font-bold' : 'text-accent'}`}
             >
               {pendingCount} pendentes conciliacao{filterPending && ' ✕'}
             </button>
           )}
-          <span className="text-[10px] text-text-secondary">
+          <span className="text-caption text-text-secondary">
             Ordenar:
             <button onClick={() => toggleSort('date')} className="ml-1 hover:text-text-primary" title="Data de pagamento/vencimento — define o mês no fluxo de caixa">
               Data <SortIcon field="date" />
@@ -217,14 +217,14 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
               return allRec ? (
                 <button
                   onClick={() => { onBatchReconcile([...selectedIds], false); setSelectedIds(new Set()); }}
-                  className="flex items-center gap-1 text-xs text-text-secondary hover:underline"
+                  className="flex items-center gap-1 text-body text-text-secondary hover:underline"
                 >
                   <CheckCircle2 size={12} /> Desconciliar ({selectedIds.size})
                 </button>
               ) : (
                 <button
                   onClick={() => { onBatchReconcile([...selectedIds], true); setSelectedIds(new Set()); }}
-                  className="flex items-center gap-1 text-xs text-accent-green hover:underline"
+                  className="flex items-center gap-1 text-body text-accent-green hover:underline"
                 >
                   <CheckCircle2 size={12} /> Conciliar ({selectedIds.size})
                 </button>
@@ -233,7 +233,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
             {onBatchUpdate && (
               <button
                 onClick={() => setShowBatchEdit(true)}
-                className="flex items-center gap-1 text-xs text-accent hover:underline"
+                className="flex items-center gap-1 text-body text-accent hover:underline"
               >
                 <Pencil size={12} /> Edicao em lote ({selectedIds.size})
               </button>
@@ -241,7 +241,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
             {onBatchMove && (
               <button
                 onClick={() => { setShowMovePanel((v) => !v); setMoveTargetMonth(''); }}
-                className="flex items-center gap-1 text-xs text-accent hover:underline"
+                className="flex items-center gap-1 text-body text-accent hover:underline"
               >
                 <MoveRight size={12} /> Mover para fatura ({selectedIds.size})
               </button>
@@ -249,7 +249,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
             {onDelete && (
               <button
                 onClick={() => { selectedIds.forEach((id) => onDelete(id)); setSelectedIds(new Set()); }}
-                className="flex items-center gap-1 text-xs text-accent-red hover:underline"
+                className="flex items-center gap-1 text-body text-accent-red hover:underline"
               >
                 <Trash2 size={12} /> Excluir ({selectedIds.size})
               </button>
@@ -261,11 +261,11 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
       {/* Move to another invoice panel */}
       {showMovePanel && onBatchMove && (
         <div className="px-4 py-3 border-b border-border bg-accent/5 flex items-center gap-3 flex-wrap">
-          <span className="text-xs text-text-secondary">Mover {selectedIds.size} lançamento(s) para a fatura de:</span>
+          <span className="text-body text-text-secondary">Mover {selectedIds.size} lançamento(s) para a fatura de:</span>
           <select
             value={moveTargetMonth}
             onChange={(e) => setMoveTargetMonth(e.target.value)}
-            className="px-2 py-1 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="px-2 py-1 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
           >
             <option value="">Selecionar mês...</option>
             {availableMonths
@@ -285,13 +285,13 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
               setMoveTargetMonth('');
               setMovingIds(false);
             }}
-            className="px-3 py-1 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90 disabled:opacity-40"
+            className="px-3 py-1 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90 disabled:opacity-40"
           >
             {movingIds ? 'Movendo...' : 'Confirmar'}
           </button>
           <button
             onClick={() => { setShowMovePanel(false); setMoveTargetMonth(''); }}
-            className="text-xs text-text-secondary hover:text-text-primary"
+            className="text-body text-text-secondary hover:text-text-primary"
           >
             Cancelar
           </button>
@@ -332,7 +332,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
       )}
 
       {displayGroups.length === 0 ? (
-        <div className="p-8 text-center text-text-secondary text-xs">
+        <div className="p-8 text-center text-text-secondary text-body">
           Nenhuma transacao neste periodo
         </div>
       ) : (
@@ -348,25 +348,25 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                 >
                   <div className="flex items-center gap-2">
                     {isCollapsed ? <ChevronDown size={14} className="text-text-secondary" /> : <ChevronUp size={14} className="text-text-secondary" />}
-                    <span className="text-xs font-bold text-text-primary">
+                    <span className="text-body font-bold text-text-primary">
                       {group.titular || 'Sem titular'}
                     </span>
                     {(() => {
                       const cardNum = group.transactions[0]?.cardNumber;
                       const last4 = cardNum ? cardNum.replace(/\D/g, '').slice(-4) : null;
                       return last4 ? (
-                        <span className="text-[10px] text-text-secondary tnum">**** {last4}</span>
+                        <span className="text-caption text-text-secondary tnum">**** {last4}</span>
                       ) : null;
                     })()}
                   </div>
-                  <span className="text-xs font-bold text-accent-red">{formatBRL(group.total)}</span>
+                  <span className="text-body font-bold text-accent-red tnum">{formatBRL(group.total)}</span>
                 </button>
 
                 {/* Transactions */}
                 {!isCollapsed && (
                   <div className="divide-y divide-border/30">
                     {/* Column headers */}
-                    <div className="flex items-center px-4 py-1.5 text-text-secondary uppercase tracking-wider text-[10px]">
+                    <div className="flex items-center px-4 py-1.5 text-caption text-ink-3 uppercase tracking-wider">
                       <div className="w-6 flex-shrink-0 flex justify-center">
                         <div
                           tabIndex={0}
@@ -438,7 +438,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                             pagamento; governa o mês no fluxo de caixa. */}
                         <div
                           data-tab-cell
-                          className={`text-xs text-text-primary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
+                          className={`text-body text-text-primary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'date', t.date.toISOString().split('T')[0])}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'date' ? (
@@ -449,7 +449,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-body focus:outline-none"
                             />
                           ) : formatDate(t.date)}
                         </div>
@@ -457,7 +457,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                         {/* Purchase date (competência) - editable */}
                         <div
                           data-tab-cell
-                          className={`text-xs text-text-secondary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
+                          className={`text-body text-text-secondary w-[80px] flex-shrink-0 overflow-hidden truncate ${editable}`}
                           onClick={() => onUpdate && startEdit(t.id, 'purchaseDate', (t.purchaseDate || t.date).toISOString().split('T')[0])}
                         >
                           {editingCell?.id === t.id && editingCell.field === 'purchaseDate' ? (
@@ -468,7 +468,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-body focus:outline-none"
                             />
                           ) : formatDate(t.purchaseDate || t.date)}
                         </div>
@@ -486,12 +486,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                               onChange={(e) => setEditValue(e.target.value)}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs focus:outline-none"
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-body focus:outline-none"
                             />
                           ) : (
                             <>
                               <div className="flex items-center gap-1 min-w-0">
-                                <span className="text-xs text-text-primary truncate">{t.description}</span>
+                                <span className="text-body text-text-primary truncate">{t.description}</span>
                                 <NoteTag
                                   note={t.notes || ''}
                                   alert={t.noteAlert}
@@ -499,7 +499,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                                 />
                               </div>
                               {t.categoryId && (
-                                <p className="text-xs text-text-secondary truncate">
+                                <p className="text-caption text-text-secondary truncate">
                                   {getCategoryLabel(t.categoryId)}
                                 </p>
                               )}
@@ -540,7 +540,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                                   onClick={() => onCreateRule(t.description, t.categoryId!)}
                                   className={`flex-shrink-0 transition-colors ${
                                     hasRule
-                                      ? 'text-yellow-400 hover:text-yellow-300'
+                                      ? 'text-status-warn hover:text-status-warn/80'
                                       : 'text-text-secondary/30 hover:text-text-secondary'
                                   }`}
                                 >
@@ -582,7 +582,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                         {/* Amount - editable */}
                         <div
                           data-tab-cell
-                          className={`text-xs font-bold flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
+                          className={`text-body font-bold tnum flex-shrink-0 w-[110px] text-right overflow-hidden mr-2 ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'} ${editable}`}
                           // Pré-preenche já no formato mascarado pt-BR: toFixed(2)
                           // garante 2 casas p/ o applyMoneyMask (que lê os dígitos
                           // como centavos) reconstruir certo — -8022.48 → "-8.022,48",
@@ -597,7 +597,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                               onChange={(e) => setEditValue(applyMoneyMask(e.target.value))}
                               onBlur={() => commitEdit(t)}
                               onKeyDown={(e) => handleKeyDown(e, t)}
-                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-xs text-right focus:outline-none"
+                              className="w-full bg-bg-secondary border border-accent rounded px-1 py-0.5 text-text-primary text-body text-right focus:outline-none"
                             />
                           ) : (
                             formatBRL(t.amount)
@@ -642,12 +642,12 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                                 if (!ok) return;
                                 onUpdate(t.id, { projectId: value || null });
                               }}
-                              className="w-full bg-transparent border-none text-xs cursor-pointer focus:outline-none hover:text-text-primary truncate"
+                              className="w-full bg-transparent border-none text-body cursor-pointer focus:outline-none hover:text-text-primary truncate"
                               style={{ color: projects.find((p) => p.id === t.projectId)?.color || 'var(--color-text-secondary)' }}
                             >
-                              <option value="" style={{ backgroundColor: '#111111', color: '#e5e5e5' }}>—</option>
+                              <option value="" style={{ backgroundColor: '#1b1b1e', color: '#f5f4f2' }}>—</option>
                               {projects.filter((p) => p.status === 'active').map((p) => (
-                                <option key={p.id} value={p.id} style={{ backgroundColor: '#111111', color: p.color }}>{p.name}</option>
+                                <option key={p.id} value={p.id} style={{ backgroundColor: '#1b1b1e', color: p.color }}>{p.name}</option>
                               ))}
                             </select>
                           </div>

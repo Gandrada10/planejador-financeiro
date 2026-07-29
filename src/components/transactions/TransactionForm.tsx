@@ -80,15 +80,15 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
     onClose();
   }
 
-  const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent';
-  const labelClass = 'block text-[10px] text-text-secondary mb-1 uppercase tracking-wider';
+  const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent';
+  const labelClass = 'block text-caption text-text-secondary mb-1 uppercase tracking-wider';
   const filteredCategories = filterCategoriesByAmount(categories, type === 'despesa' ? -1 : 1);
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-lg w-full max-w-md">
+      <div className="bg-bg-card border border-border rounded-card w-full max-w-md">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-sm font-bold text-text-primary">Nova Transacao</h3>
+          <h3 className="text-title font-semibold text-text-primary">Nova Transacao</h3>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
             <X size={18} />
           </button>
@@ -99,14 +99,14 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
             <button
               type="button"
               onClick={() => setType('despesa')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded ${type === 'despesa' ? 'bg-accent-red text-white' : 'bg-bg-secondary text-text-secondary'}`}
+              className={`flex-1 py-1.5 text-body font-bold rounded-control ${type === 'despesa' ? 'bg-accent-red text-white' : 'bg-bg-secondary text-text-secondary'}`}
             >
               Despesa
             </button>
             <button
               type="button"
               onClick={() => setType('receita')}
-              className={`flex-1 py-1.5 text-xs font-bold rounded ${type === 'receita' ? 'bg-accent-green text-white' : 'bg-bg-secondary text-text-secondary'}`}
+              className={`flex-1 py-1.5 text-body font-bold rounded-control ${type === 'receita' ? 'bg-accent-green text-white' : 'bg-bg-secondary text-text-secondary'}`}
             >
               Receita
             </button>
@@ -171,7 +171,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
                   <option key={m} value={m}>{getMonthLabel(m)}</option>
                 ))}
               </select>
-              <p className="text-[10px] text-text-secondary mt-1">
+              <p className="text-caption text-text-secondary mt-1">
                 Mes da fatura em que este lancamento deve aparecer
               </p>
             </div>
@@ -202,7 +202,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
                 onChange={(e) => setNoteAlert(e.target.checked)}
                 style={{ accentColor: 'var(--color-accent-red)' }}
               />
-              <span className={`text-[10px] flex items-center gap-1 ${noteAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
+              <span className={`text-caption flex items-center gap-1 ${noteAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
                 <AlertTriangle size={11} className={noteAlert ? 'text-accent-red' : 'text-text-secondary'} />
                 Marcar nota como alerta (aparece no sininho)
               </span>
@@ -211,7 +211,7 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
 
           <button
             type="submit"
-            className="w-full py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90 flex items-center justify-center gap-2"
+            className="w-full py-2 bg-accent text-bg-primary font-bold text-body rounded-control hover:opacity-90 flex items-center justify-center gap-2"
           >
             <Plus size={16} />
             Adicionar

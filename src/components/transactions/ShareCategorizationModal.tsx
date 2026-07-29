@@ -103,9 +103,9 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-lg w-full max-w-md">
+      <div className="bg-bg-card border border-border rounded-card w-full max-w-md">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <Send size={16} className="text-accent" />
             Enviar para Categorizar
           </h3>
@@ -117,18 +117,18 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
         <div className="p-4 space-y-4">
           {!generatedLink ? (
             <>
-              <p className="text-xs text-text-secondary">
+              <p className="text-body text-text-secondary">
                 Gere um link para alguem categorizar as transacoes sem precisar de login. O link expira em 48h.
               </p>
 
               <div>
-                <label className="block text-[10px] text-text-secondary mb-1 uppercase tracking-wider">
+                <label className="block text-caption text-text-secondary mb-1 uppercase tracking-wider">
                   Titular (filtrar transacoes de quem?)
                 </label>
                 <select
                   value={selectedTitular}
                   onChange={(e) => setSelectedTitular(e.target.value)}
-                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent"
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
                 >
                   <option value="">Todos</option>
                   {titulars.map((t) => (
@@ -137,7 +137,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
                 </select>
               </div>
 
-              <div className="bg-bg-secondary rounded p-3 text-xs text-text-secondary">
+              <div className="bg-bg-secondary rounded p-3 text-body text-text-secondary">
                 {uncategorizedCount > 0 ? (
                   <span><strong className="text-accent">{uncategorizedCount}</strong> transacoes sem categoria (despesas e receitas) serao enviadas.</span>
                 ) : (
@@ -146,20 +146,20 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
               </div>
 
               {error && (
-                <div className="text-xs text-accent-red bg-accent-red/10 rounded p-2">{error}</div>
+                <div className="text-caption text-accent-red bg-accent-red/10 rounded p-2">{error}</div>
               )}
 
               <button
                 onClick={handleGenerate}
                 disabled={loading || uncategorizedCount === 0}
-                className="w-full py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+                className="w-full py-2 bg-accent text-bg-primary font-bold text-body rounded-control hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
               >
                 {loading ? 'Gerando...' : 'Gerar Link'}
               </button>
             </>
           ) : (
             <>
-              <p className="text-xs text-text-secondary">
+              <p className="text-body text-text-secondary">
                 Link gerado! Copiar leva a mensagem pronta (período, contas e link) para colar no WhatsApp.
               </p>
 
@@ -167,13 +167,13 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
                 <input
                   readOnly
                   value={generatedLink}
-                  className="flex-1 px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs truncate"
+                  className="flex-1 px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body truncate"
                 />
                 <button
                   onClick={handleCopy}
                   title="Copiar mensagem completa"
                   aria-label="Copiar mensagem completa (período, contas e link)"
-                  className="px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary hover:border-accent"
+                  className="px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary hover:border-accent"
                 >
                   {copied ? <Check size={16} className="text-accent-green" /> : <Copy size={16} />}
                 </button>
@@ -181,7 +181,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
 
               <button
                 onClick={handleWhatsApp}
-                className="w-full py-2 bg-[#25D366] text-white font-bold text-sm rounded hover:opacity-90 flex items-center justify-center gap-2"
+                className="w-full py-2 bg-[#25D366] text-white font-bold text-body rounded-control hover:opacity-90 flex items-center justify-center gap-2"
               >
                 <MessageCircle size={16} />
                 Enviar pelo WhatsApp
@@ -189,7 +189,7 @@ export function ShareCategorizationModal({ transactions, categories, titulars, m
 
               <button
                 onClick={onClose}
-                className="w-full py-2 bg-bg-secondary border border-border text-text-primary text-sm rounded hover:border-accent"
+                className="w-full py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
               >
                 Fechar
               </button>

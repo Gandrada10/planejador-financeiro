@@ -69,17 +69,17 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
     <div
       ref={popoverRef}
       style={{ position: 'fixed', top: coords.top, left: coords.left, width: 240, zIndex: 9999 }}
-      className="bg-[#1a1a1a] border border-border rounded-lg shadow-2xl p-3 space-y-2"
+      className="bg-elevated border border-border rounded-card shadow-2xl p-3 space-y-2"
       onClick={(e) => e.stopPropagation()}
     >
-      <p className="text-[10px] text-text-secondary uppercase tracking-wider font-bold">Observação</p>
+      <p className="text-caption text-ink-3 uppercase tracking-wider font-bold">Observação</p>
       <textarea
         ref={textareaRef}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         placeholder="Digite uma observação..."
         rows={3}
-        className="w-full bg-bg-secondary border border-border rounded px-2 py-1.5 text-text-primary text-xs focus:outline-none focus:border-accent resize-none placeholder:text-text-secondary/40"
+        className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1.5 text-text-primary text-body focus:outline-none focus:border-accent resize-none placeholder:text-text-secondary/40"
         onKeyDown={(e) => {
           if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') handleSave();
           if (e.key === 'Escape') setOpen(false);
@@ -92,7 +92,7 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
           onChange={(e) => setDraftAlert(e.target.checked)}
           style={{ accentColor: 'var(--color-accent-red)' }}
         />
-        <span className={`text-[10px] flex items-center gap-1 ${draftAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
+        <span className={`text-caption flex items-center gap-1 ${draftAlert ? 'text-accent-red font-bold' : 'text-text-secondary'}`}>
           <AlertTriangle size={11} className={draftAlert ? 'text-accent-red' : 'text-text-secondary'} />
           Marcar como alerta (sininho)
         </span>
@@ -100,20 +100,20 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
       <div className="flex gap-2">
         <button
           onClick={handleSave}
-          className="flex items-center justify-center gap-1 flex-1 py-1 bg-accent text-bg-primary text-[10px] font-bold rounded hover:opacity-90"
+          className="flex items-center justify-center gap-1 flex-1 py-1 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90"
         >
           <Check size={10} /> Salvar
         </button>
         {hasNote && (
           <button
             onClick={handleDelete}
-            className="flex items-center gap-1 px-2 py-1 border border-accent-red/40 text-accent-red text-[10px] rounded hover:bg-accent-red/10"
+            className="flex items-center gap-1 px-2 py-1 border border-accent-red/40 text-accent-red text-body rounded-control hover:bg-accent-red/10"
           >
             <Trash2 size={10} />
           </button>
         )}
       </div>
-      <p className="text-[9px] text-text-secondary/40">Ctrl+Enter para salvar · Esc para fechar</p>
+      <p className="text-caption text-text-secondary/40">Ctrl+Enter para salvar · Esc para fechar</p>
     </div>,
     document.body
   ) : null;
@@ -128,7 +128,7 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
           tabIndex={-1}
           onClick={() => setOpen(!open)}
           title={isAlert ? `⚠️ ${note}` : note}
-          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[9px] font-bold transition-colors leading-none ${
+          className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold transition-colors leading-none ${
             isAlert
               ? 'bg-accent-red/20 text-accent-red hover:bg-accent-red/30'
               : 'bg-accent/20 text-accent hover:bg-accent/30'

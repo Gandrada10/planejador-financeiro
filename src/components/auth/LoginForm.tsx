@@ -44,49 +44,49 @@ export function LoginForm() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-bg-primary">
-      <div className="w-full max-w-md p-8 bg-bg-card border border-border rounded-lg">
+      <div className="w-full max-w-md p-8 bg-bg-card border border-border rounded-card">
         <h1 className="text-2xl font-bold text-accent mb-2 text-center">
           PLANEJADOR FINANCEIRO
         </h1>
-        <p className="text-text-secondary text-sm text-center mb-8">
+        <p className="text-text-secondary text-body text-center mb-8">
           Controle financeiro familiar
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-xs text-text-secondary mb-1 uppercase tracking-wider">
+            <label className="block text-caption text-text-secondary mb-1 uppercase tracking-wider">
               Email
             </label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               required
             />
           </div>
           <div>
-            <label className="block text-xs text-text-secondary mb-1 uppercase tracking-wider">
+            <label className="block text-caption text-text-secondary mb-1 uppercase tracking-wider">
               Senha
             </label>
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent"
+              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
               required
               minLength={6}
             />
           </div>
 
           {error && (
-            <p className="text-accent-red text-xs">{error}</p>
+            <p className="text-accent-red text-body">{error}</p>
           )}
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-2 bg-accent text-bg-primary font-bold text-body rounded-control hover:opacity-90 disabled:opacity-50 flex items-center justify-center gap-2"
           >
             {isRegister ? <UserPlus size={16} /> : <LogIn size={16} />}
             {loading ? '...' : isRegister ? 'Criar conta' : 'Entrar'}
@@ -95,20 +95,20 @@ export function LoginForm() {
 
         <div className="my-4 flex items-center gap-3">
           <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-text-secondary">ou</span>
+          <span className="text-caption text-text-secondary">ou</span>
           <div className="flex-1 h-px bg-border" />
         </div>
 
         <button
           onClick={handleGoogle}
-          className="w-full py-2 bg-bg-secondary border border-border text-text-primary text-sm rounded hover:border-accent flex items-center justify-center gap-2"
+          className="w-full py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent flex items-center justify-center gap-2"
         >
           <Globe size={16} />
           Entrar com Google
         </button>
 
         {ALLOW_REGISTRATION && (
-          <p className="mt-6 text-center text-xs text-text-secondary">
+          <p className="mt-6 text-center text-caption text-text-secondary">
             {isRegister ? 'Ja tem conta?' : 'Nao tem conta?'}{' '}
             <button
               onClick={() => setIsRegister(!isRegister)}

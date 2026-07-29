@@ -23,7 +23,7 @@ export function BudgetPage() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex items-center gap-1.5 px-4 py-2 text-xs rounded-t transition-colors border-b-2 -mb-px ${
+            className={`flex items-center gap-1.5 px-4 py-2 text-body rounded-t-control transition-colors border-b-2 -mb-px ${
               activeTab === tab
                 ? 'text-accent border-accent bg-accent/5'
                 : 'text-text-secondary border-transparent hover:text-text-primary hover:border-border'

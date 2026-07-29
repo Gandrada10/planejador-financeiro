@@ -285,11 +285,11 @@ export function TransactionsPage() {
   }, [rules, addRule, deleteRule]);
 
   if (loading) {
-    return <div className="text-accent text-sm animate-pulse">Carregando transacoes...</div>;
+    return <div className="text-accent text-body animate-pulse">Carregando transacoes...</div>;
   }
 
   const defaultMonth = getMonthYear();
-  const baseFieldClass = 'flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent';
+  const baseFieldClass = 'flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border rounded-control text-body focus:outline-none focus:border-accent';
   const activeFieldClass = 'border-accent bg-accent/10 text-accent';
   const inactiveFieldClass = 'border-border text-text-primary';
   const isActive = {
@@ -322,39 +322,39 @@ export function TransactionsPage() {
         <div className="flex gap-2">
           <button
             onClick={() => setShowForm(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90"
           >
             <Plus size={14} /> Nova
           </button>
           <button
             onClick={() => setShowImport(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-body font-bold rounded-control hover:bg-accent/10"
           >
             <Upload size={14} /> Importar Extrato
           </button>
           <div className="relative" ref={shareMenuRef}>
             <button
               onClick={() => setShareMenuOpen((v) => !v)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-xs font-bold rounded hover:bg-accent/10"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-accent text-accent text-body font-bold rounded-control hover:bg-accent/10"
             >
               <Send size={14} /> Categorização compartilhada <ChevronDown size={12} />
             </button>
             {shareMenuOpen && (
-              <div className="absolute right-0 mt-1 min-w-[220px] bg-bg-card border border-border rounded shadow-lg z-20 py-1">
+              <div className="absolute right-0 mt-1 min-w-[220px] bg-bg-card border border-border rounded-card shadow-lg z-20 py-1">
                 <button
                   onClick={() => { setShareMenuOpen(false); setShowShareModal(true); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-body text-text-primary hover:bg-bg-secondary"
                 >
                   <Send size={12} className="text-accent" />
                   Enviar p/ categorizar
                 </button>
                 <button
                   onClick={() => { setShareMenuOpen(false); setShowHistoryList(true); }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-xs text-text-primary hover:bg-bg-secondary"
+                  className="w-full flex items-center gap-2 px-3 py-2 text-body text-text-primary hover:bg-bg-secondary"
                 >
                   <History size={12} className="text-accent" />
                   Ver histórico
-                  <span className="ml-auto text-[10px] text-text-secondary">{historySessions.length}</span>
+                  <span className="ml-auto text-caption text-text-secondary">{historySessions.length}</span>
                 </button>
               </div>
             )}
@@ -426,7 +426,7 @@ export function TransactionsPage() {
             value={searchText}
             onChange={(e) => setSearchText(e.target.value)}
             placeholder="Buscar por descricao, valor, conta, membro..."
-            className={cn('w-full pl-8 pr-3 py-2 bg-bg-secondary border rounded text-xs focus:outline-none focus:border-accent', isActive.search ? activeFieldClass : inactiveFieldClass)}
+            className={cn('w-full pl-8 pr-3 py-2 bg-bg-secondary border rounded-control text-body focus:outline-none focus:border-accent', isActive.search ? activeFieldClass : inactiveFieldClass)}
           />
         </div>
       </div>
@@ -435,14 +435,14 @@ export function TransactionsPage() {
         <div className="flex justify-end -mt-2">
           <button
             onClick={clearAllFilters}
-            className="flex items-center gap-1 text-xs text-text-secondary hover:text-accent"
+            className="flex items-center gap-1 text-body text-text-secondary hover:text-accent"
           >
             <X size={12} /> Limpar filtros ({activeCount})
           </button>
         </div>
       )}
 
-      <div className="flex gap-4 text-xs text-text-secondary flex-wrap">
+      <div className="flex gap-4 text-body text-text-secondary flex-wrap">
         <span>{filtered.length} transacoes</span>
         <span className="text-accent-green">
           Receitas: R$ {filtered.filter((t) => countsInTotals(t, categories) && isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
@@ -462,7 +462,7 @@ export function TransactionsPage() {
         {filtered.filter((t) => !t.categoryId).length > 0 && (
           <button
             onClick={() => setFilterCategory(filterCategory === 'uncategorized' ? 'all' : 'uncategorized')}
-            className={`hover:underline ${filterCategory === 'uncategorized' ? 'text-amber-400 font-bold' : 'text-amber-400'}`}
+            className={`hover:underline ${filterCategory === 'uncategorized' ? 'text-status-warn font-bold' : 'text-status-warn'}`}
           >
             {filtered.filter((t) => !t.categoryId).length} pendentes categorizacao
             {filterCategory === 'uncategorized' && ' ✕'}
@@ -471,7 +471,7 @@ export function TransactionsPage() {
         {filtered.filter((t) => !(t.account || '').trim()).length > 0 && (
           <button
             onClick={() => setFilterAccount(filterAccount === 'none' ? 'all' : 'none')}
-            className={`hover:underline ${filterAccount === 'none' ? 'text-amber-400 font-bold' : 'text-amber-400'}`}
+            className={`hover:underline ${filterAccount === 'none' ? 'text-status-warn font-bold' : 'text-status-warn'}`}
           >
             {filtered.filter((t) => !(t.account || '').trim()).length} sem conta
             {filterAccount === 'none' && ' ✕'}
@@ -480,7 +480,7 @@ export function TransactionsPage() {
         {filtered.filter((t) => !(t.familyMember || '').trim()).length > 0 && (
           <button
             onClick={() => setFilterTitular(filterTitular === 'none' ? 'all' : 'none')}
-            className={`hover:underline ${filterTitular === 'none' ? 'text-amber-400 font-bold' : 'text-amber-400'}`}
+            className={`hover:underline ${filterTitular === 'none' ? 'text-status-warn font-bold' : 'text-status-warn'}`}
           >
             {filtered.filter((t) => !(t.familyMember || '').trim()).length} sem membro
             {filterTitular === 'none' && ' ✕'}
@@ -489,7 +489,7 @@ export function TransactionsPage() {
       </div>
 
       {applyNotice && (
-        <div role="alert" className="flex items-center justify-between gap-3 p-3 bg-amber-400/10 border border-amber-400/40 rounded-lg text-xs text-text-primary">
+        <div role="alert" className="flex items-center justify-between gap-3 p-3 bg-status-warn/10 border border-status-warn/40 rounded-card text-body text-text-primary">
           <span>{applyNotice}</span>
           <button
             onClick={() => setApplyNotice(null)}
@@ -509,14 +509,14 @@ export function TransactionsPage() {
                 onClick={async () => {
                   for (const s of activeSessions) await dismissSession(s.id);
                 }}
-                className="text-[10px] text-text-secondary hover:text-accent-red"
+                className="text-caption text-text-secondary hover:text-accent-red"
               >
                 Remover todas ({activeSessions.length})
               </button>
             </div>
           )}
           {activeSessions.slice(0, 3).map((s) => (
-            <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-lg text-xs">
+            <div key={s.id} className="flex items-center justify-between p-3 bg-accent/10 border border-accent/30 rounded-card text-body">
               <div className="flex items-center gap-2">
                 <CheckCircle size={14} className="text-accent" />
                 <span className="text-text-primary">
@@ -527,7 +527,7 @@ export function TransactionsPage() {
                 <button
                   onClick={() => handleApplySession(s.id)}
                   disabled={applyingSession === s.id}
-                  className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
+                  className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded-control hover:opacity-90 disabled:opacity-50"
                 >
                   {applyingSession === s.id ? 'Aplicando...' : 'Aplicar'}
                 </button>
@@ -542,7 +542,7 @@ export function TransactionsPage() {
             </div>
           ))}
           {activeSessions.length > 3 && (
-            <p className="text-[10px] text-text-secondary text-center">
+            <p className="text-caption text-text-secondary text-center">
               + {activeSessions.length - 3} sessoes ocultas
             </p>
           )}
@@ -556,9 +556,9 @@ export function TransactionsPage() {
           {expiredSessions.map((s) => {
             const pending = Math.max(0, s.transactionIds.length - s.categorizedCount);
             return (
-              <div key={s.id} className="flex items-center justify-between gap-3 flex-wrap p-3 bg-bg-secondary border border-amber-400/40 rounded-lg text-xs">
+              <div key={s.id} className="flex items-center justify-between gap-3 flex-wrap p-3 bg-bg-secondary border border-status-warn/40 rounded-card text-body">
                 <div className="flex items-center gap-2">
-                  <Clock size={14} className="text-amber-400" />
+                  <Clock size={14} className="text-status-warn" />
                   <span className="text-text-primary">
                     <strong>{s.titularName}</strong> — expirada · {s.categorizedCount}/{s.transactionIds.length} categorizadas
                     {pending > 0 && ` · ${pending} pendente${pending !== 1 ? 's' : ''}`}
@@ -569,14 +569,14 @@ export function TransactionsPage() {
                     <button
                       onClick={() => handleApplySession(s.id)}
                       disabled={applyingSession === s.id}
-                      className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded hover:opacity-90 disabled:opacity-50"
+                      className="px-3 py-1.5 bg-accent text-bg-primary font-bold rounded-control hover:opacity-90 disabled:opacity-50"
                     >
                       {applyingSession === s.id ? 'Aplicando...' : 'Aplicar parciais'}
                     </button>
                   )}
                   <button
                     onClick={() => handleReopenSession(s.id)}
-                    className="flex items-center gap-1 px-3 py-1.5 bg-bg-card border border-border text-text-primary font-bold rounded hover:bg-elevated"
+                    className="flex items-center gap-1 px-3 py-1.5 bg-bg-card border border-border text-text-primary font-bold rounded-control hover:bg-elevated"
                     title="Reabrir por mais 48h — o link volta a funcionar"
                   >
                     <RotateCcw size={12} /> Reabrir 48h

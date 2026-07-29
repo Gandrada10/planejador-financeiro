@@ -63,9 +63,9 @@ export function CategorizationHistoryModal({ session, categories, onClose }: Pro
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-lg w-full max-w-3xl max-h-[90vh] flex flex-col">
+      <div className="bg-bg-card border border-border rounded-card w-full max-w-3xl max-h-[90vh] flex flex-col">
         <div className="flex items-center justify-between p-4 border-b border-border">
-          <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+          <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
             <History size={16} className="text-accent" />
             Detalhes da sessão
           </h3>
@@ -74,33 +74,33 @@ export function CategorizationHistoryModal({ session, categories, onClose }: Pro
           </button>
         </div>
 
-        <div className="p-4 border-b border-border grid grid-cols-2 md:grid-cols-3 gap-3 text-xs">
+        <div className="p-4 border-b border-border grid grid-cols-2 md:grid-cols-3 gap-3 text-body">
           <div>
-            <div className="text-[10px] text-text-secondary uppercase tracking-wider">Titular</div>
+            <div className="text-caption text-ink-3 uppercase tracking-wider">Titular</div>
             <div className="text-text-primary font-medium">{session.titularName}</div>
           </div>
           <div>
-            <div className="text-[10px] text-text-secondary uppercase tracking-wider">Período</div>
+            <div className="text-caption text-ink-3 uppercase tracking-wider">Período</div>
             <div className="text-text-primary font-medium">{periodLabel}</div>
           </div>
           <div>
-            <div className="text-[10px] text-text-secondary uppercase tracking-wider">Status</div>
+            <div className="text-caption text-ink-3 uppercase tracking-wider">Status</div>
             <div className="text-text-primary font-medium">{statusLabel(session)}</div>
           </div>
           <div className="md:col-span-2">
-            <div className="text-[10px] text-text-secondary uppercase tracking-wider">Contas</div>
+            <div className="text-caption text-ink-3 uppercase tracking-wider">Contas</div>
             <div className="text-text-primary font-medium">{accountsLabel}</div>
           </div>
           <div>
-            <div className="text-[10px] text-text-secondary uppercase tracking-wider">Enviado em</div>
+            <div className="text-caption text-ink-3 uppercase tracking-wider">Enviado em</div>
             <div className="text-text-primary font-medium">{formatDateTime(session.createdAt)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-text-secondary uppercase tracking-wider">Total enviado</div>
+            <div className="text-caption text-ink-3 uppercase tracking-wider">Total enviado</div>
             <div className="text-text-primary font-medium">{formatBRL(session.totalAmount)}</div>
           </div>
           <div>
-            <div className="text-[10px] text-text-secondary uppercase tracking-wider">Lançamentos</div>
+            <div className="text-caption text-ink-3 uppercase tracking-wider">Lançamentos</div>
             <div className="text-text-primary font-medium">
               {session.transactionIds.length} enviados • {session.categorizedCount} categorizados
               {session.status === 'applied' && ` • ${session.appliedCount} aplicados`}
@@ -108,7 +108,7 @@ export function CategorizationHistoryModal({ session, categories, onClose }: Pro
           </div>
           {session.lastActivityAt && (
             <div>
-              <div className="text-[10px] text-text-secondary uppercase tracking-wider">Última atividade</div>
+              <div className="text-caption text-ink-3 uppercase tracking-wider">Última atividade</div>
               <div className="text-text-primary font-medium">{formatDateTime(session.lastActivityAt)}</div>
             </div>
           )}
@@ -116,18 +116,18 @@ export function CategorizationHistoryModal({ session, categories, onClose }: Pro
 
         <div className="flex-1 overflow-auto">
           {error && (
-            <div className="p-4 text-xs text-accent-red">{error}</div>
+            <div className="p-4 text-body text-accent-red">{error}</div>
           )}
           {!error && items === null && (
-            <div className="p-4 text-xs text-text-secondary animate-pulse">Carregando lançamentos...</div>
+            <div className="p-4 text-body text-text-secondary animate-pulse">Carregando lançamentos...</div>
           )}
           {!error && items !== null && (
             <>
-              <div className="px-4 py-2 text-[11px] text-text-secondary border-b border-border">
+              <div className="px-4 py-2 text-caption text-text-secondary border-b border-border">
                 {items.length} lançamentos: {categorizedItems} categorizados • {uncategorizedItems} sem categoria
               </div>
-              <table className="w-full text-xs">
-                <thead className="text-[10px] uppercase tracking-wider text-text-secondary">
+              <table className="w-full text-body">
+                <thead className="text-caption uppercase tracking-wider text-ink-3">
                   <tr className="border-b border-border">
                     <th className="text-left px-4 py-2">Data</th>
                     <th className="text-left px-4 py-2">Descrição</th>
@@ -148,7 +148,7 @@ export function CategorizationHistoryModal({ session, categories, onClose }: Pro
                             <span className="text-text-secondary"> ({tx.installmentNumber}/{tx.totalInstallments})</span>
                           )}
                         </td>
-                        <td className={`px-4 py-2 text-right whitespace-nowrap ${tx.amount < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
+                        <td className={`px-4 py-2 text-right tnum whitespace-nowrap ${tx.amount < 0 ? 'text-accent-red' : 'text-accent-green'}`}>
                           {formatBRL(tx.amount)}
                         </td>
                         <td className="px-4 py-2">
@@ -160,7 +160,7 @@ export function CategorizationHistoryModal({ session, categories, onClose }: Pro
                           ) : tx.categoryId ? (
                             <span className="text-text-secondary italic">Categoria removida</span>
                           ) : (
-                            <span className="text-amber-400">Não categorizado</span>
+                            <span className="text-status-warn">Não categorizado</span>
                           )}
                         </td>
                         <td className="px-4 py-2 text-text-secondary">{tx.notes || '—'}</td>
@@ -176,7 +176,7 @@ export function CategorizationHistoryModal({ session, categories, onClose }: Pro
         <div className="p-3 border-t border-border flex justify-end">
           <button
             onClick={onClose}
-            className="px-4 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent"
+            className="px-4 py-1.5 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent"
           >
             Fechar
           </button>

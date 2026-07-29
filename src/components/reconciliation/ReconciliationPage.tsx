@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { CheckCircle, AlertTriangle, TrendingUp, Target } from 'lucide-react';
+import { CheckCircle } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useAccounts } from '../../hooks/useAccounts';
 import { useCategories } from '../../hooks/useCategories';
@@ -74,7 +74,7 @@ export function ReconciliationPage() {
   const progressPercent = totalCount > 0 ? Math.round((reconciledCount / totalCount) * 100) : 0;
 
   if (loading) {
-    return <div className="text-accent text-sm animate-pulse">Carregando conciliacao...</div>;
+    return <div className="text-accent text-body animate-pulse">Carregando conciliacao...</div>;
   }
 
   return (
@@ -88,11 +88,11 @@ export function ReconciliationPage() {
       {/* Account selector + statement balance */}
       <div className="flex gap-3 flex-wrap items-end">
         <div className="flex-1 min-w-[180px]">
-          <label className="block text-[10px] text-text-secondary uppercase tracking-wider mb-1">Conta</label>
+          <label className="block text-caption text-ink-3 uppercase tracking-wider mb-1">Conta</label>
           <select
             value={selectedAccount}
             onChange={(e) => setSelectedAccount(e.target.value)}
-            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
           >
             <option value="">Selecione uma conta...</option>
             {accounts.map((a) => (
@@ -102,14 +102,14 @@ export function ReconciliationPage() {
         </div>
 
         <div className="min-w-[160px]">
-          <label className="block text-[10px] text-text-secondary uppercase tracking-wider mb-1">Saldo do Extrato</label>
+          <label className="block text-caption text-ink-3 uppercase tracking-wider mb-1">Saldo do Extrato</label>
           <input
             type="text"
             inputMode="decimal"
             value={statementBalance}
             onChange={(e) => setStatementBalance(applyMoneyMask(e.target.value))}
             placeholder="Ex: -1234,56"
-            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-xs focus:outline-none focus:border-accent"
+            className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
           />
         </div>
 
@@ -117,13 +117,13 @@ export function ReconciliationPage() {
           <div className="flex gap-2">
             <button
               onClick={handleReconcileAll}
-              className="px-3 py-2 bg-accent-green/10 text-accent-green text-xs rounded hover:bg-accent-green/20 transition-colors"
+              className="px-3 py-2 bg-accent-green/10 text-accent-green text-body rounded-control hover:bg-accent-green/20 transition-colors"
             >
               Conciliar Tudo
             </button>
             <button
               onClick={handleUnreconcileAll}
-              className="px-3 py-2 bg-bg-secondary border border-border text-text-secondary text-xs rounded hover:border-accent transition-colors"
+              className="px-3 py-2 bg-bg-secondary border border-border text-text-secondary text-body rounded-control hover:border-accent transition-colors"
             >
               Limpar Tudo
             </button>
@@ -131,61 +131,47 @@ export function ReconciliationPage() {
         )}
       </div>
 
-      {/* Summary cards */}
+      {/* Summary cards — padrão de tile do VitalSigns: rótulo → número-herói */}
       {selectedAccount && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Total Sistema */}
-          <div className="bg-bg-card border border-border rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <TrendingUp size={12} className="text-text-secondary" />
-              <span className="text-[10px] text-text-secondary uppercase tracking-wider">Total Sistema</span>
-            </div>
-            <span className={`text-sm font-bold ${systemTotal >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
+          <div className="bg-bg-card border border-border rounded-card px-3 py-3 flex flex-col gap-1 min-w-0">
+            <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 leading-tight">Total Sistema</span>
+            <span className={`text-[21px] font-bold tracking-tight tnum leading-none truncate ${systemTotal >= 0 ? 'text-positive' : 'text-negative'}`}>
               {formatBRL(systemTotal)}
             </span>
           </div>
 
           {/* Saldo Extrato */}
-          <div className="bg-bg-card border border-border rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Target size={12} className="text-text-secondary" />
-              <span className="text-[10px] text-text-secondary uppercase tracking-wider">Saldo Extrato</span>
-            </div>
-            <span className="text-sm font-bold text-text-primary">
+          <div className="bg-bg-card border border-border rounded-card px-3 py-3 flex flex-col gap-1 min-w-0">
+            <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 leading-tight">Saldo Extrato</span>
+            <span className="text-[21px] font-bold tracking-tight tnum leading-none truncate text-text-primary">
               {parsedBalance !== null && !isNaN(parsedBalance) ? formatBRL(parsedBalance) : '—'}
             </span>
           </div>
 
           {/* Divergencia */}
-          <div className="bg-bg-card border border-border rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle size={12} className="text-text-secondary" />
-              <span className="text-[10px] text-text-secondary uppercase tracking-wider">Divergencia</span>
-            </div>
+          <div className="bg-bg-card border border-border rounded-card px-3 py-3 flex flex-col gap-1 min-w-0">
+            <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 leading-tight">Divergencia</span>
             {divergence !== null ? (
-              <span className={`text-sm font-bold ${Math.abs(divergence) < 0.01 ? 'text-accent-green' : 'text-accent-red'}`}>
+              <span className={`text-[21px] font-bold tracking-tight tnum leading-none truncate ${Math.abs(divergence) < 0.01 ? 'text-positive' : 'text-negative'}`}>
                 {formatBRL(divergence)}
               </span>
             ) : (
-              <span className="text-sm font-bold text-text-secondary">—</span>
+              <span className="text-[21px] font-bold tracking-tight tnum leading-none text-text-secondary">—</span>
             )}
           </div>
 
           {/* Progresso */}
-          <div className="bg-bg-card border border-border rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle size={12} className="text-text-secondary" />
-              <span className="text-[10px] text-text-secondary uppercase tracking-wider">Progresso</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-text-primary">
-                {reconciledCount}/{totalCount}
-              </span>
-              <span className="text-[10px] text-text-secondary">({progressPercent}%)</span>
-            </div>
-            <div className="mt-1.5 h-1.5 bg-bg-secondary rounded-full overflow-hidden">
+          <div className="bg-bg-card border border-border rounded-card px-3 py-3 flex flex-col gap-1 min-w-0">
+            <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 leading-tight">Progresso</span>
+            <span className="text-[21px] font-bold tracking-tight tnum leading-none truncate text-text-primary">
+              {reconciledCount}/{totalCount}
+              <span className="text-caption font-medium text-text-secondary tracking-normal"> ({progressPercent}%)</span>
+            </span>
+            <div className="h-1.5 bg-bg-secondary rounded-full overflow-hidden">
               <div
-                className="h-full bg-accent-green rounded-full transition-all"
+                className="h-full bg-positive rounded-full transition-all"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -207,7 +193,7 @@ export function ReconciliationPage() {
               <button
                 key={status}
                 onClick={() => setFilterStatus(status)}
-                className={`px-3 py-1.5 text-xs rounded transition-colors ${
+                className={`px-3 py-1.5 text-body rounded-control transition-colors ${
                   filterStatus === status
                     ? 'bg-accent/10 text-accent border border-accent/30'
                     : 'bg-bg-secondary border border-border text-text-secondary hover:text-text-primary'
@@ -222,10 +208,10 @@ export function ReconciliationPage() {
 
       {/* Empty state */}
       {!selectedAccount && (
-        <div className="bg-bg-card border border-border rounded-lg p-8 text-center">
+        <div className="bg-bg-card border border-border rounded-card p-10 text-center">
           <CheckCircle size={32} className="mx-auto mb-3 text-text-secondary" />
-          <p className="text-sm text-text-secondary">Selecione uma conta para iniciar a conciliacao.</p>
-          <p className="text-xs text-text-secondary mt-1">
+          <p className="text-body text-text-secondary">Selecione uma conta para iniciar a conciliacao.</p>
+          <p className="text-caption text-text-secondary mt-1">
             Compare as transacoes do sistema com seu extrato bancario fisico.
           </p>
         </div>

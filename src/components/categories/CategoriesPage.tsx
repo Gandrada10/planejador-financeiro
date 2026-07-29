@@ -152,10 +152,10 @@ export function CategoriesPage() {
     setKeywordInput('');
   }
 
-  if (loading) return <div className="text-accent text-sm animate-pulse">Carregando...</div>;
+  if (loading) return <div className="text-accent text-body animate-pulse">Carregando...</div>;
 
-  const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded text-text-primary text-sm focus:outline-none focus:border-accent';
-  const labelClass = 'block text-[10px] text-text-secondary mb-1 uppercase tracking-wider';
+  const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent';
+  const labelClass = 'block text-caption text-text-secondary mb-1 uppercase tracking-wider';
 
   return (
     <div className="space-y-6">
@@ -170,15 +170,15 @@ export function CategoriesPage() {
               if (result) alert(`Sincronizado! ${result.added} adicionadas, ${result.updated} atualizadas.`);
             }}
             disabled={syncing}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent disabled:opacity-50"
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent disabled:opacity-50"
           >
             <RefreshCw size={14} className={syncing ? 'animate-spin' : ''} /> {syncing ? 'Sincronizando...' : 'Sincronizar'}
           </button>
-          <button onClick={() => setShowRulesModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent">
+          <button onClick={() => setShowRulesModal(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent">
             <Zap size={14} /> Regras de Categorias
-            <span className="text-[10px] text-text-secondary">({rules.length})</span>
+            <span className="text-caption text-text-secondary">({rules.length})</span>
           </button>
-          <button onClick={() => { setParentId(''); setShowForm(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90">
+          <button onClick={() => { setParentId(''); setShowForm(true); }} className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90">
             <Plus size={14} /> Nova Categoria
           </button>
         </div>
@@ -186,7 +186,7 @@ export function CategoriesPage() {
 
       {/* Categories grid — tabs for Despesas / Receitas */}
       {rootCategories.length === 0 ? (
-        <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
+        <div className="bg-bg-card border border-border rounded-card p-6 text-center text-text-secondary text-body">
           Nenhuma categoria. Crie categorias para organizar suas transações.
         </div>
       ) : (
@@ -204,7 +204,7 @@ export function CategoriesPage() {
                 <button
                   key={key}
                   onClick={() => setActiveTab(key)}
-                  className={`flex items-center gap-2 px-4 py-2.5 text-sm font-bold border-b-2 transition-colors -mb-px ${
+                  className={`flex items-center gap-2 px-4 py-2.5 text-body font-bold border-b-2 transition-colors -mb-px ${
                     activeTab === key
                       ? activeColor
                       : 'border-transparent text-text-secondary hover:text-text-primary'
@@ -212,7 +212,7 @@ export function CategoriesPage() {
                 >
                   <span className={`w-2 h-2 rounded-full ${dotColor}`} />
                   {label}
-                  <span className="text-[10px] text-text-secondary font-normal">({count})</span>
+                  <span className="text-caption text-text-secondary font-normal">({count})</span>
                 </button>
               );
             })}
@@ -225,7 +225,7 @@ export function CategoriesPage() {
               .map((cat) => {
                 const subs = subCategories(cat.id);
                 return (
-                  <div key={cat.id} className="bg-bg-card border border-border rounded-lg overflow-hidden">
+                  <div key={cat.id} className="bg-bg-card border border-border rounded-card overflow-hidden">
                     {/* Parent row */}
                     <div
                       className="flex items-center gap-2 px-3 py-1.5 cursor-pointer hover:bg-bg-secondary/40 transition-colors"
@@ -233,16 +233,16 @@ export function CategoriesPage() {
                     >
                       <CategoryIcon icon={cat.icon} size={18} className="flex-shrink-0" style={{ color: cat.color }} />
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        <span className="text-xs text-text-primary truncate">{cat.name}</span>
+                        <span className="text-body text-text-primary truncate">{cat.name}</span>
                         {cat.type === 'ambos' && (
-                          <span className="text-[9px] text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded uppercase tracking-wider">ambos</span>
+                          <span className="text-caption text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded uppercase tracking-wider">ambos</span>
                         )}
-                        <span className="text-[10px] text-text-secondary flex-shrink-0">{subs.length} subcategorias</span>
+                        <span className="text-caption text-text-secondary flex-shrink-0">{subs.length} subcategorias</span>
                       </div>
                       <button
                         onClick={(e) => { e.stopPropagation(); startNewSub(cat.id); }}
                         title="Nova subcategoria"
-                        className="text-text-secondary hover:text-accent p-1 text-xs"
+                        className="text-text-secondary hover:text-accent p-1 text-body"
                       >
                         <Plus size={14} />
                       </button>
@@ -263,7 +263,7 @@ export function CategoriesPage() {
                       >
                         <ChevronRight size={12} className="text-text-secondary flex-shrink-0" />
                         <CategoryIcon icon={sub.icon} size={14} className="flex-shrink-0" style={{ color: sub.color }} />
-                        <span className="flex-1 text-xs text-text-primary truncate min-w-0">{sub.name}</span>
+                        <span className="flex-1 text-body text-text-primary truncate min-w-0">{sub.name}</span>
                         <button
                           onClick={(e) => { e.stopPropagation(); handleDeleteCategory(sub); }}
                           className="text-text-secondary hover:text-accent-red p-1"
@@ -276,7 +276,7 @@ export function CategoriesPage() {
                 );
               })}
             {rootCategories.filter((c) => c.type === activeTab || c.type === 'ambos').length === 0 && (
-              <div className="bg-bg-card border border-border rounded-lg p-6 text-center text-text-secondary text-sm">
+              <div className="bg-bg-card border border-border rounded-card p-6 text-center text-text-secondary text-body">
                 Nenhuma categoria de {activeTab === 'despesa' ? 'despesa' : 'receita'}.
               </div>
             )}
@@ -287,16 +287,16 @@ export function CategoriesPage() {
       {/* Rules modal */}
       {showRulesModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-40 p-4">
-          <div className="bg-bg-card border border-border rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col">
+          <div className="bg-bg-card border border-border rounded-card w-full max-w-2xl max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-sm font-bold text-text-primary flex items-center gap-2">
+              <h3 className="text-title font-semibold text-text-primary flex items-center gap-2">
                 <Zap size={16} className="text-accent" /> Regras de Auto-categorizacao
-                <span className="text-[10px] text-text-secondary font-normal">({rules.length})</span>
+                <span className="text-caption text-text-secondary font-normal">({rules.length})</span>
               </h3>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => { resetRuleForm(); setShowRuleForm(true); }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-xs font-bold rounded hover:opacity-90"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90"
                 >
                   <Plus size={14} /> Nova Regra
                 </button>
@@ -304,7 +304,7 @@ export function CategoriesPage() {
               </div>
             </div>
             <div className="flex-1 overflow-auto p-4">
-              <p className="text-xs text-text-secondary mb-3">
+              <p className="text-body text-text-secondary mb-3">
                 Quando uma transacao importada contem o padrao, ela e categorizada automaticamente. Use * como curinga: *UBER* reconhece qualquer texto com "UBER".
               </p>
               {rules.length > 0 ? (
@@ -313,7 +313,7 @@ export function CategoriesPage() {
                     const cat = categories.find((c) => c.id === rule.categoryId);
                     const parent = cat?.parentId ? categories.find((c) => c.id === cat.parentId) : null;
                     return (
-                      <div key={rule.id} className="flex items-center gap-2 bg-bg-secondary/40 border border-border rounded p-2 text-xs">
+                      <div key={rule.id} className="flex items-center gap-2 bg-bg-secondary/40 border border-border rounded p-2 text-body">
                         <code className="text-accent bg-bg-secondary px-2 py-0.5 rounded flex-shrink-0">{rule.pattern}</code>
                         {rule.keywords?.length > 0 && rule.keywords.map((kw, i) => (
                           <code key={i} className="text-text-secondary bg-bg-secondary px-1.5 py-0.5 rounded flex-shrink-0">{kw}</code>
@@ -339,7 +339,7 @@ export function CategoriesPage() {
                   })}
                 </div>
               ) : (
-                <div className="border border-border rounded-lg p-6 text-center text-text-secondary text-xs">
+                <div className="border border-border rounded-card p-6 text-center text-text-secondary text-body">
                   Nenhuma regra. Clique em "Nova Regra" para criar a primeira.
                 </div>
               )}
@@ -351,9 +351,9 @@ export function CategoriesPage() {
       {/* Category form modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-bg-card border border-border rounded-lg w-full max-w-md">
+          <div className="bg-bg-card border border-border rounded-card w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-sm font-bold text-text-primary">
+              <h3 className="text-title font-semibold text-text-primary">
                 {editingId ? 'Editar' : 'Nova'} {parentId ? 'Subcategoria' : 'Categoria'}
               </h3>
               <button onClick={resetForm} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
@@ -382,7 +382,7 @@ export function CategoriesPage() {
                 <div className="flex gap-2">
                   {(['despesa', 'receita', 'ambos'] as const).map((t) => (
                     <button key={t} tabIndex={3} type="button" onClick={() => setType(t)}
-                      className={`flex-1 py-1.5 text-xs rounded ${type === t ? 'bg-accent text-bg-primary font-bold' : 'bg-bg-secondary text-text-secondary'}`}>
+                      className={`flex-1 py-1.5 text-body rounded-control ${type === t ? 'bg-accent text-bg-primary font-bold' : 'bg-bg-secondary text-text-secondary'}`}>
                       {t}
                     </button>
                   ))}
@@ -393,7 +393,7 @@ export function CategoriesPage() {
                 <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
                   {ICON_KEYS.map((ic) => (
                     <button key={ic} tabIndex={4} type="button" onClick={() => setIcon(ic)}
-                      className={`w-8 h-8 rounded flex items-center justify-center ${icon === ic ? 'bg-accent/20 ring-1 ring-accent' : 'bg-bg-secondary hover:bg-bg-secondary/80'}`}>
+                      className={`w-8 h-8 rounded-control flex items-center justify-center ${icon === ic ? 'bg-accent/20 ring-1 ring-accent' : 'bg-bg-secondary hover:bg-bg-secondary/80'}`}>
                       <CategoryIcon icon={ic} size={16} className="text-text-primary" />
                     </button>
                   ))}
@@ -409,7 +409,7 @@ export function CategoriesPage() {
                   ))}
                 </div>
               </div>
-              <button tabIndex={6} type="submit" className="w-full py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90">
+              <button tabIndex={6} type="submit" className="w-full py-2 bg-accent text-bg-primary font-bold text-body rounded-control hover:opacity-90">
                 {editingId ? 'Salvar' : 'Criar'}
               </button>
             </form>
@@ -420,9 +420,9 @@ export function CategoriesPage() {
       {/* Rule form modal */}
       {showRuleForm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-bg-card border border-border rounded-lg w-full max-w-md">
+          <div className="bg-bg-card border border-border rounded-card w-full max-w-md">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-sm font-bold text-text-primary">{editingRuleId ? 'Editar' : 'Nova'} Regra de Auto-categorizacao</h3>
+              <h3 className="text-title font-semibold text-text-primary">{editingRuleId ? 'Editar' : 'Nova'} Regra de Auto-categorizacao</h3>
               <button onClick={resetRuleForm} className="text-text-secondary hover:text-text-primary"><X size={18} /></button>
             </div>
             <form onSubmit={handleSaveRule} className="p-4 space-y-3">
@@ -430,7 +430,7 @@ export function CategoriesPage() {
                 <label className={labelClass}>Padrao principal (use * como curinga)</label>
                 <input tabIndex={1} type="text" value={rulePattern} onChange={(e) => setRulePattern(e.target.value)}
                   className={inputClass} placeholder="*UBER*" required autoFocus />
-                <p className="text-[10px] text-text-secondary mt-1">Ex: *UBER* reconhece "UBER TRIP", "PAG UBER", etc.</p>
+                <p className="text-caption text-text-secondary mt-1">Ex: *UBER* reconhece "UBER TRIP", "PAG UBER", etc.</p>
               </div>
               <div>
                 <label className={labelClass}>Palavras alternativas</label>
@@ -444,14 +444,14 @@ export function CategoriesPage() {
                     className={inputClass}
                     placeholder="uber do brasil"
                   />
-                  <button type="button" onClick={addKeyword} className="px-3 py-2 bg-bg-secondary border border-border text-text-primary text-xs rounded hover:border-accent flex-shrink-0">
+                  <button type="button" onClick={addKeyword} className="px-3 py-2 bg-bg-secondary border border-border text-text-primary text-body rounded-control hover:border-accent flex-shrink-0">
                     <Plus size={14} />
                   </button>
                 </div>
                 {ruleKeywords.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mt-2">
                     {ruleKeywords.map((kw, i) => (
-                      <span key={i} className="flex items-center gap-1 bg-bg-secondary text-text-primary text-xs px-2 py-0.5 rounded">
+                      <span key={i} className="flex items-center gap-1 bg-bg-secondary text-text-primary text-caption px-2 py-0.5 rounded">
                         {kw}
                         <button type="button" onClick={() => setRuleKeywords(ruleKeywords.filter((_, j) => j !== i))} className="text-text-secondary hover:text-accent-red">
                           <X size={10} />
@@ -460,7 +460,7 @@ export function CategoriesPage() {
                     ))}
                   </div>
                 )}
-                <p className="text-[10px] text-text-secondary mt-1">Palavras alternativas que tambem ativam esta regra. Pressione Enter para adicionar.</p>
+                <p className="text-caption text-text-secondary mt-1">Palavras alternativas que tambem ativam esta regra. Pressione Enter para adicionar.</p>
               </div>
               <div>
                 <label className={labelClass}>Categoria</label>
@@ -479,7 +479,7 @@ export function CategoriesPage() {
                   })}
                 </select>
               </div>
-              <button tabIndex={4} type="submit" className="w-full py-2 bg-accent text-bg-primary font-bold text-sm rounded hover:opacity-90">
+              <button tabIndex={4} type="submit" className="w-full py-2 bg-accent text-bg-primary font-bold text-body rounded-control hover:opacity-90">
                 {editingRuleId ? 'Salvar' : 'Criar Regra'}
               </button>
             </form>
