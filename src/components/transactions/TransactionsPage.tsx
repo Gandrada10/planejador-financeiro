@@ -41,7 +41,9 @@ export function TransactionsPage() {
   // mostraria zero lançamentos e pareceria bug.
   const [filterMonth, setFilterMonth] = useState(() => searchParams.get('mes') || getMonthYear());
   const [filterTitular, setFilterTitular] = useState('all');
-  const [filterCategory, setFilterCategory] = useState('all');
+  // 'all' | 'uncategorized' | categoryId. Nasce do querystring para o aviso de
+  // cobertura do dashboard ("R$ X sem categoria") ter para onde levar.
+  const [filterCategory, setFilterCategory] = useState(() => searchParams.get('categoria') || 'all');
   const [filterAccount, setFilterAccount] = useState('all');
   // Filtro por projeto — 'all' | 'none' (sem projeto) | projectId. Nasce do
   // querystring para a aba Projetos poder abrir esta tela já escopada num

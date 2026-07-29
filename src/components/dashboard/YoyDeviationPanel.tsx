@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { ALL_MONTHS } from '../shared/MonthSelector';
 import {
   formatBRL0,
   countsInTotals,
@@ -22,10 +24,20 @@ const UNCATEGORIZED_ID = '__uncategorized';
 const UNCATEGORIZED_NAME = 'Sem categoria';
 const UNCATEGORIZED_COLOR = '#737373';
 
+/** Linha-filha que devolve o que foi lançado direto na categoria-mãe. */
+const DIRECT_SUFFIX = '__direct';
+const DIRECT_NAME = 'Sem subcategoria';
+
 /** Barras visíveis antes do "ver todas" — o resto vira uma linha agregada. */
 const TOP_N = 8;
 /** Abaixo disso a variação é ruído contábil e só alonga o card. */
 const MIN_DELTA = 1;
+/** Fração dos meses comparados a partir da qual um gasto é "de todo mês". */
+const CADENCE_SHARE = 0.6;
+/** Janela mínima para a cadência significar algo: em 1–3 meses, "apareceu em
+ *  2 de 3" não separa o mensal do eventual, e o rótulo enganaria mais do que
+ *  informaria. */
+const CADENCE_MIN_MONTHS = 4;
 
 type GroupKey = 'expenses' | 'income' | 'resultado';
 
@@ -73,11 +85,28 @@ export function YoyDeviationPanel({
     const [y, m] = monthYear.split('-').map(Number);
     const prevYear = y - 1;
 
-    type Bucket = {
-      curr: number;
-      prev: number;
-      subs: Map<string, { curr: number; prev: number }>;
+    /**
+     * Além do dinheiro, os MESES em que a categoria apareceu — é o que separa
+     * "aluguel todo mês" de "obra em março". Sem cadência, o card soma um
+     * reajuste permanente com um gasto de uma vez só e chama os dois de
+     * aumento.
+     */
+    type Slice = { curr: number; prev: number; mCurr: Set<number>; mPrev: Set<number> };
+    const newSlice = (): Slice => ({ curr: 0, prev: 0, mCurr: new Set(), mPrev: new Set() });
+    const addTo = (s: Slice, amt: number, isCurr: boolean, month: number) => {
+      if (isCurr) {
+        s.curr += amt;
+        s.mCurr.add(month);
+      } else {
+        s.prev += amt;
+        s.mPrev.add(month);
+      }
     };
+
+    // `direct` = lançado na própria mãe, sem subcategoria. Guardado à parte
+    // (em vez de deduzido de total − subs) porque também precisa dos meses
+    // dele para ser classificado como qualquer outra folha.
+    type Bucket = { total: Slice; direct: Slice; subs: Map<string, Slice> };
 
     const expMap = new Map<string, Bucket>();
     const incMap = new Map<string, Bucket>();
@@ -109,19 +138,16 @@ export function YoyDeviationPanel({
       const targetMap = isIncome ? incMap : expMap;
 
       if (!targetMap.has(parentId)) {
-        targetMap.set(parentId, { curr: 0, prev: 0, subs: new Map() });
+        targetMap.set(parentId, { total: newSlice(), direct: newSlice(), subs: new Map() });
       }
       const bucket = targetMap.get(parentId)!;
-      if (isCurr) bucket.curr += amt;
-      else bucket.prev += amt;
+      addTo(bucket.total, amt, isCurr, tm);
 
       if (cat?.parentId) {
-        if (!bucket.subs.has(catId)) {
-          bucket.subs.set(catId, { curr: 0, prev: 0 });
-        }
-        const sub = bucket.subs.get(catId)!;
-        if (isCurr) sub.curr += amt;
-        else sub.prev += amt;
+        if (!bucket.subs.has(catId)) bucket.subs.set(catId, newSlice());
+        addTo(bucket.subs.get(catId)!, amt, isCurr, tm);
+      } else {
+        addTo(bucket.direct, amt, isCurr, tm);
       }
 
       if (isIncome) {
@@ -145,37 +171,59 @@ export function YoyDeviationPanel({
       };
     }
 
+    /**
+     * Recorrente = apareceu em pelo menos 60% dos meses comparados, no ano em
+     * que esteve mais presente (uma despesa que rodava todo mês em 2025 e
+     * sumiu em 2026 é uma queda de BASE, não um evento).
+     *
+     * Vale só para a FOLHA — subcategoria ou lançamento direto na mãe. Julgar
+     * a mãe misturaria o aluguel de todo mês com a obra de março e devolveria
+     * "Moradia é recorrente", que é verdade sobre a categoria e mentira sobre
+     * o que moveu o número.
+     */
+    const isRecurring = (s: Slice) =>
+      Math.max(s.mCurr.size, s.mPrev.size) >= Math.ceil(m * CADENCE_SHARE);
+
+    const toLeaf = (id: string, s: Slice, meta: ReturnType<typeof resolveCategoryMeta>) => ({
+      id,
+      name: meta.name,
+      icon: meta.icon,
+      color: meta.color,
+      curr: s.curr,
+      prev: s.prev,
+      varianceAbs: s.curr - s.prev,
+      pct: computePct(s.curr, s.prev),
+      recurring: isRecurring(s),
+    });
+
     function buildItems(map: Map<string, Bucket>): YoyItem[] {
       const items: YoyItem[] = [];
       for (const [parentId, bucket] of map.entries()) {
-        if (bucket.curr === 0 && bucket.prev === 0) continue;
+        if (bucket.total.curr === 0 && bucket.total.prev === 0) continue;
         const meta = resolveCategoryMeta(parentId);
-        const varianceAbs = bucket.curr - bucket.prev;
         const subs: YoySubItem[] = [];
-        for (const [subId, subVals] of bucket.subs.entries()) {
-          if (subVals.curr === 0 && subVals.prev === 0) continue;
-          const subMeta = resolveCategoryMeta(subId);
-          subs.push({
-            id: subId,
-            name: subMeta.name,
-            icon: subMeta.icon,
-            color: subMeta.color,
-            curr: subVals.curr,
-            prev: subVals.prev,
-            varianceAbs: subVals.curr - subVals.prev,
-            pct: computePct(subVals.curr, subVals.prev),
-          });
+        for (const [subId, subSlice] of bucket.subs.entries()) {
+          if (subSlice.curr === 0 && subSlice.prev === 0) continue;
+          subs.push(toLeaf(subId, subSlice, resolveCategoryMeta(subId)));
         }
+
+        // RESÍDUO: lançamento feito DIRETO na categoria-mãe soma no total dela
+        // mas não vira `sub` nenhum (só subcategoria vira). Sem esta linha a
+        // expansão não fechava com a barra de cima — o caso real era Moradia
+        // −12.778 na mãe contra +6.030 somando as filhas, com R$ 18,8 mil
+        // invisíveis. Ela existe para a decomposição ser EXAUSTIVA por
+        // construção, não por sorte de o usuário sempre usar subcategoria.
+        // (Só quando há subcategorias: sem elas a mãe já É a folha.)
+        const { direct } = bucket;
+        if (subs.length > 0 && (Math.abs(direct.curr) >= 0.005 || Math.abs(direct.prev) >= 0.005)) {
+          subs.push(
+            toLeaf(`${parentId}${DIRECT_SUFFIX}`, direct, { ...meta, name: DIRECT_NAME }),
+          );
+        }
+
         subs.sort((a, b) => Math.abs(b.varianceAbs) - Math.abs(a.varianceAbs));
         items.push({
-          id: parentId,
-          name: meta.name,
-          icon: meta.icon,
-          color: meta.color,
-          curr: bucket.curr,
-          prev: bucket.prev,
-          varianceAbs,
-          pct: computePct(bucket.curr, bucket.prev),
+          ...toLeaf(parentId, bucket.total, meta),
           subs,
         });
       }
@@ -193,9 +241,11 @@ export function YoyDeviationPanel({
     function pushWithImpact(item: YoyItem, sign: 1 | -1) {
       const resultadoImpact = sign * item.varianceAbs;
       if (Math.abs(resultadoImpact) < 1) return;
+      // Sem filtrar por MIN_DELTA aqui: a lista de folhas precisa ficar
+      // COMPLETA para a soma recorrente+pontual bater com o efeito líquido.
+      // Quem esconde folha irrelevante é a montagem das barras, lá embaixo.
       const subs = item.subs
         .map((s) => ({ ...s, resultadoImpact: sign * s.varianceAbs }))
-        .filter((s) => Math.abs(s.resultadoImpact!) >= 1)
         .sort((a, b) => Math.abs(b.resultadoImpact!) - Math.abs(a.resultadoImpact!));
       const entry: YoyItem = { ...item, resultadoImpact, subs };
       if (resultadoImpact > 0) resultadoHelping.push(entry);
@@ -255,6 +305,15 @@ export function YoyDeviationPanel({
       resultadoHelping,
       resultadoHurting,
       monthName,
+      cadenceReliable: m >= CADENCE_MIN_MONTHS,
+      cadenceMonths: Math.ceil(m * CADENCE_SHARE),
+      windowMonths: m,
+      // Dinheiro sem classificação não é uma categoria como as outras: é o
+      // tamanho do buraco na análise. Fica fora das barras, num aviso.
+      uncategorized: {
+        expenses: expMap.get(UNCATEGORIZED_ID)?.total ?? null,
+        income: incMap.get(UNCATEGORIZED_ID)?.total ?? null,
+      },
     };
   }, [transactions, categories, monthYear]);
   function toggle(key: string) {
@@ -273,7 +332,18 @@ export function YoyDeviationPanel({
   const bars = useMemo(() => {
     const toBar = (it: YoyItem | YoySubItem, harmSign: 1 | -1) => {
       const delta = activeGroup === 'resultado' ? (it.resultadoImpact ?? 0) : it.varianceAbs;
-      return { id: it.id, name: it.name, color: it.color, delta, harm: harmSign * delta };
+      return {
+        id: it.id,
+        name: it.name,
+        color: it.color,
+        delta,
+        harm: harmSign * delta,
+        // Base dos dois anos: sem ela "+R$ 7.163" não distingue uma deriva de
+        // 5% de uma explosão de 10×, que pedem decisões opostas.
+        curr: it.curr,
+        prev: it.prev,
+        recurring: it.recurring ?? false,
+      };
     };
 
     const items: YoyItem[] =
@@ -288,10 +358,19 @@ export function YoyDeviationPanel({
     const sign: 1 | -1 = activeGroup === 'expenses' ? 1 : -1;
 
     return items
-      .map((it) => ({
-        ...toBar(it, sign),
-        subs: it.subs.map((s) => toBar(s, sign)).filter((s) => Math.abs(s.delta) >= MIN_DELTA),
-      }))
+      .map((it) => {
+        const subs = it.subs.map((s) => toBar(s, sign));
+        return {
+          ...toBar(it, sign),
+          // Folhas: a decomposição completa da barra (subcategorias +
+          // lançamento direto), ou ela mesma quando não tem filha. É sobre
+          // esta lista — e não sobre as mães — que a cadência é somada, e por
+          // ser completa (sem MIN_DELTA) ela fecha exatamente no líquido.
+          leaves: subs.length > 0 ? subs : [toBar(it, sign)],
+          isLeaf: subs.length === 0,
+          subs: subs.filter((s) => Math.abs(s.delta) >= MIN_DELTA),
+        };
+      })
       .filter((b) => Math.abs(b.delta) >= MIN_DELTA)
       .sort((a, b) => Math.abs(b.harm) - Math.abs(a.harm));
   }, [activeGroup, data]);
@@ -305,6 +384,32 @@ export function YoyDeviationPanel({
   const max = Math.max(...bars.map((b) => Math.abs(b.delta)), 1);
 
   const currentYear = monthYear.split('-')[0];
+
+  // Aviso de cobertura. O grupo Resultado usa o balde de DESPESA: é onde o
+  // não-classificado vive na prática, e a fração sobre um saldo (que pode ser
+  // negativo) não teria leitura.
+  const uncatGroup: 'expenses' | 'income' = activeGroup === 'income' ? 'income' : 'expenses';
+  const uncatBucket =
+    uncatGroup === 'income' ? data.uncategorized.income : data.uncategorized.expenses;
+  const uncatCurr = uncatBucket?.curr ?? 0;
+  const uncatTotal = data.totals[uncatGroup].curr;
+  const uncatShare = uncatTotal > 0 ? (uncatCurr / uncatTotal) * 100 : null;
+
+  // A pergunta de planejamento que o card não respondia: dos +R$ 82 mil,
+  // quanto volta no semestre que vem? Só a parte que roda todo mês. Some
+  // sobre as FOLHAS (subcategoria / lançamento direto), nunca sobre as mães.
+  const cadence = useMemo(() => {
+    if (!data.cadenceReliable) return null;
+    let recorrente = 0;
+    let pontual = 0;
+    for (const b of bars) {
+      for (const leaf of b.leaves) {
+        if (leaf.recurring) recorrente += leaf.delta;
+        else pontual += leaf.delta;
+      }
+    }
+    return { recorrente, pontual };
+  }, [bars, data.cadenceReliable]);
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
@@ -373,6 +478,11 @@ export function YoyDeviationPanel({
                     delta={b.delta}
                     harm={b.harm}
                     max={max}
+                    curr={b.curr}
+                    prev={b.prev}
+                    prevYear={data.prevYear}
+                    currYear={currentYear}
+                    oneOff={!!cadence && b.isLeaf && !b.recurring}
                     open={open}
                     onToggle={b.subs.length > 0 ? () => toggle(b.id) : undefined}
                   />
@@ -385,6 +495,11 @@ export function YoyDeviationPanel({
                         delta={s.delta}
                         harm={s.harm}
                         max={max}
+                        curr={s.curr}
+                        prev={s.prev}
+                        prevYear={data.prevYear}
+                        currYear={currentYear}
+                        oneOff={!!cadence && !s.recurring}
                         sub
                       />
                     ))}
@@ -417,13 +532,49 @@ export function YoyDeviationPanel({
             )}
           </div>
 
-          <p className="text-caption text-ink-3 pt-1 border-t border-border">
-            Efeito líquido:{' '}
-            <span className={`tnum ${netTone(netDelta, group.higherIsBetter)}`}>
-              {signed0(netDelta)}
-            </span>{' '}
-            {group.netNoun} contra {data.prevYear}.
-          </p>
+          {uncatShare !== null && uncatShare >= 0.5 && (
+            <p className="text-caption text-ink-3 pt-1 flex items-start gap-1.5">
+              <AlertTriangle size={11} className="flex-shrink-0 mt-0.5 text-status-warn" />
+              <span>
+                <span className="tnum text-status-warn">{formatBRL0(uncatCurr)}</span> (
+                {uncatShare.toFixed(0)}%) {uncatGroup === 'income' ? 'das receitas' : 'das despesas'}{' '}
+                de {currentYear} estão sem categoria — o que puxou o ano fica em parte inexplicado
+                até classificá-las.{' '}
+                <Link
+                  to={`/transacoes?mes=${ALL_MONTHS}&categoria=uncategorized`}
+                  className="text-accent hover:underline whitespace-nowrap"
+                >
+                  Classificar
+                </Link>
+              </span>
+            </p>
+          )}
+
+          <div className="pt-1 border-t border-border space-y-0.5">
+            <p className="text-caption text-ink-3">
+              Efeito líquido:{' '}
+              <span className={`tnum ${netTone(netDelta, group.higherIsBetter)}`}>
+                {signed0(netDelta)}
+              </span>{' '}
+              {group.netNoun} contra {data.prevYear}.
+            </p>
+            {cadence && (
+              <p
+                className="text-caption text-ink-3"
+                title={`Recorrente = subcategoria (ou lançamento direto na categoria) presente em pelo menos ${data.cadenceMonths} dos ${data.windowMonths} meses comparados. Gasto anual — IPTU, seguro, matrícula — entra como pontual: não volta no semestre que vem.`}
+              >
+                Desse total,{' '}
+                <span className={`tnum ${netTone(cadence.recorrente, group.higherIsBetter)}`}>
+                  {signed0(cadence.recorrente)}
+                </span>{' '}
+                é base recorrente (segue no 2º semestre) e{' '}
+                <span className={`tnum ${netTone(cadence.pontual, group.higherIsBetter)}`}>
+                  {signed0(cadence.pontual)}
+                </span>{' '}
+                foi pontual.
+              </p>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -444,34 +595,90 @@ interface BarRowProps {
   /** > 0 = piorou o bolso (direita, coral); < 0 = melhorou (esquerda, menta). */
   harm: number;
   max: number;
+  /** Valores dos dois anos, para o % ao lado e a base no tooltip. */
+  curr: number;
+  prev: number;
+  prevYear: number;
+  currYear: string;
+  /** Folha que NÃO se repete todo mês. Indefinido em linha-mãe (que agrega
+   *  naturezas diferentes) e quando a janela é curta demais para julgar. */
+  oneOff?: boolean;
   sub?: boolean;
   open?: boolean;
   onToggle?: () => void;
 }
 
-function BarRow({ name, color, delta, harm, max, sub, open, onToggle }: BarRowProps) {
+/**
+ * Variação relativa da própria categoria — o que diz se um número grande é
+ * deriva ou ruptura.
+ *
+ * Só sai quando a base é POSITIVA: categoria que fecha negativa (reembolso
+ * maior que o gasto) produziria percentual de sinal invertido, ilegível. Acima
+ * de ~10× o percentual perde a escala e vira multiplicador ("×11"), que é como
+ * se fala do número.
+ */
+function pctLabel(curr: number, prev: number): string | null {
+  if (prev > 0.005) {
+    const p = ((curr - prev) / prev) * 100;
+    if (Math.abs(p) < 1) return null; // ruído; a barra já mostra que é pequeno
+    if (p >= 900) return `×${(curr / prev).toFixed(0)}`;
+    return `${p > 0 ? '+' : '−'}${Math.abs(p).toFixed(0)}%`;
+  }
+  if (Math.abs(prev) <= 0.005 && curr > 0) return 'novo';
+  return null;
+}
+
+function BarRow({
+  name,
+  color,
+  delta,
+  harm,
+  max,
+  curr,
+  prev,
+  prevYear,
+  currYear,
+  oneOff,
+  sub,
+  open,
+  onToggle,
+}: BarRowProps) {
   const worse = harm > 0;
   const width = `${Math.max((Math.abs(delta) / max) * 100, 1.5)}%`;
   const tone = worse ? 'text-negative' : 'text-positive';
   const bg = worse ? '#e05a4d' : '#34a873';
   const h = sub ? 'h-2.5' : 'h-4';
   const Chevron = open ? ChevronDown : ChevronRight;
+  const pct = pctLabel(curr, prev);
+  // A base completa fica no tooltip: na linha ela roubaria a coluna do nome.
+  const baseTitle = `${name} · ${prevYear}: ${formatBRL0(prev)} → ${currYear}: ${formatBRL0(curr)}`;
 
   const label = (
-    <span
-      className={`truncate ${sub ? 'text-caption text-ink-3' : 'text-body text-text-secondary'}`}
-    >
-      {name}
-    </span>
+    <>
+      <span
+        className={`truncate ${sub ? 'text-caption text-ink-3' : 'text-body text-text-secondary'}`}
+      >
+        {name}
+      </span>
+      {/* Só o pontual é marcado: recorrente é o que se espera de um gasto, e
+          marcar os dois lados vira ruído em 8 linhas seguidas. */}
+      {oneOff && (
+        <span className="text-caption text-ink-3 flex-shrink-0 hidden sm:inline">pontual</span>
+      )}
+    </>
   );
   const value = (
-    <span className={`text-caption tnum flex-shrink-0 ${tone}`}>{signed0(delta)}</span>
+    <span className={`text-caption tnum flex-shrink-0 ${tone}`}>
+      {signed0(delta)}
+      {/* Some no celular pelo mesmo motivo do "vs 2025" nos tiles: com ~110px
+          por coluna, o valor em reais é o que precisa sobreviver. */}
+      {pct && <span className="text-ink-3 hidden sm:inline"> {pct}</span>}
+    </span>
   );
   const bar = (
     <div
       className={`${h} ${worse ? 'rounded-r-[3px]' : 'rounded-l-[3px]'}`}
       style={{ width, backgroundColor: sub ? `${bg}99` : bg }}
-      title={name}
     />
   );
   // A cor da categoria vive num tracinho ao lado do nome: pintar a barra com
@@ -521,12 +728,12 @@ function BarRow({ name, color, delta, harm, max, sub, open, onToggle }: BarRowPr
     sub ? 'py-px' : 'py-0.5'
   }`;
 
-  if (!onToggle) return <div className={cls}>{inner}</div>;
+  if (!onToggle) return <div className={cls} title={baseTitle}>{inner}</div>;
   return (
     // Sem `.tap` de proposito: os 44px so valeriam para as linhas
     // expansiveis, e no celular a lista ficava com um degrau de altura a cada
     // categoria com subcategoria. Numa lista densa, ritmo uniforme vale mais.
-    <button type="button" onClick={onToggle} aria-expanded={open} className={`${cls} text-left hover:bg-elevated/40 rounded-[4px] transition-colors`}>
+    <button type="button" onClick={onToggle} aria-expanded={open} title={baseTitle} className={`${cls} text-left hover:bg-elevated/40 rounded-[4px] transition-colors`}>
       {inner}
     </button>
   );

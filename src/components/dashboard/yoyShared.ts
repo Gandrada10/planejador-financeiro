@@ -16,6 +16,12 @@ export interface YoySubItem {
   varianceAbs: number;
   pct: number | null;
   resultadoImpact?: number;
+  /**
+   * Cadência: apareceu na maioria dos meses comparados. Só tem sentido na
+   * FOLHA (subcategoria / lançamento direto na mãe) — numa categoria-mãe é a
+   * união de gastos de naturezas diferentes. Ver `isRecurring`.
+   */
+  recurring?: boolean;
 }
 
 export interface YoyItem extends YoySubItem {
