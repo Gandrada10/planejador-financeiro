@@ -17,9 +17,12 @@ import { CategorizationHistoryModal } from './CategorizationHistoryModal';
 import { CategorizationHistoryListModal } from './CategorizationHistoryListModal';
 import { CategoryFilterCombobox } from '../shared/CategoryFilterCombobox';
 import { getMonthYear, getMonthLabel, cn, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { useSearchParams } from 'react-router-dom';
+import { toggleCategoryRule } from '../../lib/categoryRules';
 import type { CategorizationSession, Transaction } from '../../types';
 
 export function TransactionsPage() {
+  const [searchParams] = useSearchParams();
   const { transactions, loading, addTransaction, updateTransaction, deleteTransaction, importBatch, batchUpdateReconciled, batchUpdate } = useTransactions();
   const { categories, rules, matchCategory, addRule, deleteRule } = useCategories();
   const { accounts, accountNames } = useAccounts();
@@ -27,15 +30,23 @@ export function TransactionsPage() {
   const { memberNames: familyMemberNames } = useFamilyMembers();
   const { sessions, activeSessions, expiredSessions, historySessions, applyCategorizationsFromSession, applyAllPendingSessions, reopenSession, dismissSession } = useCategorizationSessions();
   const { getClosedCycle, reopenCycle } = useBillingCycles();
-  const { activeProjects } = useProjects();
+  const { projects, activeProjects } = useProjects();
   const { wallets: fxWallets, saveWallet: saveFxWallet } = useFxWallets();
   const [showForm, setShowForm] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
-  const [filterMonth, setFilterMonth] = useState(getMonthYear());
+  // O mês começa no corrente, exceto quando quem abriu a tela pediu outro. Um
+  // projeto é quase sempre passado e cruza meses: entrar filtrado no mês atual
+  // mostraria zero lançamentos e pareceria bug.
+  const [filterMonth, setFilterMonth] = useState(() => searchParams.get('mes') || getMonthYear());
   const [filterTitular, setFilterTitular] = useState('all');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterAccount, setFilterAccount] = useState('all');
+  // Filtro por projeto — 'all' | 'none' (sem projeto) | projectId. Nasce do
+  // querystring para a aba Projetos poder abrir esta tela já escopada num
+  // projeto ("Abrir em Lançamentos"); sem isso não havia caminho nenhum de um
+  // projeto até a tabela editável.
+  const [filterProject, setFilterProject] = useState(() => searchParams.get('projeto') || 'all');
   const [filterInstallment, setFilterInstallment] = useState('all');
   // Fluxo: 'all' | 'income' (receitas) | 'expense' (despesas). Usa os mesmos
   // predicados da linha de totais (isIncomeAmount/isExpenseAmount) para a lista
@@ -137,6 +148,11 @@ export function TransactionsPage() {
     } else if (filterAccount !== 'all') {
       list = list.filter((t) => t.account === filterAccount);
     }
+    if (filterProject === 'none') {
+      list = list.filter((t) => !t.projectId);
+    } else if (filterProject !== 'all') {
+      list = list.filter((t) => t.projectId === filterProject);
+    }
     if (filterInstallment === 'installments') {
       list = list.filter((t) => t.totalInstallments && t.totalInstallments >= 2);
     } else if (filterInstallment === 'single') {
@@ -172,7 +188,7 @@ export function TransactionsPage() {
       });
     }
     return list;
-  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterInstallment, filterFlow, filterReconciled, searchText]);
+  }, [transactions, categories, filterMonth, filterTitular, filterCategory, filterAccount, filterProject, filterInstallment, filterFlow, filterReconciled, searchText]);
 
   /** Check if transaction date falls in a closed billing cycle for a credit card account */
   function checkClosedCycle(item: Omit<Transaction, 'id' | 'createdAt'>): { cycleId: string; label: string } | null {
@@ -269,22 +285,13 @@ export function TransactionsPage() {
     }
   }, [reopenSession]);
 
-  const handleCreateRule = useCallback(async (description: string, categoryId: string) => {
-    const existing = rules.find((r) => r.pattern.toLowerCase() === description.toLowerCase());
-    if (existing) {
-      const confirmDelete = window.confirm(
-        `Já existe uma regra para "${description}".\n\nDeseja remover a regra?`
-      );
-      if (!confirmDelete) return;
-      await deleteRule(existing.id);
-    } else {
-      const confirmCreate = window.confirm(
-        `Deseja criar uma regra para categorizar automaticamente transações com a descrição "${description}"?`
-      );
-      if (!confirmCreate) return;
-      await addRule({ pattern: description, keywords: [], categoryId });
-    }
-  }, [rules, addRule, deleteRule]);
+  // Toggle da regra ⚡ — a lógica vive em `lib/categoryRules` porque a aba
+  // Projetos monta a MESMA tabela e o botão precisa fazer a mesma coisa lá.
+  const handleCreateRule = useCallback(
+    (description: string, categoryId: string) =>
+      toggleCategoryRule({ rules, addRule, deleteRule }, description, categoryId),
+    [rules, addRule, deleteRule]
+  );
 
   if (loading) {
     return <div className="text-accent text-body animate-pulse">Carregando transacoes...</div>;
@@ -294,10 +301,18 @@ export function TransactionsPage() {
   const baseFieldClass = 'flex-1 min-w-[140px] px-3 py-2 bg-bg-secondary border rounded-control text-body focus:outline-none focus:border-accent';
   const activeFieldClass = 'border-accent bg-accent/10 text-accent';
   const inactiveFieldClass = 'border-border text-text-primary';
+  // A lista de projetos do filtro traz os ativos e, se o filtro apontar para
+  // um ENCERRADO (chegou pela URL, vindo da aba Projetos), também esse — senão
+  // o select ficaria em branco com o filtro silenciosamente ligado.
+  const projectOptions = activeProjects.some((p) => p.id === filterProject) || filterProject === 'all' || filterProject === 'none'
+    ? activeProjects
+    : [...activeProjects, ...projects.filter((p) => p.id === filterProject)];
+
   const isActive = {
     account: filterAccount !== 'all',
     month: filterMonth !== defaultMonth,
     category: filterCategory !== 'all',
+    project: filterProject !== 'all',
     titular: filterTitular !== 'all',
     installment: filterInstallment !== 'all',
     flow: filterFlow !== 'all',
@@ -310,6 +325,7 @@ export function TransactionsPage() {
     setFilterAccount('all');
     setFilterMonth(defaultMonth);
     setFilterCategory('all');
+    setFilterProject('all');
     setFilterTitular('all');
     setFilterInstallment('all');
     setFilterFlow('all');
@@ -376,6 +392,22 @@ export function TransactionsPage() {
             <option key={a} value={a}>{a}</option>
           ))}
         </select>
+        {projectOptions.length > 0 && (
+          <select
+            value={filterProject}
+            onChange={(e) => setFilterProject(e.target.value)}
+            aria-label="Filtrar por projeto"
+            className={cn(baseFieldClass, isActive.project ? activeFieldClass : inactiveFieldClass)}
+          >
+            <option value="all">Todos os projetos</option>
+            <option value="none">Sem projeto</option>
+            {projectOptions.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}{p.status === 'archived' ? ' (encerrado)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
         <select
           value={filterMonth}
           onChange={(e) => setFilterMonth(e.target.value)}

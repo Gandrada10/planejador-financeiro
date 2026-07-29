@@ -19,6 +19,7 @@ import {
   normalizeDescriptionForDedup,
   fuzzyMatchMember,
   invoiceDateFor,
+  formatFx,
 } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -242,17 +243,25 @@ function buildFxRows(
     : ledger.movements;
 
   return priced.map((p) => {
-    // O valor original em moeda vai para a descrição: é a única forma de
-    // conferir o lançamento contra o extrato depois de convertido, já que o
-    // app não guarda moeda estrangeira em campo próprio.
+    // A descrição fica com o NOME do estabelecimento e mais nada: o valor
+    // original mora em `amountFx`/`currencyFx` (campos próprios), e é de lá
+    // que as telas o leem. Antes ele era anexado ao texto por falta de campo
+    // — o que sujava a descrição e atrapalhava o casamento das regras de
+    // categoria, que agem sobre ela. A compra de moeda é a exceção: ali o
+    // valor em moeda É a identidade do lançamento ("Compra de EUR 1.165,45"),
+    // já que não há estabelecimento nenhum.
     const description = p.entry.isConversion
       ? `Compra de ${currency} — ${formatFx(p.entry.amountFx, currency)}`
-      : `${p.entry.description} | ${formatFx(p.entry.amountFx, currency)}`;
+      : p.entry.description;
     const item: ImportItem = {
       date: p.entry.date,
       purchaseDate: null,
       description,
       amount: round2(p.amountBrl),
+      amountFx: p.entry.amountFx,
+      currencyFx: currency || null,
+      // Taxa do LOTE que este gasto consumiu (FIFO), não a média do extrato.
+      fxRate: p.rate,
       // Transferência para o que é troca de bolso; para o resto, as regras de
       // categoria do app agem sobre o nome LIMPO do estabelecimento (sem o
       // sufixo em moeda, que atrapalharia o casamento das regras).
@@ -281,12 +290,6 @@ function buildFxRows(
       installmentAmount: null,
     };
   });
-}
-
-/** Valor na moeda do extrato, para a descrição do lançamento ("EUR 192,75").
- *  Sempre em módulo: o sinal já está no valor em BRL da transação. */
-function formatFx(amount: number, currency: string): string {
-  return `${currency} ${Math.abs(amount).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function round2(n: number): number {

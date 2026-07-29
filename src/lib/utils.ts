@@ -5,6 +5,25 @@ export function formatBRL(value: number): string {
   }).format(value);
 }
 
+/**
+ * Valor em MOEDA ESTRANGEIRA para exibição ("EUR 192,75"). Irmão de
+ * `formatBRL`, mas deliberadamente sem `style: 'currency'`: o Intl com
+ * `currency: 'EUR'` em locale pt-BR renderiza "€ 192,75" com o símbolo, e
+ * símbolo de moeda estrangeira ao lado de "R$" na mesma tela confunde mais
+ * do que informa — o CÓDIGO ("EUR", "USD") é inequívoco em qualquer moeda,
+ * inclusive nas que não têm símbolo próprio.
+ *
+ * Sempre em MÓDULO: o sinal já está no valor em reais da transação, que é o
+ * que manda nos totais. Repetir o "−" nos dois lugares só polui.
+ */
+export function formatFx(amount: number, currency: string): string {
+  const n = Math.abs(amount).toLocaleString('pt-BR', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return `${currency} ${n}`;
+}
+
 /** Valor monetário com sinal explícito no positivo ("+R$ 1.000,00"). */
 export function formatSignedBRL(value: number): string {
   return `${value > 0 ? '+' : ''}${formatBRL(value)}`;

@@ -60,10 +60,33 @@ function docToTransaction(id: string, data: Record<string, unknown>): Transactio
     billingMonth: (data.billingMonth as string) || null,
     provisionalDate: data.provisionalDate ? (data.provisionalDate as Timestamp).toDate() : null,
     fitid: (data.fitid as string) || null,
+    // Moeda estrangeira (satélites de `amount` — ver o tipo `Transaction`).
+    // `amountFx` pode ser 0 legitimamente? Não: gasto de valor zero não
+    // existe aqui. Ainda assim usamos checagem de tipo em vez de `||` para
+    // não trocar um 0 gravado por null e mascarar dado corrompido.
+    amountFx: typeof data.amountFx === 'number' ? data.amountFx : null,
+    currencyFx: (data.currencyFx as string) || null,
+    fxRate: typeof data.fxRate === 'number' ? data.fxRate : null,
     isReimbursement: (data.isReimbursement as boolean) || false,
     reimbursementFor: (data.reimbursementFor as string) || null,
     awaitingReimbursement: (data.awaitingReimbursement as boolean) || false,
     reimbursementPrevCategoryId: (data.reimbursementPrevCategoryId as string) ?? null,
+  };
+}
+
+/**
+ * Satélites de moeda estrangeira normalizados para gravação. O Firestore
+ * rejeita `undefined`, e estes campos são opcionais em `Transaction` — quem
+ * cria a transação quase sempre os omite (gasto em reais). Normalizar num
+ * lugar só evita repetir três `?? null` em cada caminho de escrita.
+ * A moeda vai sempre em MAIÚSCULAS para o agrupamento por moeda não rachar
+ * "eur"/"EUR" em dois grupos.
+ */
+function fxFields(t: Partial<Transaction>): Record<string, unknown> {
+  return {
+    amountFx: t.amountFx ?? null,
+    currencyFx: t.currencyFx ? t.currencyFx.toUpperCase() : null,
+    fxRate: t.fxRate ?? null,
   };
 }
 
@@ -109,6 +132,9 @@ export function useTransactions() {
       purchaseDate: data.purchaseDate ? Timestamp.fromDate(data.purchaseDate) : null,
       billingMonth: data.billingMonth ?? null,
       provisionalDate: data.provisionalDate ? Timestamp.fromDate(data.provisionalDate) : null,
+      // O Firestore REJEITA `undefined` — campo opcional que o chamador não
+      // preencheu tem de virar null explícito, como o billingMonth acima.
+      ...fxFields(data),
       createdAt: Timestamp.now(),
     });
   }
@@ -119,6 +145,8 @@ export function useTransactions() {
     const ref = doc(db, 'users', uid, 'transactions', id);
     const updates: Record<string, unknown> = { ...data };
     if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
+    // Edição pode LIMPAR a moeda (null) — por isso `!== undefined`, não truthy.
+    if (data.currencyFx !== undefined) updates.currencyFx = data.currencyFx ? data.currencyFx.toUpperCase() : null;
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
     if (data.provisionalDate) updates.provisionalDate = Timestamp.fromDate(data.provisionalDate);
@@ -150,6 +178,7 @@ export function useTransactions() {
         purchaseDate: item.purchaseDate ? Timestamp.fromDate(item.purchaseDate) : null,
         billingMonth: item.billingMonth ?? null,
         provisionalDate: item.provisionalDate ? Timestamp.fromDate(item.provisionalDate) : null,
+        ...fxFields(item),
         importBatch: batchId,
         createdAt: Timestamp.now(),
       });
@@ -171,6 +200,8 @@ export function useTransactions() {
     if (!uid || ids.length === 0) return;
     const updates: Record<string, unknown> = { ...data };
     if (data.titular !== undefined) updates.titular = normalizeTitular(data.titular);
+    // Edição pode LIMPAR a moeda (null) — por isso `!== undefined`, não truthy.
+    if (data.currencyFx !== undefined) updates.currencyFx = data.currencyFx ? data.currencyFx.toUpperCase() : null;
     if (data.date) updates.date = Timestamp.fromDate(data.date);
     if (data.purchaseDate) updates.purchaseDate = Timestamp.fromDate(data.purchaseDate);
     if (data.provisionalDate) updates.provisionalDate = Timestamp.fromDate(data.provisionalDate);

@@ -1,4 +1,5 @@
 import type { Category, Transaction } from '../../types';
+import { computeProjectStats, groupByProject } from '../projectStats';
 import { getMonthLabel, getMonthYear, getMonthYearOffset, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../utils';
 import type {
   BudgetProgress,
@@ -274,25 +275,35 @@ function computeBudgetProgress(
   return { budgets, totalLimit, totalActual };
 }
 
+/**
+ * Resumo de projetos do período. A conta em si vive em `lib/projectStats` e é
+ * a MESMA que a aba Projetos exibe — antes eram duas implementações, e um
+ * relatório que discordasse da tela não teria como ser defendido.
+ *
+ * O que fica aqui é só o recorte de período (o PDF é de um intervalo; a aba é
+ * da vida inteira do projeto) e o formato do resumo que o PDF consome.
+ */
 function computeProjects(deps: ReportDeps, period: ResolvedPeriod): ProjectSummary[] {
-  const active = deps.projects.filter((p) => p.status === 'active');
-  return active
+  const inPeriod = deps.transactions.filter((t) => {
+    const my = getMonthYear(accountingDate(t));
+    return my >= period.startMonth && my <= period.endMonth;
+  });
+  const byProject = groupByProject(inPeriod);
+  return deps.projects
+    .filter((p) => p.status === 'active')
     .map((p) => {
-      const ptxs = deps.transactions.filter((t) => {
-        if (t.projectId !== p.id) return false;
-        const my = getMonthYear(accountingDate(t));
-        return my >= period.startMonth && my <= period.endMonth;
-      });
-      const spent = sum(ptxs.filter((t) => isExpenseAmount(t)).map((t) => t.amount));
-      const income = sum(ptxs.filter((t) => isIncomeAmount(t)).map((t) => t.amount));
+      const stats = computeProjectStats(byProject.get(p.id) ?? [], deps.categories);
       return {
         id: p.id,
         name: p.name,
         color: p.color,
-        spent,
-        income,
-        balance: income + spent,
-        count: ptxs.length,
+        spent: stats.expense,
+        income: stats.income,
+        balance: stats.balance,
+        // `countedCount` e não `count`: as transações já chegam filtradas por
+        // `countsInTotals` daqui de cima, então os dois coincidem — usar o
+        // contado deixa a intenção explícita se isso mudar.
+        count: stats.countedCount,
       };
     })
     .filter((p) => p.count > 0);

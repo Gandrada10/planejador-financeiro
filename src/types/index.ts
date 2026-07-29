@@ -118,6 +118,37 @@ export interface Transaction {
    * Dedupe contra reimportação usa este campo (ver `ImportModal.tsx`).
    */
   fitid?: string | null;
+  /**
+   * ── Moeda estrangeira (campos SATÉLITE) ───────────────────────────────
+   * Valor original do gasto na moeda em que ele foi feito, quando não foi em
+   * reais. Mesmo SINAL de `amount` (negativo = despesa).
+   *
+   * REGRA DE OURO: `amount` (em BRL) continua sendo a ÚNICA fonte de todo
+   * total do app. Estes três campos NUNCA entram em soma de receita/despesa,
+   * meta, orçamento, fluxo de caixa ou custo de vida — são para EXIBIR o
+   * valor original e para totalizar por moeda dentro de um projeto ("a
+   * viagem custou R$ 34.031,56 / € 5.567,75"). Somar `amountFx` junto com
+   * `amount` seria somar bananas com laranjas.
+   *
+   * Preenchidos automaticamente na importação de extrato em moeda
+   * estrangeira (ver `buildFxRows` em `ImportModal.tsx`, que já conhece os
+   * três a partir de `parseWiseStatement` + `fxLedger`), ou à mão no
+   * formulário/edição do lançamento — o caso de dinheiro em espécie e de
+   * cartão internacional de outro banco.
+   *
+   * `null`/ausente = gasto em reais. É o estado da esmagadora maioria das
+   * transações e não há migração retroativa.
+   */
+  amountFx?: number | null;
+  /** Código ISO da moeda do `amountFx` ("EUR", "USD"), sempre em maiúsculas.
+   *  A presença DESTE campo é o que marca a transação como "em moeda". */
+  currencyFx?: string | null;
+  /** Custo efetivo aplicado: BRL por unidade de moeda, já com IOF e spread
+   *  embutidos (`|amount| / |amountFx|`). Guardado em vez de recalculado
+   *  para sobreviver a uma edição manual do valor em reais, e porque é a
+   *  taxa do LOTE que aquele gasto consumiu (FIFO, ver `fxLedger.ts`) — não
+   *  a cotação do dia, nem a média da viagem. */
+  fxRate?: number | null;
 }
 
 export interface Account {

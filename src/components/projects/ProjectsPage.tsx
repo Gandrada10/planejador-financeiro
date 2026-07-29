@@ -1,10 +1,17 @@
-import { useState } from 'react';
-import { Plus, Trash2, Archive, RotateCcw, Pencil, Check, X, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Plus, Trash2, Archive, RotateCcw, Pencil, Check, X } from 'lucide-react';
 import { useProjects } from '../../hooks/useProjects';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
-import { formatBRL, countsInTotals, isIncomeAmount, isExpenseAmount } from '../../lib/utils';
+import { useAccounts } from '../../hooks/useAccounts';
+import { useTitularMappings } from '../../hooks/useTitularMappings';
+import { useFamilyMembers } from '../../hooks/useFamilyMembers';
+import { formatBRL0, formatFx } from '../../lib/utils';
+import { computeProjectStats, groupByProject, type ProjectStats } from '../../lib/projectStats';
+import { toggleCategoryRule } from '../../lib/categoryRules';
 import { BudgetRuler } from '../shared/BudgetRuler';
+import { ConfirmDialog } from '../shared/ConfirmDialog';
+import { ProjectDetail } from './ProjectDetail';
 import type { Project, Transaction } from '../../types';
 
 const PROJECT_COLORS = ['#f59e0b', '#3b82f6', '#10b981', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4', '#f97316'];
@@ -20,57 +27,75 @@ function parseBudget(raw: string): number | null {
   return Number.isFinite(n) && n > 0 ? n : null;
 }
 
+/**
+ * Aba Projetos — lista à esquerda, projeto aberto à direita.
+ *
+ * A versão anterior era uma grade de cards em que cada card carregava um
+ * resumo e uma lista de lançamentos SOMENTE-LEITURA de altura fixa. Dava
+ * para ver que o dinheiro tinha ido embora, não para trabalhar em cima
+ * disso: nenhum campo era editável e não havia como filtrar, buscar ou
+ * exportar. Com um card ocupando um terço da tela, também não havia largura
+ * para a tabela de lançamentos de verdade.
+ *
+ * O formato lista+detalhe resolve as duas coisas: a lista fica estreita
+ * (nome, gasto, régua — o que basta para comparar projetos de relance) e
+ * devolve a tela inteira ao projeto aberto, que é onde mora a tabela
+ * completa e editável.
+ */
 export function ProjectsPage() {
   const { projects, loading, addProject, updateProject, deleteProject } = useProjects();
-  const { transactions } = useTransactions();
-  const { categories } = useCategories();
+  const { transactions, updateTransaction, deleteTransaction, batchUpdate, batchUpdateReconciled } = useTransactions();
+  const { categories, rules, addRule, deleteRule } = useCategories();
+  const { accountNames } = useAccounts();
+  const { titularNames } = useTitularMappings();
+  const { memberNames } = useFamilyMembers();
+
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [name, setName] = useState('');
-  const [color, setColor] = useState(PROJECT_COLORS[0]);
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [budget, setBudget] = useState('');
   const [showArchived, setShowArchived] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!name.trim()) return;
-    await addProject({
-      name: name.trim(),
-      color,
-      status: 'active',
-      startDate: startDate ? new Date(startDate + 'T00:00:00') : null,
-      endDate: endDate ? new Date(endDate + 'T00:00:00') : null,
-      budget: parseBudget(budget),
-    });
-    setName('');
-    setColor(PROJECT_COLORS[0]);
-    setStartDate('');
-    setEndDate('');
-    setBudget('');
-    setShowForm(false);
+  // Um passe só na base, e não um filtro por projeto: com uma dezena de
+  // projetos e centenas de lançamentos, filtrar por projeto varreria a lista
+  // inteira uma vez para cada um.
+  const byProject = useMemo(() => groupByProject(transactions), [transactions]);
+  const statsById = useMemo(() => {
+    const map = new Map<string, ProjectStats>();
+    for (const p of projects) {
+      map.set(p.id, computeProjectStats(byProject.get(p.id) ?? [], categories));
+    }
+    return map;
+  }, [projects, byProject, categories]);
+
+  const active = useMemo(
+    () => projects.filter((p) => p.status === 'active')
+      .sort((a, b) => Math.abs(statsById.get(b.id)?.expense ?? 0) - Math.abs(statsById.get(a.id)?.expense ?? 0)),
+    [projects, statsById]
+  );
+  const archived = useMemo(
+    () => projects.filter((p) => p.status === 'archived')
+      .sort((a, b) => Math.abs(statsById.get(b.id)?.expense ?? 0) - Math.abs(statsById.get(a.id)?.expense ?? 0)),
+    [projects, statsById]
+  );
+
+  // Seleção DERIVADA, não sincronizada por efeito: o estado guarda só a
+  // escolha explícita do usuário, e o render cai no primeiro da lista quando
+  // ela não existe ou saiu de vista (projeto encerrado com "encerrados"
+  // ocultos, projeto excluído). Um efeito que chamasse setState aqui
+  // dispararia render em cascata e deixaria um quadro com o painel vazio.
+  const visibleList = showArchived ? [...active, ...archived] : active;
+  const effectiveId = selectedId && visibleList.some((p) => p.id === selectedId)
+    ? selectedId
+    : visibleList[0]?.id ?? null;
+
+  const selected = projects.find((p) => p.id === effectiveId) ?? null;
+  const selectedStats = selected ? statsById.get(selected.id) ?? null : null;
+
+  const memberOptions = memberNames.length > 0 ? memberNames : titularNames;
+
+  function handleCreateRule(description: string, categoryId: string) {
+    return toggleCategoryRule({ rules, addRule, deleteRule }, description, categoryId);
   }
-
-  function getProjectTotals(projectId: string) {
-    const txs = transactions.filter((t) => t.projectId === projectId);
-    // Transferências (ex.: pagamento de fatura, PIX interno) não contam como
-    // receita/despesa do projeto — só a contagem inclui todos os lançamentos.
-    const counted = txs.filter((t) => countsInTotals(t, categories));
-    const income = counted.filter((t) => isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0);
-    // Despesa inclui reembolsos (positivos) como contra-despesa: somados
-    // assinados, reduzem o gasto do projeto para o custo real.
-    const expense = counted.filter((t) => isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0);
-    return { count: txs.length, income, expense, balance: income + expense };
-  }
-
-  function getProjectTransactions(projectId: string) {
-    return transactions
-      .filter((t) => t.projectId === projectId)
-      .sort((a, b) => b.date.getTime() - a.date.getTime());
-  }
-
-  const active = projects.filter((p) => p.status === 'active');
-  const archived = projects.filter((p) => p.status === 'archived');
 
   if (loading) {
     return <div className="text-accent text-body animate-pulse">Carregando projetos...</div>;
@@ -99,304 +124,286 @@ export function ProjectsPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-bg-card border border-accent/30 rounded-card p-4 space-y-3">
-          <p className="text-title font-semibold text-text-primary">Novo projeto</p>
-          <div>
-            <label className="text-caption text-text-secondary block mb-1">Nome</label>
-            <input
-              autoFocus
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Ex: Reforma cozinha, Viagem Europa..."
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
-            />
-          </div>
-          <div>
-            <label className="text-caption text-text-secondary block mb-1">Cor</label>
-            <div className="flex gap-2">
-              {PROJECT_COLORS.map((c) => (
-                <button key={c} type="button" onClick={() => setColor(c)}
-                  className={`w-6 h-6 rounded-full border-2 transition-transform ${color === c ? 'border-white scale-110' : 'border-transparent'}`}
-                  style={{ backgroundColor: c }}
-                />
-              ))}
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-caption text-text-secondary block mb-1">Data de início</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
-              />
-            </div>
-            <div>
-              <label className="text-caption text-text-secondary block mb-1">Data de fim</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="text-caption text-text-secondary block mb-1">
-              Orçamento total <span className="text-ink-3">(opcional)</span>
-            </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={budget}
-              onChange={(e) => setBudget(e.target.value)}
-              placeholder="Ex: 120000"
-              className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent"
-            />
-            <p className="text-caption text-ink-3 mt-1">
-              Vira a régua de orçado x executado no dashboard. Sem orçamento, o projeto aparece
-              só com o gasto acumulado.
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button type="submit" className="px-4 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90">Criar</button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-4 py-1.5 bg-bg-secondary border border-border text-text-secondary text-body rounded-control">Cancelar</button>
-          </div>
-        </form>
+        <ProjectForm
+          onCancel={() => setShowForm(false)}
+          onSubmit={async (data) => { await addProject(data); setShowForm(false); }}
+        />
       )}
 
-      {active.length === 0 && !showForm ? (
+      {projects.length === 0 && !showForm ? (
         <div className="bg-bg-card border border-border rounded-card p-8 text-center">
-          <p className="text-body text-text-secondary">Nenhum projeto em andamento.</p>
-          <p className="text-caption text-text-secondary mt-1">Crie projetos para agrupar despesas e receitas (ex: reforma, viagem, evento).</p>
+          <p className="text-body text-text-secondary">Nenhum projeto ainda.</p>
+          <p className="text-caption text-text-secondary mt-1">
+            Crie projetos para agrupar despesas e receitas (ex: reforma, viagem, evento).
+          </p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {active.map((p) => (
-            <ProjectCard key={p.id} project={p} totals={getProjectTotals(p.id)} projectTransactions={getProjectTransactions(p.id)} categories={categories} onUpdate={updateProject} onDelete={deleteProject} />
-          ))}
-        </div>
-      )}
-
-      {showArchived && archived.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="text-title font-semibold text-text-secondary">Encerrados</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {archived.map((p) => (
-              <ProjectCard key={p.id} project={p} totals={getProjectTotals(p.id)} projectTransactions={getProjectTransactions(p.id)} categories={categories} onUpdate={updateProject} onDelete={deleteProject} />
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ProjectCard({ project, totals, projectTransactions, categories, onUpdate, onDelete }: {
-  project: Project;
-  totals: { count: number; income: number; expense: number; balance: number };
-  projectTransactions: Transaction[];
-  categories: import('../../types').Category[];
-  onUpdate: (id: string, data: Partial<Project>) => Promise<void>;
-  onDelete: (id: string) => Promise<void>;
-}) {
-  const isArchived = project.status === 'archived';
-  const [editing, setEditing] = useState(false);
-  const [editName, setEditName] = useState(project.name);
-  const [editColor, setEditColor] = useState(project.color);
-  const [editStartDate, setEditStartDate] = useState(project.startDate ? project.startDate.toISOString().slice(0, 10) : '');
-  const [editEndDate, setEditEndDate] = useState(project.endDate ? project.endDate.toISOString().slice(0, 10) : '');
-  const [editBudget, setEditBudget] = useState(project.budget != null ? String(project.budget) : '');
-  const [showTxs, setShowTxs] = useState(false);
-
-  async function saveEdit() {
-    if (!editName.trim()) return;
-    await onUpdate(project.id, {
-      name: editName.trim(),
-      color: editColor,
-      startDate: editStartDate ? new Date(editStartDate + 'T00:00:00') : null,
-      endDate: editEndDate ? new Date(editEndDate + 'T00:00:00') : null,
-      budget: parseBudget(editBudget),
-    });
-    setEditing(false);
-  }
-
-  function cancelEdit() {
-    setEditName(project.name);
-    setEditColor(project.color);
-    setEditStartDate(project.startDate ? project.startDate.toISOString().slice(0, 10) : '');
-    setEditEndDate(project.endDate ? project.endDate.toISOString().slice(0, 10) : '');
-    setEditBudget(project.budget != null ? String(project.budget) : '');
-    setEditing(false);
-  }
-
-  function getCategoryName(id: string | null) {
-    if (!id) return '—';
-    return categories.find((c) => c.id === id)?.name ?? '—';
-  }
-
-  return (
-    <div className={`bg-bg-card border rounded-card overflow-hidden ${isArchived ? 'border-border/40 opacity-70' : 'border-border'}`}>
-      <div className="p-4 space-y-3">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-2">
-          {editing ? (
-            <div className="flex-1 space-y-2">
-              <input
-                autoFocus
-                value={editName}
-                onChange={(e) => setEditName(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') saveEdit(); if (e.key === 'Escape') cancelEdit(); }}
-                className="w-full bg-bg-secondary border border-accent rounded-control px-2 py-1 text-body text-text-primary focus:outline-none"
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,280px)_1fr] gap-4 items-start">
+          {/* Lista */}
+          <div className="space-y-1.5">
+            {active.map((p) => (
+              <ProjectListItem
+                key={p.id}
+                project={p}
+                stats={statsById.get(p.id)}
+                selected={p.id === effectiveId}
+                onSelect={() => setSelectedId(p.id)}
               />
-              <div className="flex gap-1.5">
-                {PROJECT_COLORS.map((c) => (
-                  <button key={c} type="button" onClick={() => setEditColor(c)}
-                    className={`w-5 h-5 rounded-full border-2 transition-transform ${editColor === c ? 'border-white scale-110' : 'border-transparent'}`}
-                    style={{ backgroundColor: c }}
+            ))}
+            {showArchived && archived.length > 0 && (
+              <>
+                <p className="text-caption text-ink-3 uppercase tracking-wider pt-3 pb-1">Encerrados</p>
+                {archived.map((p) => (
+                  <ProjectListItem
+                    key={p.id}
+                    project={p}
+                    stats={statsById.get(p.id)}
+                    selected={p.id === effectiveId}
+                    onSelect={() => setSelectedId(p.id)}
                   />
                 ))}
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <label className="text-caption text-text-secondary block mb-0.5">Início</label>
-                  <input type="date" value={editStartDate} onChange={(e) => setEditStartDate(e.target.value)}
-                    className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1 text-body text-text-primary focus:outline-none focus:border-accent"
-                  />
-                </div>
-                <div>
-                  <label className="text-caption text-text-secondary block mb-0.5">Fim</label>
-                  <input type="date" value={editEndDate} onChange={(e) => setEditEndDate(e.target.value)}
-                    className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1 text-body text-text-primary focus:outline-none focus:border-accent"
-                  />
-                </div>
-              </div>
-              <div>
-                <label className="text-caption text-text-secondary block mb-0.5">Orçamento total (opcional)</label>
-                <input type="text" inputMode="decimal" value={editBudget} placeholder="Ex: 120000"
-                  onChange={(e) => setEditBudget(e.target.value)}
-                  className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1 text-body text-text-primary focus:outline-none focus:border-accent"
-                />
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center gap-2 min-w-0">
-              <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
-              <span className="text-title font-semibold text-text-primary truncate">{project.name}</span>
-            </div>
-          )}
-
-          <div className="flex items-center gap-1 flex-shrink-0">
-            {editing ? (
-              <>
-                <button onClick={saveEdit} className="p-1 text-accent-green hover:text-accent-green/80" title="Salvar"><Check size={13} /></button>
-                <button onClick={cancelEdit} className="p-1 text-text-secondary hover:text-accent-red" title="Cancelar"><X size={13} /></button>
-              </>
-            ) : (
-              <>
-                <button onClick={() => setEditing(true)} className="p-1 text-text-secondary hover:text-accent" title="Editar"><Pencil size={12} /></button>
-                {totals.count === 0 && (
-                  <button onClick={() => onDelete(project.id)} className="p-1 text-text-secondary hover:text-accent-red" title="Excluir">
-                    <Trash2 size={12} />
-                  </button>
-                )}
               </>
             )}
           </div>
-        </div>
 
-        {/* Status badge */}
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold ${
-            isArchived
-              ? 'bg-text-secondary/10 text-text-secondary'
-              : 'bg-accent-green/10 text-accent-green'
-          }`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${isArchived ? 'bg-text-secondary' : 'bg-accent-green'}`} />
-            {isArchived ? 'Encerrado' : 'Em andamento'}
-          </span>
-          <span className="text-caption text-text-secondary">{totals.count} transações</span>
-        </div>
-
-        {/* Dates */}
-        {(project.startDate || project.endDate) && (
-          <div className="flex items-center gap-1.5 text-caption text-text-secondary">
-            <Calendar size={10} className="flex-shrink-0" />
-            {project.startDate && <span>{project.startDate.toLocaleDateString('pt-BR')}</span>}
-            {project.startDate && project.endDate && <span>—</span>}
-            {project.endDate && <span>{project.endDate.toLocaleDateString('pt-BR')}</span>}
-          </div>
-        )}
-
-        {/* Totals */}
-        <div className="grid grid-cols-2 gap-2 text-body pt-1 border-t border-border/40">
-          <div>
-            <span className="text-text-secondary text-caption">Receitas</span>
-            <p className="text-accent-green font-bold tnum">{formatBRL(totals.income)}</p>
-          </div>
-          <div>
-            <span className="text-text-secondary text-caption">Despesas</span>
-            <p className="text-accent-red font-bold tnum">{formatBRL(totals.expense)}</p>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between pt-0.5">
-          <span className={`text-body font-bold tnum ${totals.balance >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-            Saldo: {formatBRL(totals.balance)}
-          </span>
-        </div>
-
-        {/* Orçado x executado — a mesma régua do dashboard, para o número que
-            você digita aqui ter resposta aqui. */}
-        {project.budget != null && project.budget > 0 && (
-          <BudgetRuler spent={Math.abs(totals.expense)} budget={project.budget} color={project.color} withLabel />
-        )}
-
-        {/* Action buttons */}
-        <div className="flex gap-2 pt-1 border-t border-border/40">
-          <button
-            onClick={() => onUpdate(project.id, { status: isArchived ? 'active' : 'archived' })}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-body rounded-control border transition-colors flex-1 justify-center ${
-              isArchived
-                ? 'border-accent-green/40 text-accent-green hover:bg-accent-green/10'
-                : 'border-border text-text-secondary hover:border-accent-red/60 hover:text-accent-red'
-            }`}
-          >
-            {isArchived ? <><RotateCcw size={12} /> Reativar</> : <><Archive size={12} /> Encerrar projeto</>}
-          </button>
-          {totals.count > 0 && (
-            <button
-              onClick={() => setShowTxs(!showTxs)}
-              className="flex items-center gap-1 px-3 py-1.5 text-body rounded-control border border-border text-text-secondary hover:border-accent hover:text-accent transition-colors"
-            >
-              {showTxs ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              Ver lançamentos
-            </button>
+          {/* Detalhe */}
+          {selected && selectedStats ? (
+            <div className="space-y-3 min-w-0">
+              <ProjectActions
+                project={selected}
+                stats={selectedStats}
+                onUpdate={updateProject}
+                onAskDelete={() => setDeleteTarget(selected)}
+              />
+              <ProjectDetail
+                project={selected}
+                stats={selectedStats}
+                transactions={byProject.get(selected.id) ?? []}
+                allTransactions={transactions}
+                categories={categories}
+                projects={projects.filter((p) => p.status === 'active')}
+                accountNames={accountNames}
+                memberNames={memberOptions}
+                rules={rules}
+                onUpdate={updateTransaction}
+                onDelete={deleteTransaction}
+                onBatchUpdate={batchUpdate}
+                onBatchReconcile={batchUpdateReconciled}
+                onCreateRule={handleCreateRule}
+                onDeleteRule={deleteRule}
+              />
+            </div>
+          ) : (
+            <div className="bg-bg-card border border-border rounded-card p-8 text-center">
+              <p className="text-body text-text-secondary">Selecione um projeto à esquerda.</p>
+            </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Transaction list */}
-      {showTxs && (
-        <div className="border-t border-border/40 bg-bg-secondary/40">
-          <div className="max-h-64 overflow-y-auto">
-            {projectTransactions.map((tx) => (
-              <div key={tx.id} className="flex items-center justify-between px-4 py-2 border-b border-border/20 last:border-0 gap-2">
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-body text-text-primary truncate">{tx.description}</span>
-                  <span className="text-caption text-text-secondary">
-                    {tx.date.toLocaleDateString('pt-BR')} · {getCategoryName(tx.categoryId)}
-                  </span>
-                </div>
-                <span className={`text-body font-bold tnum flex-shrink-0 ${tx.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
-                  {formatBRL(tx.amount)}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {deleteTarget && (
+        <ConfirmDialog
+          title={`Excluir "${deleteTarget.name}"?`}
+          message="O projeto some da lista. Os lançamentos não são apagados — apenas deixam de estar vinculados a ele."
+          confirmLabel="Excluir"
+          destructive
+          onConfirm={async () => { await deleteProject(deleteTarget.id); setDeleteTarget(null); }}
+          onCancel={() => setDeleteTarget(null)}
+        />
       )}
     </div>
   );
 }
+
+/** Item da lista: só o que serve para comparar projetos de relance. */
+function ProjectListItem({ project, stats, selected, onSelect }: {
+  project: Project;
+  stats?: ProjectStats;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const spent = Math.abs(stats?.expense ?? 0);
+  const fx = stats?.byCurrency[0];
+  return (
+    <button
+      onClick={onSelect}
+      aria-current={selected ? 'true' : undefined}
+      className={`w-full text-left p-3 rounded-card border transition-colors ${
+        selected
+          ? 'bg-accent/5 border-accent'
+          : 'bg-bg-card border-border hover:border-accent/50'
+      } ${project.status === 'archived' ? 'opacity-70' : ''}`}
+    >
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: project.color }} />
+        <span className="text-body font-semibold text-text-primary truncate">{project.name}</span>
+      </div>
+      <div className="flex items-baseline justify-between gap-2 mt-1">
+        <span className="text-body font-bold text-text-primary tnum">{formatBRL0(spent)}</span>
+        {fx && <span className="text-caption text-ink-3 tnum">{formatFx(fx.amount, fx.currency)}</span>}
+      </div>
+      <div className="mt-1.5">
+        <BudgetRuler spent={spent} budget={project.budget ?? null} color={project.color} />
+      </div>
+      <p className="text-caption text-ink-3 mt-1">{stats?.count ?? 0} lançamentos</p>
+    </button>
+  );
+}
+
+/** Barra de ações do projeto aberto: editar cadastro, encerrar, excluir. */
+function ProjectActions({ project, stats, onUpdate, onAskDelete }: {
+  project: Project;
+  stats: ProjectStats;
+  onUpdate: (id: string, data: Partial<Project>) => Promise<void>;
+  onAskDelete: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const isArchived = project.status === 'archived';
+
+  if (editing) {
+    return (
+      <ProjectForm
+        initial={project}
+        onCancel={() => setEditing(false)}
+        onSubmit={async (data) => { await onUpdate(project.id, data); setEditing(false); }}
+      />
+    );
+  }
+
+  return (
+    <div className="flex gap-2 flex-wrap">
+      <button
+        onClick={() => setEditing(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 text-body rounded-control border border-border text-text-secondary hover:border-accent hover:text-accent"
+      >
+        <Pencil size={13} /> Editar projeto
+      </button>
+      <button
+        onClick={() => onUpdate(project.id, {
+          status: isArchived ? 'active' : 'archived',
+          // Encerrar sem data de fim: sugere a data do último lançamento, que
+          // é o fim de fato. Não sobrescreve uma data já preenchida à mão.
+          ...(!isArchived && !project.endDate && stats.lastDate ? { endDate: stats.lastDate } : {}),
+        })}
+        className={`flex items-center gap-1.5 px-3 py-1.5 text-body rounded-control border transition-colors ${
+          isArchived
+            ? 'border-accent-green/40 text-accent-green hover:bg-accent-green/10'
+            : 'border-border text-text-secondary hover:border-accent-red/60 hover:text-accent-red'
+        }`}
+      >
+        {isArchived ? <><RotateCcw size={13} /> Reativar</> : <><Archive size={13} /> Encerrar</>}
+      </button>
+      {stats.count === 0 && (
+        <button
+          onClick={onAskDelete}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-body rounded-control border border-border text-text-secondary hover:border-accent-red/60 hover:text-accent-red"
+        >
+          <Trash2 size={13} /> Excluir
+        </button>
+      )}
+    </div>
+  );
+}
+
+type ProjectDraft = Omit<Project, 'id' | 'createdAt'>;
+
+/** Formulário único de criação e edição — eram dois blocos quase idênticos
+ *  (um no topo da página, outro dentro do card), com as mesmas regras de
+ *  parse de orçamento e de data escritas duas vezes. */
+function ProjectForm({ initial, onSubmit, onCancel }: {
+  initial?: Project;
+  onSubmit: (data: ProjectDraft) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [color, setColor] = useState(initial?.color ?? PROJECT_COLORS[0]);
+  const [startDate, setStartDate] = useState(initial?.startDate ? initial.startDate.toISOString().slice(0, 10) : '');
+  const [endDate, setEndDate] = useState(initial?.endDate ? initial.endDate.toISOString().slice(0, 10) : '');
+  const [budget, setBudget] = useState(initial?.budget != null ? String(initial.budget) : '');
+
+  const inputClass = 'w-full px-3 py-2 bg-bg-secondary border border-border rounded-control text-text-primary text-body focus:outline-none focus:border-accent';
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim()) return;
+    await onSubmit({
+      name: name.trim(),
+      color,
+      status: initial?.status ?? 'active',
+      startDate: startDate ? new Date(startDate + 'T00:00:00') : null,
+      endDate: endDate ? new Date(endDate + 'T00:00:00') : null,
+      budget: parseBudget(budget),
+    });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="bg-bg-card border border-accent/30 rounded-card p-4 space-y-3">
+      <p className="text-title font-semibold text-text-primary">{initial ? 'Editar projeto' : 'Novo projeto'}</p>
+      <div>
+        <label htmlFor="proj-name" className="text-caption text-text-secondary block mb-1">Nome</label>
+        <input
+          id="proj-name"
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Ex: Reforma cozinha, Viagem Europa..."
+          className={inputClass}
+        />
+      </div>
+      <div>
+        <span className="text-caption text-text-secondary block mb-1">Cor</span>
+        <div className="flex gap-2">
+          {PROJECT_COLORS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={`Cor ${c}`}
+              aria-pressed={color === c}
+              onClick={() => setColor(c)}
+              className={`w-6 h-6 rounded-full border-2 transition-transform ${color === c ? 'border-white scale-110' : 'border-transparent'}`}
+              style={{ backgroundColor: c }}
+            />
+          ))}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="proj-start" className="text-caption text-text-secondary block mb-1">Data de início</label>
+          <input id="proj-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} />
+        </div>
+        <div>
+          <label htmlFor="proj-end" className="text-caption text-text-secondary block mb-1">Data de fim</label>
+          <input id="proj-end" type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} />
+        </div>
+      </div>
+      <div>
+        <label htmlFor="proj-budget" className="text-caption text-text-secondary block mb-1">
+          Orçamento total <span className="text-ink-3">(opcional)</span>
+        </label>
+        <input
+          id="proj-budget"
+          type="text"
+          inputMode="decimal"
+          value={budget}
+          onChange={(e) => setBudget(e.target.value)}
+          placeholder="Ex: 120000"
+          className={inputClass}
+        />
+        <p className="text-caption text-ink-3 mt-1">
+          Vira a régua de orçado x executado aqui e no dashboard. Sem orçamento, o projeto
+          aparece só com o gasto acumulado.
+        </p>
+      </div>
+      <div className="flex gap-2">
+        <button type="submit" className="flex items-center gap-1.5 px-4 py-1.5 bg-accent text-bg-primary text-body font-bold rounded-control hover:opacity-90">
+          <Check size={13} /> {initial ? 'Salvar' : 'Criar'}
+        </button>
+        <button type="button" onClick={onCancel} className="flex items-center gap-1.5 px-4 py-1.5 bg-bg-secondary border border-border text-text-secondary text-body rounded-control">
+          <X size={13} /> Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
+export type { Transaction };

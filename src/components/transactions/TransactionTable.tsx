@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
-import { formatBRL, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
+import { formatBRL, formatFx, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
 import { NoteTag } from '../shared/NoteTag';
 import { BatchEditModal } from '../shared/BatchEditModal';
@@ -524,6 +524,15 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onKeyDown={handleKeyDown}
                       className="w-full bg-bg-secondary border border-accent rounded-control px-1 py-0.5 text-text-primary text-body text-right focus:outline-none"
                     />
+                  ) : t.currencyFx && t.amountFx != null ? (
+                    // Gasto em moeda estrangeira: o valor em reais manda (é o
+                    // que entra nos totais) e o original vai embaixo, em corpo
+                    // menor. Segunda LINHA e não coluna nova — a tabela já tem
+                    // 12 colunas e o dado só existe numa minoria das linhas.
+                    <div className="leading-tight">
+                      <div>{formatBRL(t.amount)}</div>
+                      <div className="text-[10px] font-normal text-ink-3">{formatFx(t.amountFx, t.currencyFx)}</div>
+                    </div>
                   ) : (
                     formatBRL(t.amount)
                   )}

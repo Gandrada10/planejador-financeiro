@@ -2,7 +2,16 @@ import { useState, useEffect, useMemo } from 'react';
 import { Check, X, Trash2, AlertTriangle } from 'lucide-react';
 
 import type { Transaction, Category, Account, Project } from '../../types';
-import { applyMoneyMask, parseMoneyInput, filterCategoriesByAmount } from '../../lib/utils';
+import { applyMoneyMask, parseMoneyInput, filterCategoriesByAmount, formatBRL } from '../../lib/utils';
+
+/** Prévia da taxa que será gravada, para o número não virar caixa-preta:
+ *  o usuário digita "€ 40" e "R$ 242" e vê "R$ 6,05 por EUR" na hora. */
+function fxRateLabel(rawFx: string, rawBrl: string, currency: string): string {
+  const fx = parseMoneyInput(rawFx);
+  const brl = parseMoneyInput(rawBrl);
+  if (!fx || !brl) return '—';
+  return `${formatBRL(Math.abs(brl) / Math.abs(fx))} por ${currency}`;
+}
 
 interface Props {
   transaction: Transaction;
@@ -53,6 +62,13 @@ export function TransactionEditModal({
   const [notes, setNotes] = useState(transaction.notes || '');
   const [noteAlert, setNoteAlert] = useState(!!transaction.noteAlert);
   const [isReimbursement, setIsReimbursement] = useState(!!transaction.isReimbursement);
+  // Moeda estrangeira: texto livre para aceitar o estado VAZIO (gasto em
+  // reais, que é a esmagadora maioria). Valor sempre em módulo — o sinal vem
+  // do seletor despesa/receita, igual ao valor em reais.
+  const [amountFx, setAmountFx] = useState(
+    transaction.amountFx != null ? String(Math.abs(transaction.amountFx)).replace('.', ',') : ''
+  );
+  const [currencyFx, setCurrencyFx] = useState(transaction.currencyFx || '');
 
   useEffect(() => {
     function handleKey(e: KeyboardEvent) {
@@ -96,10 +112,31 @@ export function TransactionEditModal({
       notes,
       // Alerta só faz sentido com texto — nota vazia nunca fica no sininho.
       noteAlert: notes.trim() ? noteAlert : false,
+      ...fxPatch(amountFx, currencyFx, signedAmount),
     };
 
     onSave(transaction.id, data);
     onClose();
+  }
+
+  /**
+   * Satélites de moeda a gravar. Os três andam juntos: sem moeda declarada
+   * ou sem valor, TODOS voltam a null — deixar `amountFx` órfão de
+   * `currencyFx` produziria um número sem unidade, que nenhuma tela sabe
+   * exibir. A taxa é derivada aqui (reais ÷ moeda) porque na entrada manual
+   * não existe lote de câmbio de onde tirá-la; no caminho da importação ela
+   * vem do FIFO e é bem mais precisa.
+   */
+  function fxPatch(rawFx: string, rawCurrency: string, signedBrl: number): Partial<Transaction> {
+    const fx = parseMoneyInput(rawFx);
+    const currency = rawCurrency.trim().toUpperCase();
+    if (!fx || !currency) return { amountFx: null, currencyFx: null, fxRate: null };
+    const magnitude = Math.abs(fx);
+    return {
+      amountFx: signedBrl < 0 ? -magnitude : magnitude,
+      currencyFx: currency,
+      fxRate: magnitude > 0 ? Math.abs(signedBrl) / magnitude : null,
+    };
   }
 
   function handleDelete() {
@@ -179,6 +216,40 @@ export function TransactionEditModal({
               />
             </div>
           </div>
+
+          {/* Moeda estrangeira: gasto em espécie ou em cartão internacional de
+              outro banco, que nenhum importador conhece. O que vem do extrato
+              da Wise já chega preenchido. O valor em R$ acima continua sendo
+              o que conta nos totais — isto aqui só registra o original. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelClass}>Valor em moeda estrangeira <span className="text-ink-3">(opcional)</span></label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={amountFx}
+                onChange={(e) => setAmountFx(applyMoneyMask(e.target.value))}
+                className={inputClass}
+                placeholder="0,00"
+              />
+            </div>
+            <div>
+              <label className={labelClass}>Moeda</label>
+              <input
+                type="text"
+                value={currencyFx}
+                onChange={(e) => setCurrencyFx(e.target.value.toUpperCase().slice(0, 3))}
+                className={inputClass}
+                placeholder="EUR"
+                maxLength={3}
+              />
+            </div>
+          </div>
+          {amountFx && currencyFx && (
+            <p className="text-caption text-ink-3 -mt-1">
+              Taxa deste lançamento: {fxRateLabel(amountFx, amount, currencyFx)}
+            </p>
+          )}
 
           <div>
             <label className={labelClass}>{isCard ? 'Data da compra' : 'Data de competência (opcional)'}</label>
