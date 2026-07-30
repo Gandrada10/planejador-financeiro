@@ -358,7 +358,13 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // Compras de moeda quase sempre JÁ estão no app, importadas do extrato da
   // conta corrente que as pagou — por isso nascem DESmarcadas. Quando o
   // usuário liga, entram com a categoria de exclusão-de-total.
-  const [fxIncludeConversions, setFxIncludeConversions] = useState(false);
+  // Nasce LIGADO: linha que está no arquivo aparece na lista. A compra de
+  // moeda não é gasto (entra como Transferência, fora dos totais), mas sumir
+  // da tela sem o usuário pedir é decidir por ele — e a conferência com o
+  // extrato deixa de fechar. Desligar continua sendo útil para quem também
+  // importa o extrato em reais que pagou a recarga e não quer a mesma
+  // transferência dos dois lados.
+  const [fxIncludeConversions, setFxIncludeConversions] = useState(true);
 
   // Credit card billing month (= mês de PAGAMENTO/vencimento da fatura, regime
   // de caixa) e o dia de vencimento aplicado (override do cadastro do cartão).
@@ -619,7 +625,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       const rows = buildFxRows(
         ledger,
         result.meta.currency || '',
-        false,
+        true,
         categories.find((c) => c.excludeFromTotals)?.id ?? null,
         matchCategory,
         existingTransactions,
@@ -627,7 +633,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       );
 
       setFxOpeningCost(continues ? String(openingCost) : '');
-      setFxIncludeConversions(false);
+      setFxIncludeConversions(true);
       setFxResult(result);
       setItems(rows);
       setSelected(new Set(rows.map((_, i) => i).filter((i) => !rows[i].isDuplicate)));
@@ -1198,7 +1204,26 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
 
     for (const [i, row] of items.entries()) {
       if (!selected.has(i)) continue;
-      const { isDuplicate: _, installmentType, periodicity, installmentAmount, ...rest } = row;
+      // `duplicateOf` SAI aqui junto com os outros campos de tela.
+      //
+      // Ele é metadado do preview (descreve um lançamento JÁ existente que
+      // parece igual a este) e nunca teve o que fazer dentro do documento. Só
+      // que, no caminho do extrato em moeda estrangeira, a linha nasce com a
+      // chave presente e valor `undefined` quando NÃO é duplicata — e o
+      // Firestore recusa `undefined` com exceção síncrona no `batch.set`
+      // (o app não liga `ignoreUndefinedProperties`, de propósito: campo
+      // indefinido em app financeiro é bug, não valor). A exceção subia pelo
+      // `onImport`, ninguém pegava, e o botão ficava "Importando..." para
+      // sempre, sem mensagem. Era exatamente o extrato Wise que travava, e só
+      // ele: os caminhos de IA e OFX não gravam este campo.
+      const {
+        isDuplicate: _isDuplicate,
+        duplicateOf: _duplicateOf,
+        installmentType,
+        periodicity,
+        installmentAmount,
+        ...rest
+      } = row;
 
       // `purchaseDate` = competência (data da compra original, também de cada
       // parcela) — referência secundária, NÃO governa o mês. `invoiceDate` = a
@@ -1259,7 +1284,23 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       }
     }
 
-    await onImport(toImport);
+    // Falha de gravação PRECISA virar mensagem. Sem este try, qualquer erro
+    // aqui (dado que o Firestore recusa, regra de segurança, rede) pulava o
+    // `setImporting(false)` lá embaixo e deixava o botão preso em
+    // "Importando..." — a tela mais frustrante possível, porque não diz nada
+    // e não dá o que fazer.
+    try {
+      await onImport(toImport);
+    } catch (err) {
+      console.error('[import] falha ao gravar o lote', err);
+      setError(
+        err instanceof Error
+          ? `Não deu para gravar os lançamentos: ${err.message}`
+          : 'Não deu para gravar os lançamentos. Tente de novo.'
+      );
+      setImporting(false);
+      return;
+    }
 
     // Fecha a carteira de moeda: o saldo e o custo do fim deste extrato são o
     // ponto de partida do próximo. Gravado DEPOIS do import — se a gravação
@@ -1310,13 +1351,22 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   const totals = useMemo(() => {
     let compras = 0;
     let estornos = 0;
+    let transferencias = 0;
     items.forEach((it, i) => {
       if (!selected.has(i)) return;
+      // Transferência (compra de moeda, pagamento de fatura) não é gasto nem
+      // receita — é dinheiro trocando de bolso, e é assim que ela conta em
+      // TODO o resto do app. Somá-la aqui faria o placar do lote dizer o
+      // dobro do que a importação de fato acrescenta às despesas.
+      if (transferCategoryId && it.categoryId === transferCategoryId) {
+        transferencias += it.amount;
+        return;
+      }
       if (it.amount < 0) compras += it.amount;
       else estornos += it.amount;
     });
-    return { compras, estornos, liquido: compras + estornos };
-  }, [items, selected]);
+    return { compras, estornos, transferencias, liquido: compras + estornos };
+  }, [items, selected, transferCategoryId]);
 
   // Blindagem anti-titular-cru: uma linha SELECIONADA está "não resolvida"
   // quando carrega um titular vindo do extrato (string bruta) que NÃO é um
@@ -1481,6 +1531,15 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                     </div>
                   );
                 })()}
+                {totals.transferencias !== 0 && (
+                  <div
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 bg-bg-card border border-border rounded-control"
+                    title="Dinheiro trocando de bolso (compra de moeda, pagamento de fatura). Entra como Transferência e fica fora de receitas e despesas — aqui e no resto do app."
+                  >
+                    <span className="text-text-secondary">Transferências</span>
+                    <span className="font-bold text-ink-3 tnum">{formatBRL(totals.transferencias)}</span>
+                  </div>
+                )}
                 <span className="text-caption text-text-secondary">
                   {selected.size} de {items.length} selecionada{items.length !== 1 ? 's' : ''}
                 </span>
@@ -1606,8 +1665,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                         className="accent-accent"
                       />
                       <span>
-                        Importar também as compras de moeda como transferência
-                        {!transferCategoryId && <> (categoria de transferência não encontrada)</>}
+                        Trazer as compras de moeda (como Transferência, fora dos totais)
+                        {!transferCategoryId && <> — categoria de transferência não encontrada</>}
+                        {fxLedger.conversions.length > 0 && (
+                          <span className="text-ink-3">
+                            {' '}· {fxLedger.conversions.length} neste extrato
+                            {' '}· desmarque se você já importa o extrato em reais que pagou por elas
+                          </span>
+                        )}
                       </span>
                     </label>
                   </div>
