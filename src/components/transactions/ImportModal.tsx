@@ -690,7 +690,11 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         familyMember: old.familyMember,
         titular: old.titular,
         notes: old.notes,
-        noteAlert: old.noteAlert,
+        // `?? false` e não `old.noteAlert`: copiar o valor cru CRIA a chave
+        // com `undefined` quando a linha nunca teve nota — e o Firestore
+        // recusa `undefined`, derrubando a gravação do lote inteiro. A linha
+        // nasce sem a chave; era esta cópia que a inventava.
+        noteAlert: old.noteAlert ?? false,
       };
     });
 
@@ -1254,8 +1258,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           amount,
           installmentNumber: currentInst,
           totalInstallments: rest.totalInstallments,
-          billingMonth: billingDate ? billingMonth : rest.billingMonth,
-          provisionalDate: billingDate ? invoiceDate : rest.provisionalDate,
+          // `?? null` em todo campo opcional: o Firestore recusa `undefined`,
+          // e a linha do extrato em moeda não tem nenhum dos dois.
+          billingMonth: (billingDate ? billingMonth : rest.billingMonth) ?? null,
+          provisionalDate: (billingDate ? invoiceDate : rest.provisionalDate) ?? null,
         });
 
         // Future installments
@@ -1269,8 +1275,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
             amount,
             installmentNumber: currentInst + offset,
             totalInstallments: rest.totalInstallments,
-            billingMonth: billingDate ? getMonthYear(futureDate) : rest.billingMonth,
-            provisionalDate: billingDate ? futureDate : rest.provisionalDate,
+            billingMonth: (billingDate ? getMonthYear(futureDate) : rest.billingMonth) ?? null,
+            provisionalDate: (billingDate ? futureDate : rest.provisionalDate) ?? null,
           });
         }
       } else {
@@ -1278,8 +1284,8 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           ...rest,
           date: invoiceDate,
           purchaseDate,
-          billingMonth: billingDate ? billingMonth : rest.billingMonth,
-          provisionalDate: billingDate ? invoiceDate : rest.provisionalDate,
+          billingMonth: (billingDate ? billingMonth : rest.billingMonth) ?? null,
+          provisionalDate: (billingDate ? invoiceDate : rest.provisionalDate) ?? null,
         });
       }
     }

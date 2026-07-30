@@ -50,6 +50,35 @@ async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof wr
   await ackOrQueued(Promise.all(pending));
 }
 
+/**
+ * Tira do objeto as chaves com valor `undefined`, logo antes de gravar.
+ *
+ * O Firestore RECUSA `undefined` com exceção, e derruba o lote inteiro por
+ * causa de um campo opcional. Isso já quebrou a importação duas vezes, sempre
+ * do mesmo jeito: um campo opcional (`duplicateOf`, depois `noteAlert`) que
+ * alguém copiou de outro objeto — `x: outro.x` cria a chave mesmo quando o
+ * valor é `undefined` — e viajou até a escrita.
+ *
+ * Cada uma dessas foi corrigida na origem, que é onde tem de ser. Esta rede
+ * existe porque o preço de escapar mais uma é alto demais: o usuário perde a
+ * importação inteira e recebe uma mensagem que não diz o que fazer. O
+ * `console.warn` mantém o bug VISÍVEL — a rede evita a queda, não esconde o
+ * problema. E não vira `ignoreUndefinedProperties` global: aqui a limpeza é
+ * explícita, só no caminho de escrita em lote, e deixa rastro.
+ */
+function stripUndefined(data: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  const dropped: string[] = [];
+  for (const [k, v] of Object.entries(data)) {
+    if (v === undefined) dropped.push(k);
+    else out[k] = v;
+  }
+  if (dropped.length > 0) {
+    console.warn('[firestore] campo(s) undefined descartado(s) na gravação:', dropped.join(', '));
+  }
+  return out;
+}
+
 function docToTransaction(id: string, data: Record<string, unknown>): Transaction {
   return {
     id,
@@ -187,7 +216,7 @@ export function useTransactions() {
     const batchId = `import_${Date.now()}`;
     await commitInChunks(items, (batch, item) => {
       const newDoc = doc(ref);
-      batch.set(newDoc, {
+      batch.set(newDoc, stripUndefined({
         ...item,
         titular: normalizeTitular(item.titular),
         date: Timestamp.fromDate(item.date),
@@ -197,7 +226,7 @@ export function useTransactions() {
         ...fxFields(item),
         importBatch: batchId,
         createdAt: Timestamp.now(),
-      });
+      }));
     });
   }
 
