@@ -593,8 +593,8 @@ export function YoyDeviationPanel({
           </div>
 
           {uncatShare !== null && uncatShare >= 0.5 && (
-            <p className="text-caption text-ink-3 pt-1 flex items-start gap-1.5">
-              <AlertTriangle size={11} className="flex-shrink-0 mt-0.5 text-status-warn" />
+            <p className="text-body text-text-secondary leading-snug pt-1 flex items-start gap-1.5">
+              <AlertTriangle size={12} className="flex-shrink-0 mt-0.5 text-status-warn" />
               <span>
                 <span className="tnum text-status-warn">{formatBRL0(uncatCurr)}</span> (
                 {uncatShare.toFixed(0)}%) {uncatGroup === 'income' ? 'das receitas' : 'das despesas'}{' '}
@@ -610,17 +610,19 @@ export function YoyDeviationPanel({
             </p>
           )}
 
-          <div className="pt-1 border-t border-border space-y-0.5">
-            <p className="text-caption text-ink-3">
+          {/* Conclusões do card. Em text-body e não em caption: são as três
+              frases que respondem "e daí?" — a leitura que sobra depois de as
+              barras terem chamado a atenção — e a 11px mudas ninguém lê. */}
+          <div className="pt-2 border-t border-border space-y-1 text-body text-text-secondary leading-snug">
+            <p>
               Efeito líquido:{' '}
-              <span className={`tnum ${netTone(netDelta, group.higherIsBetter)}`}>
+              <span className={`tnum font-semibold ${netTone(netDelta, group.higherIsBetter)}`}>
                 {signed0(netDelta)}
               </span>{' '}
               {group.netNoun} contra {data.prevYear}.
             </p>
             {cadence && (
               <p
-                className="text-caption text-ink-3"
                 title={`Recorrente = subcategoria (ou lançamento direto na categoria) presente em pelo menos ${data.cadenceMonths} dos ${data.windowMonths} meses comparados. Gasto anual — IPTU, seguro, matrícula — entra como pontual: não volta no semestre que vem.`}
               >
                 Desse total,{' '}
@@ -636,11 +638,10 @@ export function YoyDeviationPanel({
             )}
             {projection && (
               <p
-                className="text-caption text-ink-3"
                 title={`${periodLabel} realizado mais a base recorrente rodando nos ${projection.remaining} meses que faltam. Não inclui gastos pontuais que ainda vão aparecer — em despesa, é um piso, não uma previsão.`}
               >
                 No ritmo recorrente, {currentYear} fecha perto de{' '}
-                <span className="tnum text-text-secondary">
+                <span className="tnum font-semibold text-text-primary">
                   {activeGroup === 'resultado'
                     ? signed0(projection.value)
                     : formatBRL0(projection.value)}
@@ -742,7 +743,9 @@ function BarRow({
     </>
   );
   const value = (
-    <span className={`text-caption tnum flex-shrink-0 ${tone}`}>
+    // Linha principal em text-body: é o número que se lê na varredura. As
+    // subcategorias seguem em caption para a hierarquia continuar visível.
+    <span className={`${sub ? 'text-caption' : 'text-body'} tnum flex-shrink-0 ${tone}`}>
       {signed0(delta)}
       {/* Some no celular pelo mesmo motivo do "vs 2025" nos tiles: com ~110px
           por coluna, o valor em reais é o que precisa sobreviver. */}

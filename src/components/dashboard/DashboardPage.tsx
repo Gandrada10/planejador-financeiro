@@ -214,13 +214,16 @@ export function DashboardPage() {
           costOfLiving={costOfLiving}
         />
 
-        {/* ---- FLUXO | COMPROMISSOS ----
+        {/* ---- FLUXO | LEITURA DO ANO E COMPROMISSOS ----
             Esquerda (4/7): só o Sankey — ele estica até a altura da coluna
             vizinha e centraliza o diagrama no espaço que sobrar.
-            Direita (3/7): projetos e metas, o que você se comprometeu a
-            fazer com o dinheiro. A análise da categoria clicada entra no
-            TOPO da coluna, cara a cara com o diagrama que a gerou, sem
-            esconder nenhum dos dois.
+            Direita (3/7): "o que puxou o ano" no topo — a leitura do ano
+            fica cara a cara com o fluxo do mês, que é a comparação que se
+            faz de fato ("gastei muito neste mês ou o ano todo está assim?")
+            — e embaixo projetos e metas, o que você se comprometeu a fazer
+            com o dinheiro. A análise da categoria clicada entra ACIMA de
+            tudo, ao lado do diagrama que a gerou, sem esconder nenhum dos
+            dois.
 
             items-start: cada coluna tem altura própria. Abrir a análise
             empurra metas e projetos para baixo SEM esticar o fluxo — o
@@ -247,6 +250,14 @@ export function DashboardPage() {
               />
             )}
 
+            <YoyDeviationPanel
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+              periodLabel={periodLabel}
+            />
+
             <ProjectsPanel
               projects={projects}
               transactions={transactions}
@@ -268,26 +279,17 @@ export function DashboardPage() {
           isMonthInProgress={isMonthInProgress}
         />
 
-        {/* ---- FECHAMENTO: o mês conferido | o ano explicado ----
-            Mesma proporção da faixa de cima, para as colunas fecharem
-            alinhadas de ponta a ponta da página. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4 items-start">
-          <CashFlowTable
-            data={cashFlowData}
-            totalEntries={totalEntries}
-            totalExits={totalExits}
-            totalBalance={totalBalance}
-            monthLabel={getMonthLabel(monthYear)}
-          />
-
-          <YoyDeviationPanel
-            transactions={transactions}
-            categories={categories}
-            monthYear={monthYear}
-            isMonthInProgress={isMonthInProgress}
-            periodLabel={periodLabel}
-          />
-        </div>
+        {/* ---- FECHAMENTO: o mês conferido ----
+            Em largura total desde que "o que puxou o ano" subiu para a coluna
+            do fluxo: a conferência do caixa é uma tabela de contas e ganha em
+            ter a página inteira em vez de 3/7 dela. */}
+        <CashFlowTable
+          data={cashFlowData}
+          totalEntries={totalEntries}
+          totalExits={totalExits}
+          totalBalance={totalBalance}
+          monthLabel={getMonthLabel(monthYear)}
+        />
         </div>
       ) : (
         <div className="bg-bg-card border border-border rounded-card p-10 text-center space-y-2">
