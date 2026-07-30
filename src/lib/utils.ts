@@ -228,9 +228,17 @@ export function normalizeDescriptionForDedup(desc: string): string {
  * Filter categories so the dropdown only shows relevant types for a given amount.
  * amount >= 0 → receita + ambos; amount < 0 → despesa + ambos
  */
-export function filterCategoriesByAmount<T extends { type: string }>(categories: T[], amount: number): T[] {
+export function filterCategoriesByAmount<T extends { type: string; excludeFromTotals?: boolean }>(
+  categories: T[],
+  amount: number
+): T[] {
   const allowed = amount >= 0 ? ['receita', 'ambos'] : ['despesa', 'ambos'];
-  return categories.filter((c) => allowed.includes(c.type));
+  // Categoria fora-dos-totais ("Transferência") vale nos DOIS sinais: a mesma
+  // transferência é saída de um lado e entrada do outro — comprar euro sai da
+  // conta corrente e entra na conta em moeda. Filtrá-la pelo sinal deixava o
+  // lado da entrada sem a única categoria que serve para ele, e o seletor
+  // aparecia vazio numa linha que já vinha classificada.
+  return categories.filter((c) => c.excludeFromTotals || allowed.includes(c.type));
 }
 
 /**

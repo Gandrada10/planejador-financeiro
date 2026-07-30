@@ -64,9 +64,19 @@ export interface FxCarry {
 /** Um lançamento do extrato já com preço em BRL. */
 export interface FxPricedEntry {
   entry: WiseEntry;
-  /** Valor em BRL, assinado no mesmo sentido de `entry.amountFx`
-   *  (negativo = despesa). Para conversões de entrada é o BRL desembolsado,
-   *  negativo — a saída da conta corrente que comprou a moeda. */
+  /**
+   * Valor em BRL do movimento, SEMPRE no mesmo sentido de `entry.amountFx` —
+   * porque o lançamento é gravado na CONTA EM MOEDA, e o sinal tem de contar o
+   * que aconteceu ali: gasto no cartão sai (negativo), moeda comprada entra
+   * (positivo, como está no extrato).
+   *
+   * Já foi negativo na compra de moeda, sob a ideia de que ali o que importa é
+   * o desembolso em reais. Mas esse desembolso é um fato da CONTA CORRENTE, e
+   * é de lá que ele é importado; repeti-lo com sinal invertido na conta em
+   * moeda contava a mesma saída duas vezes no caixa e contradizia a linha do
+   * extrato, que é uma entrada. Cada conta registra o seu lado — as duas
+   * pernas se anulam porque ambas são Transferência, fora dos totais.
+   */
   amountBrl: number;
   /** Custo unitário efetivo aplicado (BRL por unidade de moeda), ou `null`
    *  quando o valor é zero. Só para exibição/conferência. */
@@ -164,7 +174,9 @@ export function buildFxLedger(entries: WiseEntry[], opening: FxCarry): FxLedgerR
     const fxCents = toCents(entry.amountFx);
 
     if (entry.isConversion) {
-      // Compra de moeda: cria lote e sai da conta corrente em BRL.
+      // Compra de moeda: cria o lote que vai lastrear os gastos seguintes. Na
+      // conta em moeda isto é ENTRADA — o custo em reais é o valor do que
+      // entrou, com o mesmo sinal do extrato (ver `amountBrl`).
       const costCents = entry.sourceAmount !== null
         ? toCents(entry.sourceAmount)
         : (averageRate !== null ? Math.round(fxCents * averageRate) : 0);
@@ -175,7 +187,7 @@ export function buildFxLedger(entries: WiseEntry[], opening: FxCarry): FxLedgerR
       lots.push({ fx: fxCents, brl: costCents, estimated: approx });
       conversions.push({
         entry,
-        amountBrl: -fromCents(costCents),
+        amountBrl: fromCents(costCents),
         rate: fxCents > 0 ? costCents / fxCents : null,
         estimated: approx,
       });
