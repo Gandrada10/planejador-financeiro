@@ -214,31 +214,47 @@ export function DashboardPage() {
           costOfLiving={costOfLiving}
         />
 
-        {/* ---- FLUXO | LEITURA DO ANO E COMPROMISSOS ----
-            Esquerda (4/7): só o Sankey — ele estica até a altura da coluna
-            vizinha e centraliza o diagrama no espaço que sobrar.
-            Direita (3/7): "o que puxou o ano" no topo — a leitura do ano
-            fica cara a cara com o fluxo do mês, que é a comparação que se
-            faz de fato ("gastei muito neste mês ou o ano todo está assim?")
-            — e embaixo projetos e metas, o que você se comprometeu a fazer
-            com o dinheiro. A análise da categoria clicada entra ACIMA de
-            tudo, ao lado do diagrama que a gerou, sem esconder nenhum dos
-            dois.
+        {/* ---- O MÊS | O ANO E OS COMPROMISSOS ----
+            Esquerda (4/7): o mês por dentro — o fluxo do dinheiro e, logo
+            abaixo, a conferência do caixa daquele mesmo mês.
+            Direita (3/7): o ano ("o que puxou"), cara a cara com o fluxo,
+            que é a comparação que se faz de fato ("gastei muito neste mês ou
+            o ano todo está assim?"), e embaixo os compromissos: projetos e
+            metas. A análise da categoria clicada entra ACIMA de tudo, ao lado
+            do diagrama que a gerou.
 
-            items-start: cada coluna tem altura própria. Abrir a análise
-            empurra metas e projetos para baixo SEM esticar o fluxo — o
-            diagrama não pode mudar de tamanho a cada clique. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4 items-start">
-          <MonthFlowPanel
-            transactions={transactions}
-            categories={categories}
-            monthYear={monthYear}
-            isMonthInProgress={isMonthInProgress}
-            selectedCategory={flowCategory}
-            onSelectCategory={setFlowCategory}
-          />
+            ── Por que as duas colunas são pilhas com o último card elástico ──
+            Duas colunas de altura independente sempre terminam desalinhadas,
+            e a sobra vira um buraco na página — era o vão embaixo do Sankey,
+            que só cresce quando as metas se populam. Aqui cada lado carrega um
+            card fixo (fluxo / o ano) e um card que cresce com os dados (caixa
+            / metas), o que já aproxima as alturas; o que ainda sobra é
+            absorvido PELO ÚLTIMO CARD de cada coluna (`flex-1`), então a folga
+            vira respiro DENTRO de uma moldura em vez de um vazio na página.
+            O diagrama do fluxo continua de altura natural: ele não pode mudar
+            de tamanho a cada clique. */}
+        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4">
+          <div className="flex flex-col gap-4 min-w-0">
+            <MonthFlowPanel
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+              selectedCategory={flowCategory}
+              onSelectCategory={setFlowCategory}
+            />
 
-          <div className="space-y-4">
+            <CashFlowTable
+              data={cashFlowData}
+              totalEntries={totalEntries}
+              totalExits={totalExits}
+              totalBalance={totalBalance}
+              monthLabel={getMonthLabel(monthYear)}
+              className="lg:flex-1"
+            />
+          </div>
+
+          <div className="flex flex-col gap-4 min-w-0">
             {flowCategory && (
               <CategoryDetailPanel
                 transactions={transactions}
@@ -265,12 +281,14 @@ export function DashboardPage() {
               monthYear={monthYear}
             />
 
-            <BudgetGoalsPanel rows={budgetData} />
+            <BudgetGoalsPanel rows={budgetData} className="lg:flex-1" />
 
           </div>
         </div>
 
-        {/* A evolução mês a mês em largura total: 24 barras respiram. */}
+        {/* Fecha a página em largura total: 24 barras (e 36, nas janelas
+            longas) respiram. É o único card cuja leitura depende de largura,
+            então é o que fica de fora da grade de duas colunas. */}
         <ExpensesPanel
           transactions={transactions}
           categories={categories}
@@ -279,17 +297,6 @@ export function DashboardPage() {
           isMonthInProgress={isMonthInProgress}
         />
 
-        {/* ---- FECHAMENTO: o mês conferido ----
-            Em largura total desde que "o que puxou o ano" subiu para a coluna
-            do fluxo: a conferência do caixa é uma tabela de contas e ganha em
-            ter a página inteira em vez de 3/7 dela. */}
-        <CashFlowTable
-          data={cashFlowData}
-          totalEntries={totalEntries}
-          totalExits={totalExits}
-          totalBalance={totalBalance}
-          monthLabel={getMonthLabel(monthYear)}
-        />
         </div>
       ) : (
         <div className="bg-bg-card border border-border rounded-card p-10 text-center space-y-2">

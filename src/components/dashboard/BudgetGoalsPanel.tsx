@@ -12,6 +12,9 @@ export interface BudgetRow {
 
 interface Props {
   rows: BudgetRow[];
+  /** Do layout do dashboard: `lg:flex-1` faz este card, último da coluna,
+   *  absorver a folga de altura em vez de deixá-la virar vazio na página. */
+  className?: string;
 }
 
 /**
@@ -22,7 +25,7 @@ interface Props {
  * mais carregado do app — aqui os totais também deixam de ser recalculados no
  * corpo da página.
  */
-export function BudgetGoalsPanel({ rows }: Props) {
+export function BudgetGoalsPanel({ rows, className = '' }: Props) {
   const parents = rows.filter((b) => b.isParent);
   const totalLimit = parents.reduce((s, b) => s + b.limit, 0);
   const totalActual = parents.reduce((s, b) => s + b.spent, 0);
@@ -30,10 +33,15 @@ export function BudgetGoalsPanel({ rows }: Props) {
   const totalOver = totalLimit > 0 && totalActual > totalLimit;
 
   return (
-    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
+    <div className={`bg-bg-card border border-border rounded-card p-4 flex flex-col gap-3 ${className}`}>
       <h3 className="text-title font-semibold text-text-primary">Metas de despesas</h3>
   {rows.length === 0 ? (
-    <p className="text-caption text-ink-3">Nenhuma meta definida para este mês.</p>
+    // Centralizado no espaço que sobrar: este é o último card da coluna e
+    // pode ser esticado para fechar a altura. Um aviso curto grudado no topo
+    // de um card alto parece defeito; centrado, parece um estado vazio.
+    <p className="flex-1 grid place-items-center text-center text-caption text-ink-3 py-2">
+      Nenhuma meta definida para este mês.
+    </p>
   ) : (
     <div className="space-y-2">
       {/* Column headers */}

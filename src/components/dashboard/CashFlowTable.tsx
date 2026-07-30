@@ -18,6 +18,9 @@ interface Props {
   totalBalance: number;
   /** "junho de 2026" — janela dos números do mês. */
   monthLabel: string;
+  /** Do layout do dashboard: `lg:flex-1` faz este card, último da coluna,
+   *  absorver a folga de altura em vez de deixá-la virar vazio na página. */
+  className?: string;
 }
 
 /**
@@ -71,6 +74,7 @@ export function CashFlowTable({
   totalExits,
   totalBalance,
   monthLabel,
+  className = '',
 }: Props) {
   const groups = GROUPS.map((g) => {
     const rows = data.filter((d) => g.types.includes(d.type));
@@ -84,7 +88,11 @@ export function CashFlowTable({
   }).filter((g) => g.rows.length > 0);
 
   return (
-    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
+    // flex-col + total com `mt-auto`: quando este card é esticado para fechar
+    // a altura da coluna (ver DashboardPage), a folga vai para ANTES do total,
+    // que fica ancorado no rodapé do card como o fecho de um extrato. Sobra
+    // embaixo do total pareceria card inacabado.
+    <div className={`bg-bg-card border border-border rounded-card p-4 flex flex-col gap-3 ${className}`}>
       <div className="flex items-baseline justify-between gap-2 flex-wrap">
         <h3 className="text-title font-semibold text-text-primary">Resultados de caixa</h3>
         <p className="text-caption text-ink-3">{monthLabel} · por conta</p>
@@ -117,7 +125,7 @@ export function CashFlowTable({
         ))}
       </div>
 
-      <div className="pt-2 border-t border-border">
+      <div className="mt-auto pt-2 border-t border-border">
         <Line
           name="Total do mês"
           entries={totalEntries}

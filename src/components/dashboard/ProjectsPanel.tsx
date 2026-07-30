@@ -197,15 +197,19 @@ function Row({ p, muted }: { p: ProjectRow; muted?: boolean }) {
 
       <BudgetRuler spent={spent} budget={p.budget ?? null} color={p.color} />
 
+      {/* flex-wrap e nenhum `truncate` em cima de dinheiro: o único item que
+          podia encolher aqui era justamente o "faltam/estourou" — o número que
+          responde à pergunta do card. Faltando largura, a linha quebra; valor
+          cortado pela metade não é uma opção. */}
       <div
-        className="flex items-baseline gap-2 text-caption min-w-0"
+        className="flex items-baseline gap-x-2 gap-y-0.5 flex-wrap text-caption min-w-0"
         title={`Total do projeto: ${formatBRL(spent)}${p.budget ? ` de ${formatBRL(p.budget)}` : ''}`}
       >
         <span className="tnum text-text-primary flex-shrink-0">{formatBRL0(spent)}</span>
         <span className="text-ink-3 flex-shrink-0">
           {p.budget ? `de ${formatBRL0(p.budget)}` : 'gasto até aqui'}
         </span>
-        <span className={`flex-1 text-right tnum truncate ${label.cls}`}>{label.text}</span>
+        <span className={`flex-1 text-right tnum whitespace-nowrap ${label.cls}`}>{label.text}</span>
         <span className="text-ink-3 tnum flex-shrink-0">
           {p.spentMonth < 0 ? `· ${formatBRL0(-p.spentMonth)} no mês` : '· sem gasto no mês'}
         </span>
