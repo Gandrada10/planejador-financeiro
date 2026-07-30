@@ -269,6 +269,7 @@ export function DashboardPage() {
             <YoyDeviationPanel
               transactions={transactions}
               categories={categories}
+              projects={projects}
               monthYear={monthYear}
               isMonthInProgress={isMonthInProgress}
               periodLabel={periodLabel}

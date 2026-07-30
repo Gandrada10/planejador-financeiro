@@ -9,12 +9,14 @@ import {
   isIncomeAmount,
   accountingDate,
 } from '../../lib/utils';
-import type { Transaction, Category } from '../../types';
+import type { Transaction, Category, Project } from '../../types';
 import { resolveTrend, type YoyItem, type YoySubItem, type GroupTotal } from './yoyShared';
 
 interface Props {
   transactions: Transaction[];
   categories: Category[];
+  /** Para NOMEAR de onde veio o aumento: "Europa 2026", "Obra casa 2026". */
+  projects: Project[];
   monthYear: string;
   isMonthInProgress: boolean;
   periodLabel: string;
@@ -50,6 +52,21 @@ function computePct(curr: number, prev: number, absBase = false): number | null 
 const signed0 = (v: number) => `${v > 0 ? '+' : v < 0 ? '−' : ''}${formatBRL0(Math.abs(v))}`;
 
 /**
+ * A parte da variação que veio de PROJETO — o total menos a vida corrente.
+ *
+ * Projeto (viagem, obra, casamento) tem começo, orçamento e fim declarados
+ * pelo usuário. A cadência sozinha não enxerga isso: uma viagem que durou
+ * cinco meses aparece em 5 dos 6 meses comparados e é promovida a "base
+ * recorrente", indo parar na projeção do 2º semestre como se fosse aluguel.
+ * Esta parcela sai da base e vai para "pontual", que é o que ela é.
+ */
+function projectVariance(it: YoySubItem): number {
+  const currProject = it.curr - (it.currBase ?? it.curr);
+  const prevProject = it.prev - (it.prevBase ?? it.prev);
+  return currProject - prevProject;
+}
+
+/**
  * Cada grupo tem seu próprio vocabulário de direção, mas a REGRA DE COR é uma
  * só no card inteiro: coral = piorou o seu bolso, menta = melhorou. Por isso
  * "recebeu mais" fica à esquerda em Receitas — do lado bom, junto com
@@ -71,6 +88,7 @@ const GROUPS: Array<{
 export function YoyDeviationPanel({
   transactions,
   categories,
+  projects,
   monthYear,
   isMonthInProgress,
   periodLabel,
@@ -98,6 +116,11 @@ export function YoyDeviationPanel({
        *  da conta da taxa mensal — senão um junho ainda aberto rebaixaria a
        *  base recorrente e a projeção sairia otimista de graça. */
       currTail: number;
+      /** Os mesmos três, mas só do que NÃO pertence a projeto. Ver o tipo
+       *  `YoySubItem`: projeto tem fim, então nunca é base recorrente. */
+      currBase: number;
+      prevBase: number;
+      currTailBase: number;
       mCurr: Set<number>;
       mPrev: Set<number>;
     };
@@ -105,17 +128,25 @@ export function YoyDeviationPanel({
       curr: 0,
       prev: 0,
       currTail: 0,
+      currBase: 0,
+      prevBase: 0,
+      currTailBase: 0,
       mCurr: new Set(),
       mPrev: new Set(),
     });
-    const addTo = (s: Slice, amt: number, isCurr: boolean, month: number) => {
+    const addTo = (s: Slice, amt: number, isCurr: boolean, month: number, inProject: boolean) => {
       if (isCurr) {
         s.curr += amt;
         s.mCurr.add(month);
-        if (month === m) s.currTail += amt;
+        if (!inProject) s.currBase += amt;
+        if (month === m) {
+          s.currTail += amt;
+          if (!inProject) s.currTailBase += amt;
+        }
       } else {
         s.prev += amt;
         s.mPrev.add(month);
+        if (!inProject) s.prevBase += amt;
       }
     };
 
@@ -126,6 +157,10 @@ export function YoyDeviationPanel({
 
     const expMap = new Map<string, Bucket>();
     const incMap = new Map<string, Bucket>();
+    /** Variação por PROJETO, para o card poder nomear de onde veio o aumento
+     *  em vez de deixar o usuário procurar na aba Projetos. */
+    const expByProject = new Map<string, { curr: number; prev: number }>();
+    const incByProject = new Map<string, { curr: number; prev: number }>();
 
     let totalCurrExp = 0;
     let totalPrevExp = 0;
@@ -157,13 +192,24 @@ export function YoyDeviationPanel({
         targetMap.set(parentId, { total: newSlice(), direct: newSlice(), subs: new Map() });
       }
       const bucket = targetMap.get(parentId)!;
-      addTo(bucket.total, amt, isCurr, tm);
+      // Projeto tem começo e fim declarados pelo próprio usuário: viagem,
+      // obra, casamento. O que está preso a um deles não é vida corrente e
+      // não pode virar "base que segue no 2º semestre".
+      const inProject = !!t.projectId;
+      if (inProject) {
+        const perProject = isIncome ? incByProject : expByProject;
+        const acc = perProject.get(t.projectId!) ?? { curr: 0, prev: 0 };
+        if (isCurr) acc.curr += amt;
+        else acc.prev += amt;
+        perProject.set(t.projectId!, acc);
+      }
+      addTo(bucket.total, amt, isCurr, tm, inProject);
 
       if (cat?.parentId) {
         if (!bucket.subs.has(catId)) bucket.subs.set(catId, newSlice());
-        addTo(bucket.subs.get(catId)!, amt, isCurr, tm);
+        addTo(bucket.subs.get(catId)!, amt, isCurr, tm, inProject);
       } else {
-        addTo(bucket.direct, amt, isCurr, tm);
+        addTo(bucket.direct, amt, isCurr, tm, inProject);
       }
 
       if (isIncome) {
@@ -208,6 +254,9 @@ export function YoyDeviationPanel({
       curr: s.curr,
       prev: s.prev,
       currTail: s.currTail,
+      currBase: s.currBase,
+      prevBase: s.prevBase,
+      currTailBase: s.currTailBase,
       varianceAbs: s.curr - s.prev,
       pct: computePct(s.curr, s.prev),
       recurring: isRecurring(s),
@@ -262,7 +311,9 @@ export function YoyDeviationPanel({
       for (const it of items) {
         for (const leaf of it.subs.length > 0 ? it.subs : [it]) {
           if (!leaf.recurring) continue;
-          sum += leaf.curr - (isMonthInProgress ? (leaf.currTail ?? 0) : 0);
+          // `currBase`: sem a parte de projeto. É o que faz a projeção falar
+          // da vida corrente em vez de esticar uma viagem até dezembro.
+          sum += (leaf.currBase ?? 0) - (isMonthInProgress ? (leaf.currTailBase ?? 0) : 0);
         }
       }
       return sum / closed;
@@ -285,9 +336,20 @@ export function YoyDeviationPanel({
       // só identifica a linha — não é usado para buscar categoria.
       const side = sign === 1 ? 'inc' : 'exp';
       const subs = item.subs
-        .map((s) => ({ ...s, id: `${side}:${s.id}`, resultadoImpact: sign * s.varianceAbs }))
+        .map((s) => ({
+          ...s,
+          id: `${side}:${s.id}`,
+          resultadoImpact: sign * s.varianceAbs,
+          resultadoProjectImpact: sign * projectVariance(s),
+        }))
         .sort((a, b) => Math.abs(b.resultadoImpact!) - Math.abs(a.resultadoImpact!));
-      const entry: YoyItem = { ...item, id: `${side}:${item.id}`, resultadoImpact, subs };
+      const entry: YoyItem = {
+        ...item,
+        id: `${side}:${item.id}`,
+        resultadoImpact,
+        resultadoProjectImpact: sign * projectVariance(item),
+        subs,
+      };
       if (resultadoImpact > 0) resultadoHelping.push(entry);
       else resultadoHurting.push(entry);
     }
@@ -352,6 +414,8 @@ export function YoyDeviationPanel({
         expenses: recurringMonthly(expenseItems),
         income: recurringMonthly(incomeItems),
       },
+      expByProject,
+      incByProject,
       // Dinheiro sem classificação não é uma categoria como as outras: é o
       // tamanho do buraco na análise. Fica fora das barras, num aviso.
       uncategorized: {
@@ -376,11 +440,14 @@ export function YoyDeviationPanel({
   const bars = useMemo(() => {
     const toBar = (it: YoyItem | YoySubItem, harmSign: 1 | -1) => {
       const delta = activeGroup === 'resultado' ? (it.resultadoImpact ?? 0) : it.varianceAbs;
+      const projectDelta =
+        activeGroup === 'resultado' ? (it.resultadoProjectImpact ?? 0) : projectVariance(it);
       return {
         id: it.id,
         name: it.name,
         color: it.color,
         delta,
+        projectDelta,
         harm: harmSign * delta,
         // Base dos dois anos: sem ela "+R$ 7.163" não distingue uma deriva de
         // 5% de uma explosão de 10×, que pedem decisões opostas.
@@ -448,12 +515,49 @@ export function YoyDeviationPanel({
     let pontual = 0;
     for (const b of bars) {
       for (const leaf of b.leaves) {
-        if (leaf.recurring) recorrente += leaf.delta;
-        else pontual += leaf.delta;
+        // O que veio de projeto é pontual POR DEFINIÇÃO — não importa em
+        // quantos meses apareceu. O resto da folha segue a cadência.
+        pontual += leaf.projectDelta;
+        const semProjeto = leaf.delta - leaf.projectDelta;
+        if (leaf.recurring) recorrente += semProjeto;
+        else pontual += semProjeto;
       }
     }
     return { recorrente, pontual };
   }, [bars, data.cadenceReliable]);
+
+  /**
+   * De QUAIS projetos veio o aumento, com nome e valor. É a informação que o
+   * card não dava: "vieram de projetos" responde metade da pergunta, "vieram
+   * da Europa 2026 e da Obra casa 2026" responde ela inteira — e essas duas
+   * o usuário sabe que estão acabando.
+   */
+  const projectRows = useMemo(() => {
+    const ids = new Set([...data.expByProject.keys(), ...data.incByProject.keys()]);
+    const rows: { id: string; name: string; color: string; delta: number }[] = [];
+    for (const id of ids) {
+      const e = data.expByProject.get(id) ?? { curr: 0, prev: 0 };
+      const i = data.incByProject.get(id) ?? { curr: 0, prev: 0 };
+      const expDelta = e.curr - e.prev;
+      const incDelta = i.curr - i.prev;
+      // Mesma convenção de sinal das barras do grupo ativo.
+      const delta =
+        activeGroup === 'expenses' ? expDelta
+        : activeGroup === 'income' ? incDelta
+        : incDelta - expDelta;
+      if (Math.abs(delta) < MIN_DELTA) continue;
+      const p = projects.find((pp) => pp.id === id);
+      rows.push({
+        id,
+        name: p?.name ?? 'Projeto excluído',
+        color: p?.color ?? UNCATEGORIZED_COLOR,
+        delta,
+      });
+    }
+    return rows.sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta));
+  }, [data, activeGroup, projects]);
+
+  const projectTotal = projectRows.reduce((sum, r) => sum + r.delta, 0);
 
   // O fecho do raciocínio: se só a base recorrente rodar até dezembro, onde o
   // ano termina. Deliberadamente NÃO estima os pontuais que ainda vão
@@ -636,11 +740,36 @@ export function YoyDeviationPanel({
                 foi pontual.
               </p>
             )}
+            {projectRows.length > 0 && (
+              <p>
+                Do pontual,{' '}
+                <span className={`tnum font-semibold ${netTone(projectTotal, group.higherIsBetter)}`}>
+                  {signed0(projectTotal)}
+                </span>{' '}
+                {projectRows.length === 1 ? 'veio do projeto' : 'vieram dos projetos'}{' '}
+                {projectRows.slice(0, 3).map((r, i, arr) => (
+                  <span key={r.id} className="whitespace-nowrap">
+                    <span
+                      className="inline-block w-1.5 h-1.5 rounded-full align-middle mr-1"
+                      style={{ backgroundColor: r.color }}
+                      aria-hidden="true"
+                    />
+                    {r.name} (<span className="tnum">{signed0(r.delta)}</span>)
+                    {i < arr.length - 1 ? (i === arr.length - 2 ? ' e ' : ', ') : ''}
+                  </span>
+                ))}
+                {projectRows.length > 3 && <> e mais {projectRows.length - 3}</>}
+                {' '}— projeto tem começo e fim, então não entra no ritmo do 2º semestre.{' '}
+                <Link to="/projetos" className="text-accent hover:underline whitespace-nowrap">
+                  Ver projetos
+                </Link>
+              </p>
+            )}
             {projection && (
               <p
-                title={`${periodLabel} realizado mais a base recorrente rodando nos ${projection.remaining} meses que faltam. Não inclui gastos pontuais que ainda vão aparecer — em despesa, é um piso, não uma previsão.`}
+                title={`${periodLabel} realizado mais a base recorrente rodando nos ${projection.remaining} meses que faltam. NÃO estica projetos (viagem, obra) para o resto do ano, nem inclui gastos pontuais que ainda vão aparecer — em despesa, é um piso, não uma previsão.`}
               >
-                No ritmo recorrente, {currentYear} fecha perto de{' '}
+                No ritmo recorrente{projectRows.length > 0 ? ' (sem projetos)' : ''}, {currentYear} fecha perto de{' '}
                 <span className="tnum font-semibold text-text-primary">
                   {activeGroup === 'resultado'
                     ? signed0(projection.value)

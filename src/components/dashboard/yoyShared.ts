@@ -25,6 +25,21 @@ export interface YoySubItem {
   /** Parte de `curr` lançada no mês corrente — descartada no cálculo da taxa
    *  mensal quando esse mês ainda não fechou. */
   currTail?: number;
+  /**
+   * A mesma coisa que `curr`/`prev`/`currTail`, mas SÓ do que não pertence a
+   * projeto ("base" = vida corrente).
+   *
+   * Existe porque cadência não distingue viagem de aluguel: uma viagem de
+   * cinco meses aparece em 5 dos 6 meses comparados e é promovida a "base
+   * recorrente", entrando na projeção do 2º semestre como se fosse conta de
+   * luz. Projeto tem começo, orçamento e fim — o app já sabe disso, e é essa
+   * separação que impede a extrapolação absurda.
+   */
+  currBase?: number;
+  prevBase?: number;
+  currTailBase?: number;
+  /** Só no Resultado: a parte de `resultadoImpact` que veio de projeto. */
+  resultadoProjectImpact?: number;
 }
 
 export interface YoyItem extends YoySubItem {
