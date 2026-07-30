@@ -95,6 +95,29 @@ body {
   padding-right: env(safe-area-inset-right, 0px);
 }
 
+/* Respiro da área de conteúdo (o <main> de todas as telas).
+ *
+ * Existe porque as classes .safe-* acima ESCREVEM `padding-*`: usadas no mesmo
+ * elemento de um `p-4 lg:p-6` do Tailwind, ganhavam a disputa (mesma
+ * especificidade, declaradas depois) e zeravam as laterais e o rodapé no
+ * desktop, onde env(safe-area-inset-*) = 0px. Era a origem do conteúdo colado
+ * na borda da janela em telas grandes. Aqui o recuo base e a área segura do
+ * iPhone SOMAM em vez de competir. */
+.pad-page {
+  padding-top: 16px;
+  padding-left: calc(16px + env(safe-area-inset-left, 0px));
+  padding-right: calc(16px + env(safe-area-inset-right, 0px));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 1024px) {
+  .pad-page {
+    padding-top: 24px;
+    padding-left: calc(32px + env(safe-area-inset-left, 0px));
+    padding-right: calc(32px + env(safe-area-inset-right, 0px));
+    padding-bottom: calc(32px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
 /* Safari no iOS aumenta a fonte sozinho ao girar para paisagem. */
 html { -webkit-text-size-adjust: 100%; }
 

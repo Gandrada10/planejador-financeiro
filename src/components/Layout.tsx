@@ -166,7 +166,10 @@ export function Layout() {
           </div>
         </header>
 
-        <main className="flex-1 p-4 lg:p-6 overflow-auto safe-x safe-b">
+        {/* pad-page: recuo da página + área segura do iPhone somados. Não trocar
+            por `p-4 safe-x`: as duas classes disputam a mesma propriedade e o
+            conteúdo volta a colar na borda no desktop (ver index.css). */}
+        <main className="flex-1 overflow-auto pad-page">
           <Outlet />
         </main>
       </div>
