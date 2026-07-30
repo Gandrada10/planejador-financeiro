@@ -1,5 +1,8 @@
-import { useState, useMemo } from 'react';
-import { Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import {
+  Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw, Clock,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+} from 'lucide-react';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
 import { formatBRL, formatFx, formatDate, tabNavigate, applyMoneyMask, parseMoneyInput } from '../../lib/utils';
 import { CategoryCombobox } from '../shared/CategoryCombobox';
@@ -28,6 +31,25 @@ interface Props {
   rules?: CategoryRule[];
 }
 
+/**
+ * Linhas por página.
+ *
+ * Medido nesta tabela (Chromium, 90 categorias no cadastro): cada linha custa
+ * ~51 nós de DOM e ~0,75 ms de render — são 3 selects nativos com todas as
+ * opções, um combobox de categoria que monta a lista inteira e meia dúzia de
+ * ícones POR LINHA. E o custo não é só na abertura: o valor sendo digitado numa
+ * célula vive no estado DESTA tabela, então cada tecla re-renderiza todas as
+ * linhas montadas.
+ *
+ *   250 linhas → ~13k nós, ~200 ms por render — dá para trabalhar
+ *   1000 linhas → ~51k nós, ~800 ms por render — cada tecla trava
+ *
+ * Daí o teto de 250: é o maior lote em que uma tecla ainda responde no mesmo
+ * quadro num celular. Os TOTAIS da tela continuam somando a lista inteira —
+ * a paginação é só do que vai para o DOM.
+ */
+const PAGE_SIZE = 250;
+
 export function TransactionTable({ transactions, categories, projects = [], accountNames, memberNames = [], onUpdate, onDelete, onBatchReconcile, onBatchUpdate, checkClosedCycle, reopenCycle, onCreateRule, onDeleteRule, rules = [], allTransactions }: Props) {
   const [reimbTx, setReimbTx] = useState<Transaction | null>(null);
   const [editingCell, setEditingCell] = useState<{ id: string; field: string } | null>(null);
@@ -36,6 +58,8 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   const [sortField, setSortField] = useState<'date' | 'purchaseDate'>('date');
   const [sortDir, setSortDir] = useState<'desc' | 'asc'>('desc');
   const [showBatchEdit, setShowBatchEdit] = useState(false);
+  const [page, setPage] = useState(1);
+  const scrollBoxRef = useRef<HTMLDivElement>(null);
   // Exclusão exige confirmação (ação irreversível). Guarda o alvo pendente:
   // um id (linha) ou 'batch' (seleção múltipla).
   const [pendingDelete, setPendingDelete] = useState<string | 'batch' | null>(null);
@@ -65,6 +89,8 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   function toggleSort(field: 'date' | 'purchaseDate') {
     if (sortField === field) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
     else { setSortField(field); setSortDir('desc'); }
+    // Reordenar embaralha tudo: continuar na página 3 não quer dizer nada.
+    goToPage(1);
   }
 
   const sorted = useMemo(() => {
@@ -75,6 +101,25 @@ export function TransactionTable({ transactions, categories, projects = [], acco
       return sortDir === 'asc' ? diff : -diff;
     });
   }, [transactions, sortField, sortDir]);
+
+  // Paginação. `safePage` é DERIVADO e não sincronizado por efeito: quando um
+  // filtro encurta a lista, a página fora de alcance simplesmente deixa de
+  // existir e o render cai na última válida. Um efeito que chamasse setPage
+  // aqui devolveria o usuário à página 1 a cada edição de linha (a lista muda
+  // de identidade a cada gravação), que é justamente o que não pode acontecer.
+  const pageCount = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const paged = useMemo(
+    () => (sorted.length <= PAGE_SIZE ? sorted : sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)),
+    [sorted, safePage]
+  );
+
+  function goToPage(next: number) {
+    setPage(Math.min(Math.max(1, next), Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))));
+    // A tabela rola dentro da própria caixa: sem isso, a página nova abre no
+    // meio da lista, na altura em que a anterior estava.
+    if (scrollBoxRef.current) scrollBoxRef.current.scrollTop = 0;
+  }
 
   function SortIcon({ field }: { field: 'date' | 'purchaseDate' }) {
     if (sortField !== field) return <ArrowUpDown size={10} className="inline ml-1 opacity-40" />;
@@ -171,12 +216,16 @@ export function TransactionTable({ transactions, categories, projects = [], acco
     setSelectedIds(next);
   }
 
+  /** Marca/desmarca as linhas DESTA página — o que está à vista. Para pegar a
+   *  lista inteira existe o atalho explícito na barra de seleção; marcar 1.500
+   *  linhas invisíveis num clique é como se apaga um mês por engano. */
   function toggleAll() {
-    if (selectedIds.size === sorted.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(sorted.map((t) => t.id)));
-    }
+    const pageIds = paged.map((t) => t.id);
+    const allPageSelected = pageIds.every((id) => selectedIds.has(id));
+    const next = new Set(selectedIds);
+    if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+    else pageIds.forEach((id) => next.add(id));
+    setSelectedIds(next);
   }
 
   function performDeleteSelected() {
@@ -208,13 +257,24 @@ export function TransactionTable({ transactions, categories, projects = [], acco
   }
 
   const editableCell = 'cursor-pointer hover:bg-bg-secondary/50 transition-colors';
-  const allSelected = selectedIds.size === sorted.length && sorted.length > 0;
+  const allSelected = paged.length > 0 && paged.every((t) => selectedIds.has(t.id));
+  const paginated = pageCount > 1;
+  const firstRow = (safePage - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(safePage * PAGE_SIZE, sorted.length);
 
   return (
     <div className="space-y-2">
       {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 p-2 bg-bg-secondary rounded-card text-body flex-wrap">
           <span className="text-text-secondary">{selectedIds.size} selecionadas</span>
+          {paginated && selectedIds.size < sorted.length && (
+            <button
+              onClick={() => setSelectedIds(new Set(sorted.map((t) => t.id)))}
+              className="text-accent hover:underline"
+            >
+              Selecionar todas as {sorted.length.toLocaleString('pt-BR')}
+            </button>
+          )}
           {onBatchReconcile && (() => {
             const selectedList = sorted.filter((t) => selectedIds.has(t.id));
             const allReconciled = selectedList.every((t) => t.reconciled);
@@ -278,7 +338,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
           então a barra de rolagem horizontal fica sempre alcançável no rodapé
           (antes ela existia, mas só aparecia depois de TODAS as linhas). As
           colunas comprimem até o piso do colgroup; abaixo do min-w, rola. */}
-      <div className="overflow-auto bg-bg-card border border-border rounded-card max-h-[calc(100vh-190px)]">
+      <div ref={scrollBoxRef} className="overflow-auto bg-bg-card border border-border rounded-card max-h-[calc(100vh-190px)]">
         <table className="w-full min-w-[1086px] text-body table-fixed">
           <colgroup>
             <col style={{ width: 28 }} />  {/* dot */}
@@ -303,7 +363,9 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                     allSelected ? 'bg-select border-select' : 'border-border hover:border-select'
                   }`}
                   onClick={toggleAll}
-                  title={allSelected ? 'Desmarcar todos' : 'Selecionar todos'}
+                  title={allSelected
+                    ? 'Desmarcar as linhas desta página'
+                    : `Selecionar as ${paged.length} linhas desta página`}
                 />
               </th>
               <th
@@ -333,7 +395,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
             </tr>
           </thead>
           <tbody>
-            {sorted.map((t) => (
+            {paged.map((t) => (
               <tr key={t.id} className="border-b border-border/30 hover:bg-bg-secondary/30 group">
                 {/* Conciliação dot - tab-navigable */}
                 <td className="p-2" data-tab-cell>
@@ -663,6 +725,50 @@ export function TransactionTable({ transactions, categories, projects = [], acco
         </table>
       </div>
 
+      {/* Paginação: só aparece quando a lista passa de uma página — no recorte
+          de um mês ela nunca aparece, e em "todos os meses" é o que impede a
+          tela de montar milhares de linhas de uma vez. */}
+      {paginated && (
+        <div className="flex items-center justify-between gap-3 flex-wrap px-1">
+          <span
+            className="text-caption text-ink-3 tnum"
+            title={`A tela monta ${PAGE_SIZE} lançamentos por vez para continuar respondendo a cada tecla; os totais acima somam a lista inteira.`}
+          >
+            Mostrando {firstRow.toLocaleString('pt-BR')}–{lastRow.toLocaleString('pt-BR')} de{' '}
+            {sorted.length.toLocaleString('pt-BR')} lançamentos
+          </span>
+          <div className="flex items-center gap-1">
+            <PagerButton
+              label="Primeira página"
+              icon={ChevronsLeft}
+              disabled={safePage === 1}
+              onClick={() => goToPage(1)}
+            />
+            <PagerButton
+              label="Página anterior"
+              icon={ChevronLeft}
+              disabled={safePage === 1}
+              onClick={() => goToPage(safePage - 1)}
+            />
+            <span className="text-caption text-text-secondary tnum px-2 whitespace-nowrap">
+              Página {safePage} de {pageCount}
+            </span>
+            <PagerButton
+              label="Próxima página"
+              icon={ChevronRight}
+              disabled={safePage === pageCount}
+              onClick={() => goToPage(safePage + 1)}
+            />
+            <PagerButton
+              label="Última página"
+              icon={ChevronsRight}
+              disabled={safePage === pageCount}
+              onClick={() => goToPage(pageCount)}
+            />
+          </div>
+        </div>
+      )}
+
       {pendingDelete && (
         <ConfirmDialog
           destructive
@@ -711,5 +817,27 @@ export function TransactionTable({ transactions, categories, projects = [], acco
         />
       )}
     </div>
+  );
+}
+
+/** Botão de navegação da paginação: alvo de 32px, ícone só, rótulo no title e
+ *  no aria-label (o ícone sozinho não diz nada para leitor de tela). */
+function PagerButton({ label, icon: Icon, disabled, onClick }: {
+  label: string;
+  icon: React.ElementType;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      title={label}
+      className="tap flex items-center justify-center w-8 h-8 rounded-control border border-border text-text-secondary transition-colors hover:border-accent hover:text-accent disabled:opacity-30 disabled:hover:border-border disabled:hover:text-text-secondary"
+    >
+      <Icon size={14} />
+    </button>
   );
 }
