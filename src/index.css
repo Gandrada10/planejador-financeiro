@@ -118,6 +118,23 @@ body {
   }
 }
 
+/* Sobreposição que respeita o teclado virtual.
+ *
+ * Um overlay `fixed inset-0` ocupa a JANELA. No iOS o teclado não encolhe o
+ * viewport de layout (o Safari ignora `interactive-widget=resizes-content`),
+ * então metade dessa janela fica atrás do teclado — e uma folha ancorada
+ * embaixo, como a da nota, nasce justamente ali. Com esta classe o overlay
+ * ocupa a FAIXA VISÍVEL publicada por `trackVisualViewport`, e o conteúdo se
+ * centraliza/ancora dentro do que dá para ver. Fora do iOS, as variáveis valem
+ * a janela inteira e o comportamento é o mesmo de antes.
+ *
+ * Usar junto com `inset-0` (que já dá left/right); top/height sobrescrevem. */
+.overlay-vv {
+  top: var(--vv-top, 0px);
+  height: var(--vv-height, 100%);
+  bottom: auto;
+}
+
 /* Safari no iOS aumenta a fonte sozinho ao girar para paisagem. */
 html { -webkit-text-size-adjust: 100%; }
 

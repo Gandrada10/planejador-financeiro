@@ -151,12 +151,17 @@ export function TransactionEditModal({
   const labelClass = 'block text-caption text-text-secondary mb-1 uppercase tracking-wider';
 
   return (
+    // overlay-vv + max-h-full: o campo "Observações" fica no fim de um modal
+    // rolável. Com `90vh` medido na janela inteira, no iPhone/iPad o fim do
+    // modal — e o campo de nota — ficava atrás do teclado, e a caixa de rolagem
+    // não tinha para onde rolar. Preso à faixa visível, o próprio navegador
+    // traz o campo focado para dentro dela.
     <div
-      className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 overlay-vv bg-black/60 flex items-center justify-center z-50 p-4"
       onClick={onClose}
     >
       <div
-        className="bg-bg-card border border-border rounded-card w-full max-w-md max-h-[90vh] overflow-y-auto"
+        className="bg-bg-card border border-border rounded-card w-full max-w-md max-h-full overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between p-4 border-b border-border sticky top-0 bg-bg-card z-10">

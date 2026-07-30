@@ -2,6 +2,12 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
+import { trackVisualViewport } from './lib/visualViewport'
+
+// Publica a faixa visível da tela em variáveis CSS. No iOS o teclado não
+// encolhe o viewport de layout, então sem isso qualquer sobreposição ancorada
+// embaixo nasce atrás do teclado (ver lib/visualViewport.ts).
+trackVisualViewport()
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

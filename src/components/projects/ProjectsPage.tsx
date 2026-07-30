@@ -452,7 +452,9 @@ function ProjectFormDialog({ initial, onSubmit, onCancel }: {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={onCancel}>
+    // overlay-vv: preso à faixa visível da tela, para o teclado do celular não
+    // cobrir os campos de baixo do formulário (ver index.css).
+    <div className="fixed inset-0 overlay-vv z-[60] bg-black/60 flex items-start sm:items-center justify-center p-4 overflow-y-auto" onClick={onCancel}>
       <form
         ref={formRef}
         onSubmit={handleSubmit}

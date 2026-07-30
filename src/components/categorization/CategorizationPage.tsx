@@ -234,8 +234,12 @@ export function CategorizationPage() {
   ) : null;
 
   const noteEditorModal = noteDraft ? (
+    // overlay-vv: a folha é ancorada embaixo (`items-end`), e no iPhone/iPad o
+    // teclado não encolhe o viewport de layout — sem isso ela nasce ATRÁS do
+    // teclado e a caixa de texto que o dedo acabou de tocar é a primeira coisa
+    // a desaparecer. Ver `.overlay-vv` em index.css.
     <div
-      className="fixed inset-0 z-50 bg-black/50 flex items-end justify-center"
+      className="fixed inset-0 overlay-vv z-50 bg-black/50 flex items-end justify-center"
       onClick={() => { if (!noteSaving) closeNoteDraft(); }}
     >
       <div
@@ -243,7 +247,7 @@ export function CategorizationPage() {
         aria-modal="true"
         aria-label="Adicionar nota"
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-lg bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-3"
+        className="w-full max-w-lg max-h-full overflow-y-auto bg-bg-secondary border-t border-border rounded-t-[24px] p-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] flex flex-col gap-3"
       >
         <div className="flex items-center justify-between">
           <h2 className="text-title font-bold text-text-primary">Nota</h2>

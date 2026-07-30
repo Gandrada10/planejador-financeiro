@@ -85,8 +85,10 @@ export function TransactionForm({ onSubmit, onClose, titularNames = [], categori
   const filteredCategories = filterCategoriesByAmount(categories, type === 'despesa' ? -1 : 1);
 
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-bg-card border border-border rounded-card w-full max-w-md">
+    // overlay-vv: formulário digitado no celular — preso à faixa visível, o
+    // teclado deixa de cobrir os campos de baixo (ver index.css).
+    <div className="fixed inset-0 overlay-vv bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-bg-card border border-border rounded-card w-full max-w-md max-h-full overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b border-border">
           <h3 className="text-title font-semibold text-text-primary">Nova Transacao</h3>
           <button onClick={onClose} className="text-text-secondary hover:text-text-primary">
