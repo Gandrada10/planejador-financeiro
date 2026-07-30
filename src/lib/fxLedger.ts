@@ -168,12 +168,16 @@ export function buildFxLedger(entries: WiseEntry[], opening: FxCarry): FxLedgerR
       const costCents = entry.sourceAmount !== null
         ? toCents(entry.sourceAmount)
         : (averageRate !== null ? Math.round(fxCents * averageRate) : 0);
-      lots.push({ fx: fxCents, brl: costCents });
+      // Custo derivado da cotação mid-market (recarga sem o valor em BRL no
+      // arquivo) é aproximação por baixo: o lote nasce marcado, e a marca
+      // acompanha cada gasto que consumir dele.
+      const approx = entry.sourceAmount === null || entry.sourceEstimated === true;
+      lots.push({ fx: fxCents, brl: costCents, estimated: approx });
       conversions.push({
         entry,
         amountBrl: -fromCents(costCents),
         rate: fxCents > 0 ? costCents / fxCents : null,
-        estimated: entry.sourceAmount === null,
+        estimated: approx,
       });
       continue;
     }

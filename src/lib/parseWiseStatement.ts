@@ -84,6 +84,12 @@ export interface WiseEntry {
    *  É o CUSTO real do lote — já com IOF e spread embutidos. `null` fora de
    *  conversões ou quando o valor não pôde ser lido. */
   sourceAmount: number | null;
+  /** `true` quando `sourceAmount` foi DERIVADO da cotação da coluna `Câmbio`
+   *  em vez de lido do valor debitado. É o caso das entradas "Dinheiro
+   *  adicionado à conta", em que o arquivo não traz o valor em BRL: a cotação
+   *  é mid-market e não inclui a tarifa da Wise, então o custo sai um pouco
+   *  POR BAIXO e o lote precisa nascer marcado como estimado. */
+  sourceEstimated: boolean;
   /** Moeda de origem da conversão (ex.: "BRL"), ou `null`. */
   sourceCurrency: string | null;
   /** Nome do estabelecimento, cru como veio no arquivo (`null` se não houver). */
@@ -146,6 +152,7 @@ const COLUMNS = {
   description: ['Description', 'Descrição'],
   runningBalance: ['Running Balance', 'Saldo cumulativo'],
   exchangeFrom: ['Exchange From', 'Convertido de'],
+  exchangeRate: ['Exchange Rate', 'Câmbio', 'Cambio'],
   merchant: ['Merchant', 'Estabelecimento comercial'],
   cardLast4: ['Card Last Four Digits', 'Últimos quatro dígitos do cartão'],
   detailsType: ['Transaction Details Type', 'Tipo de detalhe da transação'],
@@ -307,6 +314,8 @@ interface RawRow {
   merchant: string | null;
   cardLast4: string | null;
   exchangeFrom: string | null;
+  /** Cotação da coluna `Câmbio`, quando houver. Ver `extractSourceAmount`. */
+  exchangeRate: number | null;
   currency: string | null;
   isConversionRow: boolean;
 }
@@ -383,6 +392,24 @@ export function parseWiseRows(data: WiseRow[]): WiseParseResult {
     const exchangeFrom = text(row, COLUMNS.exchangeFrom);
     const rowCurrency = text(row, COLUMNS.currency);
     if (rowCurrency && !currency) currency = rowCurrency;
+
+    // COMPRA DE MOEDA vem em DOIS tipos, não um.
+    //
+    // `CONVERSION` é o que a tela de câmbio da Wise emite. Mas recarregar a
+    // conta em euro pagando em reais — o caminho normal de quem viaja — sai
+    // como `MONEY_ADDED`, com o valor em euro e a moeda de origem numa coluna
+    // à parte. Reconhecendo só `CONVERSION`, as recargas caíam na vala de
+    // "crédito avulso" e viravam RECEITA em reais: num extrato real de viagem
+    // isso são milhares de reais de receita que nunca existiram, e ainda deixa
+    // os gastos sem lastro de custo (apreçados por estimativa).
+    //
+    // A marca é a moeda de origem ser DIFERENTE da moeda da conta: recarga em
+    // euro numa conta em euro é só dinheiro entrando, não compra de moeda.
+    const fromCurrency = (exchangeFrom || '').toUpperCase();
+    const accountCurrency = (rowCurrency || '').toUpperCase();
+    const boughtCurrency =
+      detailsType === 'CONVERSION' ||
+      (detailsType === 'MONEY_ADDED' && fromCurrency !== '' && fromCurrency !== accountCurrency);
     rows.push({
       index: i,
       id,
@@ -394,8 +421,9 @@ export function parseWiseRows(data: WiseRow[]): WiseParseResult {
       merchant: text(row, COLUMNS.merchant),
       cardLast4: text(row, COLUMNS.cardLast4),
       exchangeFrom,
+      exchangeRate: parseLooseNumber(cell(row, COLUMNS.exchangeRate)),
       currency: rowCurrency,
-      isConversionRow: detailsType === 'CONVERSION',
+      isConversionRow: boughtCurrency,
     });
   });
 
@@ -445,8 +473,8 @@ export function parseWiseRows(data: WiseRow[]): WiseParseResult {
     // chega dias depois e ancoraria a despesa no mês errado.
     const anchor = group.reduce((best, r) => (Math.abs(r.amount) > Math.abs(best.amount) ? r : best), group[0]);
     const isConversion = anchor.isConversionRow && total > 0;
-    const sourceAmount = isConversion ? extractSourceAmount(anchor) : null;
-    if (isConversion && sourceAmount === null) {
+    const source = isConversion ? extractSourceAmount(anchor) : null;
+    if (isConversion && source === null) {
       warnings.push(`Linha ${anchor.index + 2}: conversão sem valor de origem legível — lote entra sem custo.`);
     }
     entries.push({
@@ -458,7 +486,8 @@ export function parseWiseRows(data: WiseRow[]): WiseParseResult {
       // Conversão nos DOIS sentidos é transferência: comprar a moeda e sacar
       // de volta para BRL são dinheiro trocando de bolso, não gasto.
       isTransfer: anchor.isConversionRow,
-      sourceAmount,
+      sourceAmount: source ? source.amount : null,
+      sourceEstimated: source ? source.estimated : false,
       sourceCurrency: isConversion ? anchor.exchangeFrom : null,
       merchant: anchor.merchant,
       cardLast4: anchor.cardLast4,
@@ -493,16 +522,33 @@ export function parseWiseRows(data: WiseRow[]): WiseParseResult {
  * as duas é justamente o custo do câmbio, ~4% no caso real que motivou este
  * código). Usar a cotação subestimaria a despesa de forma sistemática.
  */
-function extractSourceAmount(row: RawRow): number | null {
+function extractSourceAmount(row: RawRow): { amount: number; estimated: boolean } | null {
   const cur = row.exchangeFrom;
   if (!cur) return null;
   // Pega o número imediatamente ANTES do código da moeda de origem — cobre
   // "5.000,00 BRL convertidos para ..." e "Converted 5,000.00 BRL to ...".
   const re = new RegExp(`([\\d.,]+)\\s*${cur}`, 'i');
   const m = re.exec(row.description);
-  if (!m) return null;
-  const n = parseLooseNumber(m[1]);
-  return n !== null && n > 0 ? n : null;
+  const fromText = m ? parseLooseNumber(m[1]) : null;
+  if (fromText !== null && fromText > 0) return { amount: fromText, estimated: false };
+
+  // Sem valor na descrição — é o caso das recargas ("Dinheiro adicionado à
+  // conta"), em que o débito aconteceu do lado de lá e não aparece neste
+  // extrato. Resta a cotação da coluna `Câmbio`, que é mid-market: sai por
+  // baixo do que de fato saiu da conta em reais, então volta marcada como
+  // ESTIMADA e o app avisa na tela.
+  //
+  // A coluna não diz o sentido da cotação (por vezes "quanto da moeda de
+  // destino vale 1 da origem", por vezes o inverso). Longe de 1 os dois
+  // sentidos são distinguíveis e dão o MESMO resultado (0,16 EUR/BRL e
+  // 6,2 BRL/EUR); perto de 1 seriam duas respostas diferentes e igualmente
+  // plausíveis, e aí é melhor não ter número do que ter o errado.
+  const rate = row.exchangeRate;
+  if (rate === null || rate <= 0 || (rate > 0.5 && rate < 2)) return null;
+  const amount = rate < 1 ? Math.abs(row.amount) / rate : Math.abs(row.amount) * rate;
+  return Number.isFinite(amount) && amount > 0
+    ? { amount: round2(amount), estimated: true }
+    : null;
 }
 
 function round2(n: number): number {

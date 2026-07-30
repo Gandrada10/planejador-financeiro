@@ -26,11 +26,46 @@ function getUserTransactionsRef() {
 // estourem o limite e falhem por inteiro.
 const BATCH_CHUNK = 400;
 
+/**
+ * Quanto esperamos o SERVIDOR confirmar antes de devolver o controle à tela.
+ *
+ * O `batch.commit()` do Firestore só resolve quando o backend confirma — a
+ * gravação LOCAL já aconteceu antes disso, na fila durável do IndexedDB (ver
+ * `lib/firebase.ts`). Sem teto, uma rede ruim, o WebChannel bloqueado ou o
+ * aparelho offline deixavam o botão "Importar" girando para sempre, embora os
+ * lançamentos já estivessem gravados e prestes a subir sozinhos. Passado o
+ * teto, a tela segue e quem carrega o estado é o indicador de sincronização da
+ * barra lateral ("Salvando…" / "Offline"), que existe exatamente para isso.
+ */
+const ACK_TIMEOUT_MS = 8000;
+
 async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof writeBatch>, item: T) => void) {
+  // Todos os blocos são DISPARADOS antes de qualquer espera: é o disparo que
+  // enfileira a escrita localmente. Esperar bloco a bloco e desistir no meio
+  // deixaria itens sem nunca terem sido gravados.
+  const pending: Promise<void>[] = [];
   for (let i = 0; i < items.length; i += BATCH_CHUNK) {
     const batch = writeBatch(db);
     for (const item of items.slice(i, i + BATCH_CHUNK)) apply(batch, item);
-    await batch.commit();
+    pending.push(
+      // O catch impede "unhandled rejection" quando a espera já desistiu; a
+      // falha real (permissão, dado inválido) continua visível no console e no
+      // indicador de sincronização.
+      batch.commit().catch((err) => {
+        console.error('[firestore] commit falhou', err);
+        throw err;
+      })
+    );
+  }
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.all(pending),
+      new Promise<void>((resolve) => { timer = setTimeout(resolve, ACK_TIMEOUT_MS); }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 

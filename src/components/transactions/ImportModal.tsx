@@ -70,6 +70,9 @@ function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
 // arquivo errado/malicioso antes de carregar os bytes na memória.
 const OFX_MAX_BYTES = 15_000_000;
 
+/** Teto de espera da leitura com IA (ver a chamada em `handleParse`). */
+const AI_TIMEOUT_MS = 120_000;
+
 // ─── OFX (conta corrente) — dedupe, encoding e auto-match de conta ─────────
 //
 // Irmão do caminho de IA acima: dedupe primeiro pelo FITID (chave natural do
@@ -520,15 +523,22 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     if (ext === 'xlsx' || ext === 'xls') {
       try {
         const sheet = await readFirstSheet(file);
-        // `header: 1` na primeira linha: só os NOMES das colunas, sem montar
-        // objeto pra planilha inteira antes de saber se é o extrato certo.
-        const header = (XLSX.utils.sheet_to_json(sheet, { header: 1, range: 0 })[0] || []) as string[];
+        // Recorte da PRIMEIRA LINHA: só os nomes das colunas. `range: 0` não
+        // fazia isso — em SheetJS ele significa "comece na linha 0", então a
+        // planilha inteira era materializada só para descobrir o cabeçalho.
+        const header = (XLSX.utils.sheet_to_json(sheet, {
+          header: 1,
+          range: { s: { r: 0, c: 0 }, e: { r: 0, c: 200 } },
+        })[0] || []) as string[];
         if (isWiseHeader(header)) {
           handleParseFx(file, sheet);
           return;
         }
-      } catch {
-        // Planilha ilegível aqui → o caminho de IA reporta o erro.
+      } catch (err) {
+        // Planilha ilegível aqui → cai no caminho de IA, que reporta o erro.
+        // O aviso no console é o rastro de por que um extrato Wise teria ido
+        // parar na IA (que leria euro como se fosse real).
+        console.warn('[import] não deu para ler o cabeçalho da planilha:', err);
       }
     }
 
@@ -944,11 +954,32 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         setAiParsing(false);
         return;
       }
-      const response = await fetch('/api/parse-statement', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rawText, fileName: file.name, apiKey: localKey }),
-      });
+      // Teto de espera: sem ele, uma função que não responde (chave inválida,
+      // API fora do ar, rede presa) deixava a tela em "Analisando extrato com
+      // IA..." para sempre, sem nada para o usuário fazer além de recarregar.
+      // Extrato longo com Haiku leva dezenas de segundos, daí o teto folgado.
+      const abort = new AbortController();
+      const timeout = setTimeout(() => abort.abort(), AI_TIMEOUT_MS);
+      let response: Response;
+      try {
+        response = await fetch('/api/parse-statement', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ rawText, fileName: file.name, apiKey: localKey }),
+          signal: abort.signal,
+        });
+      } catch (err) {
+        if ((err as Error)?.name === 'AbortError') {
+          throw new Error(
+            `A leitura com IA passou de ${Math.round(AI_TIMEOUT_MS / 1000)}s sem resposta. ` +
+            'Tente de novo; se repetir, confira a chave em Configurações. ' +
+            'Extrato Wise (.csv/.xlsx) e extrato de conta corrente (.ofx) não usam IA.'
+          );
+        }
+        throw err;
+      } finally {
+        clearTimeout(timeout);
+      }
 
       if (!response.ok) {
         const err = await response.json().catch(() => ({ error: 'Erro de conexao' }));
