@@ -1284,13 +1284,38 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       }
     }
 
-    // Falha de gravação PRECISA virar mensagem. Sem este try, qualquer erro
-    // aqui (dado que o Firestore recusa, regra de segurança, rede) pulava o
-    // `setImporting(false)` lá embaixo e deixava o botão preso em
-    // "Importando..." — a tela mais frustrante possível, porque não diz nada
-    // e não dá o que fazer.
+    // try/finally em volta de TUDO que espera gravação: é o que garante que o
+    // botão volta do "Importando...". Antes, um erro no meio pulava o
+    // `setImporting(false)` e deixava o botão preso para sempre, sem mensagem
+    // — a tela mais frustrante possível, porque não diz nada e não dá o que
+    // fazer. As esperas em si têm teto na camada de escrita (`ackOrQueued`):
+    // a gravação local já aconteceu, e é a confirmação do servidor que pode
+    // demorar sem limite.
     try {
       await onImport(toImport);
+
+      // Fecha a carteira de moeda: o saldo e o custo do fim deste extrato são
+      // o ponto de partida do próximo. Gravado DEPOIS do import — se a
+      // gravação das transações falhar, o carry-over não avança e a
+      // reimportação começa do mesmo lugar. É snapshot, não acumulador:
+      // reimportar reescreve os mesmos números em vez de dobrar o saldo.
+      if (importKind === 'fx' && fxLedger && fxResult?.meta.currency && onSaveFxWallet) {
+        try {
+          await onSaveFxWallet(fxResult.meta.currency, {
+            balanceFx: fxLedger.closing.balanceFx,
+            costBrl: round2(fxLedger.closing.costBrl),
+            estimated: fxLedger.closing.estimated === true,
+            accountName: items.find((it) => it.account)?.account || '',
+            asOf: fxResult.meta.dtEnd,
+          });
+        } catch {
+          // A importação em si deu certo — não transformamos falha de metadado
+          // em erro de importação. Na próxima o campo de saldo inicial só vem
+          // vazio e o usuário informa.
+        }
+      }
+
+      setStep('done');
     } catch (err) {
       console.error('[import] falha ao gravar o lote', err);
       setError(
@@ -1298,33 +1323,9 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           ? `Não deu para gravar os lançamentos: ${err.message}`
           : 'Não deu para gravar os lançamentos. Tente de novo.'
       );
+    } finally {
       setImporting(false);
-      return;
     }
-
-    // Fecha a carteira de moeda: o saldo e o custo do fim deste extrato são o
-    // ponto de partida do próximo. Gravado DEPOIS do import — se a gravação
-    // das transações falhar, o carry-over não avança e a reimportação começa
-    // do mesmo lugar. É snapshot, não acumulador: reimportar reescreve os
-    // mesmos números em vez de dobrar o saldo.
-    if (importKind === 'fx' && fxLedger && fxResult?.meta.currency && onSaveFxWallet) {
-      try {
-        await onSaveFxWallet(fxResult.meta.currency, {
-          balanceFx: fxLedger.closing.balanceFx,
-          costBrl: round2(fxLedger.closing.costBrl),
-          estimated: fxLedger.closing.estimated === true,
-          accountName: items.find((it) => it.account)?.account || '',
-          asOf: fxResult.meta.dtEnd,
-        });
-      } catch {
-        // A importação em si deu certo — não transformamos falha de metadado
-        // em erro de importação. Na próxima o campo de saldo inicial só vem
-        // vazio e o usuário informa.
-      }
-    }
-
-    setStep('done');
-    setImporting(false);
   }
 
   const duplicateCount = items.filter((i) => i.isDuplicate).length;

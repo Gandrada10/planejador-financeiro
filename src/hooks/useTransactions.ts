@@ -12,6 +12,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { ackOrQueued } from '../lib/ack';
 import type { Transaction } from '../types';
 import { normalizeTitular } from '../lib/utils';
 
@@ -25,19 +26,6 @@ function getUserTransactionsRef() {
 // que importações/edições grandes (fatura extensa, "selecionar tudo") não
 // estourem o limite e falhem por inteiro.
 const BATCH_CHUNK = 400;
-
-/**
- * Quanto esperamos o SERVIDOR confirmar antes de devolver o controle à tela.
- *
- * O `batch.commit()` do Firestore só resolve quando o backend confirma — a
- * gravação LOCAL já aconteceu antes disso, na fila durável do IndexedDB (ver
- * `lib/firebase.ts`). Sem teto, uma rede ruim, o WebChannel bloqueado ou o
- * aparelho offline deixavam o botão "Importar" girando para sempre, embora os
- * lançamentos já estivessem gravados e prestes a subir sozinhos. Passado o
- * teto, a tela segue e quem carrega o estado é o indicador de sincronização da
- * barra lateral ("Salvando…" / "Offline"), que existe exatamente para isso.
- */
-const ACK_TIMEOUT_MS = 8000;
 
 async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof writeBatch>, item: T) => void) {
   // Todos os blocos são DISPARADOS antes de qualquer espera: é o disparo que
@@ -57,16 +45,9 @@ async function commitInChunks<T>(items: T[], apply: (batch: ReturnType<typeof wr
       })
     );
   }
-
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      Promise.all(pending),
-      new Promise<void>((resolve) => { timer = setTimeout(resolve, ACK_TIMEOUT_MS); }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
+  // Teto na espera pela confirmação do servidor: a gravação local já
+  // aconteceu, e é a tela que não pode ficar presa. Ver `ackOrQueued`.
+  await ackOrQueued(Promise.all(pending));
 }
 
 function docToTransaction(id: string, data: Record<string, unknown>): Transaction {

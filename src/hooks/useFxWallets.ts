@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { collection, onSnapshot, doc, setDoc, Timestamp } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
+import { ackOrQueued } from '../lib/ack';
 import type { FxWallet } from '../types';
 
 /**
@@ -57,10 +58,14 @@ export function useFxWallets() {
    * importação de extrato em moeda estrangeira — o que fica aqui é o ponto de
    * partida da PRÓXIMA importação.
    */
+  /* `ackOrQueued`: esta escrita é esperada pela TELA — a importação só se
+   *  declara concluída depois dela. Sem teto, uma confirmação que não chega
+   *  deixava o botão "Importar" congelado DEPOIS de os lançamentos já terem
+   *  sido gravados. É metadado de carry-over: pode subir com atraso. */
   async function saveWallet(currency: string, snapshot: Omit<FxWallet, 'currency' | 'updatedAt'>) {
     const uid = auth.currentUser?.uid;
     if (!uid) return;
-    await setDoc(
+    await ackOrQueued(setDoc(
       doc(db, 'users', uid, 'fxWallets', currency.toUpperCase()),
       {
         balanceFx: snapshot.balanceFx,
@@ -71,7 +76,7 @@ export function useFxWallets() {
         updatedAt: Timestamp.now(),
       },
       { merge: true }
-    );
+    ));
   }
 
   function walletFor(currency: string | null | undefined): FxWallet | null {
