@@ -1,6 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { StickyNote, Check, Trash2, AlertTriangle } from 'lucide-react';
+import { useAnchoredPosition } from './useAnchoredPosition';
+
+const POPOVER_WIDTH = 240;
 
 interface Props {
   note: string;
@@ -13,24 +16,24 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [draftAlert, setDraftAlert] = useState(false);
-  const [coords, setCoords] = useState({ top: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const hasNote = note.trim().length > 0;
 
+  // Mede o pop-up e escolhe o lado (abaixo do gatilho, ou acima quando a
+  // última linha da lista não deixa espaço embaixo). Escreve top/left/altura
+  // direto no elemento, antes da pintura.
+  useAnchoredPosition({ open, anchorRef: triggerRef, popRef: popoverRef, width: POPOVER_WIDTH });
+
   useEffect(() => {
     if (open) {
       setDraft(note);
       setDraftAlert(alert);
-      // Position the popover relative to the trigger button
-      if (triggerRef.current) {
-        const rect = triggerRef.current.getBoundingClientRect();
-        const popoverWidth = 240;
-        const left = Math.min(rect.left, window.innerWidth - popoverWidth - 8);
-        setCoords({ top: rect.bottom + 4, left: Math.max(8, left) });
-      }
-      setTimeout(() => textareaRef.current?.focus(), 0);
+      // preventScroll: o pop-up é `fixed`, então rolar não o traz para dentro
+      // da tela — só empurra a página inteira para cima, que era exatamente o
+      // efeito relatado ao abrir a nota do último lançamento.
+      setTimeout(() => textareaRef.current?.focus({ preventScroll: true }), 0);
     }
   }, [open, note, alert]);
 
@@ -44,7 +47,12 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
         setOpen(false);
       }
     }
-    function handleScroll() { setOpen(false); }
+    // Rolar a lista atrás desancoraria o pop-up (é `fixed`), então ele fecha —
+    // mas rolar DENTRO dele (texto longo, janela baixa) não pode fechá-lo.
+    function handleScroll(e: Event) {
+      if (popoverRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    }
     document.addEventListener('mousedown', handleClick);
     document.addEventListener('scroll', handleScroll, true);
     return () => {
@@ -68,7 +76,10 @@ export function NoteTag({ note, alert = false, onSave }: Props) {
   const popover = open ? createPortal(
     <div
       ref={popoverRef}
-      style={{ position: 'fixed', top: coords.top, left: coords.left, width: 240, zIndex: 9999 }}
+      // top/left/width/max-height são escritos por useAnchoredPosition antes da
+      // pintura; ficam fora do style do React para não haver duas mãos na
+      // mesma propriedade.
+      style={{ position: 'fixed', overflowY: 'auto', zIndex: 9999 }}
       className="bg-elevated border border-border rounded-card shadow-2xl p-3 space-y-2"
       onClick={(e) => e.stopPropagation()}
     >

@@ -1,6 +1,8 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import type { Category } from '../../types';
 import { filterCategoriesByAmount, tabNavigate } from '../../lib/utils';
+import { useAnchoredPosition } from './useAnchoredPosition';
 
 function removeAccents(str: string) {
   return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -26,6 +28,7 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
   const containerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const popRef = useRef<HTMLDivElement>(null);
 
   const relevantCats = useMemo(() => filterCategoriesByAmount(categories, amount), [categories, amount]);
   const rootCats = useMemo(() => relevantCats.filter((c) => !c.parentId), [relevantCats]);
@@ -71,23 +74,47 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
     }
   }, [highlighted]);
 
+  // A lista vai para um PORTAL (ver render), então "clicou fora" tem de
+  // considerar os dois pedaços: o gatilho e o pop-up.
   useEffect(() => {
     if (!open) return;
     function handleClick(e: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
-        setOpen(false);
-        setSearch('');
-      }
+      const t = e.target as Node;
+      if (containerRef.current?.contains(t) || popRef.current?.contains(t)) return;
+      setOpen(false);
+      setSearch('');
+    }
+    // Rolar a tabela atrás desancora o pop-up (é `fixed`): fecha. Rolar DENTRO
+    // dele, não — inclusive a rolagem que as setas do teclado provocam na
+    // lista, que senão fecharia o dropdown a cada tecla.
+    function handleScroll(e: Event) {
+      if (popRef.current?.contains(e.target as Node)) return;
+      setOpen(false);
+      setSearch('');
     }
     document.addEventListener('mousedown', handleClick);
-    return () => document.removeEventListener('mousedown', handleClick);
+    document.addEventListener('scroll', handleScroll, true);
+    return () => {
+      document.removeEventListener('mousedown', handleClick);
+      document.removeEventListener('scroll', handleScroll, true);
+    };
   }, [open]);
+
+  useAnchoredPosition({
+    open,
+    anchorRef: containerRef,
+    popRef,
+    minWidth: 288, // 18rem — piso que o dropdown já tinha
+    maxWidth: 352, // 22rem
+  });
 
   function openDropdown() {
     setOpen(true);
     setSearch('');
     setHighlighted(-1);
-    setTimeout(() => inputRef.current?.focus(), 0);
+    // preventScroll: focar um campo `fixed` fora da tela faria o navegador
+    // rolar a página inteira atrás dele.
+    setTimeout(() => inputRef.current?.focus({ preventScroll: true }), 0);
   }
 
   function doNavigate(direction: 'next' | 'prev') {
@@ -145,9 +172,18 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
         {currentLabel || <span className="text-text-secondary">Sem categoria</span>}
       </button>
 
-      {open && (
-        <div className="absolute z-50 mt-1 min-w-[18rem] max-w-[22rem] bg-elevated border border-border rounded-card shadow-xl overflow-hidden" style={{ left: 0 }}>
-          <div className="p-1.5 border-b border-border">
+      {/* Em PORTAL: dentro da célula, `absolute` era recortado pela caixa de
+          rolagem da tabela — na última linha aparecia uma opção e meia. Em
+          portal + fixed, o dropdown sobe quando não há espaço embaixo. */}
+      {open && createPortal(
+        <div
+          ref={popRef}
+          // top/left/width/max-height vêm de useAnchoredPosition, antes da
+          // pintura — por isso não estão aqui.
+          style={{ position: 'fixed', zIndex: 9999 }}
+          className="flex flex-col bg-elevated border border-border rounded-card shadow-2xl overflow-hidden"
+        >
+          <div className="p-1.5 border-b border-border flex-shrink-0">
             <input
               ref={inputRef}
               type="text"
@@ -158,7 +194,9 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
               className="w-full bg-bg-secondary border border-border rounded-control px-2 py-1.5 text-text-primary text-body focus:outline-none focus:border-accent placeholder:text-text-secondary/50"
             />
           </div>
-          <div ref={listRef} className="max-h-48 overflow-y-auto">
+          {/* min-h-0: sem isso o filho flex não encolhe e a lista vaza do teto
+              de altura em vez de rolar por dentro. */}
+          <div ref={listRef} className="max-h-48 min-h-0 flex-1 overflow-y-auto">
             <button
               onClick={() => select(null)}
               className="w-full text-left px-3 py-1.5 text-body text-text-secondary hover:bg-accent/10 hover:text-text-primary transition-colors"
@@ -187,7 +225,8 @@ export function CategoryCombobox({ categories, amount, value, onChange, classNam
               ))
             )}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );
