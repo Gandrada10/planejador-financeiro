@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Download, FileSpreadsheet, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, TrendingUp, BarChart2, Tags, FileBarChart } from 'lucide-react';
+import { Download, FileSpreadsheet, ChevronDown, ChevronRight, ChevronsUpDown, ChevronsDownUp, TrendingUp, BarChart2, Tags, FileBarChart, Link2 } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
 import { useBudgets } from '../../hooks/useBudgets';
@@ -10,7 +10,7 @@ import { CashFlowReport } from './CashFlowReport';
 import { CategoryEvolutionReport } from './CategoryEvolutionReport';
 import { FinancialChat } from './FinancialChat';
 import { ExportFullReportModal } from './ExportFullReportModal';
-import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { formatBRL, formatDate, getMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate, isReimbursementTx } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 
 type ReportTab = 'categorias' | 'fluxo' | 'evolucao';
@@ -64,6 +64,16 @@ export function ReportsPage() {
   const filteredTransactions = useMemo(
     () => monthTransactions.filter((t) => countsInTotals(t, excludedIds)),
     [monthTransactions, excludedIds]
+  );
+
+  // Lançamentos que estão neste relatório por DATA CONTÁBIL, não pela própria
+  // data: reembolso vinculado (`reimbursementFor`) abate a despesa no mês da
+  // COMPRA, então um PIX recebido em 30/06 pode compor o total de julho. A
+  // lista continua mostrando a data real (convenção da casa) — sem marcar,
+  // a soma das linhas parece não bater com o total da categoria.
+  const anchoredElsewhere = useMemo(
+    () => new Set(filteredTransactions.filter((t) => getMonthYear(t.date) !== monthYear).map((t) => t.id)),
+    [filteredTransactions, monthYear]
   );
 
   const totalEntries = useMemo(
@@ -181,6 +191,15 @@ export function ReportsPage() {
     return groups;
   }, [filteredTransactions, categories, rootCategories, subCategories, totalFiltered]);
 
+  /** Por que esta linha, datada em outro mês, compõe o total deste relatório. */
+  function dateNote(t: Transaction): string {
+    const real = formatDate(t.date);
+    const mes = getMonthLabel(monthYear);
+    return t.reimbursementFor
+      ? `Reembolso recebido em ${real}, vinculado a uma despesa de ${mes} — abate o gasto no mês da compra, por isso entra neste total.`
+      : `Lançado em ${real}, mas contabilizado em ${mes}.`;
+  }
+
   function toggleCat(id: string) {
     setExpandedCats((prev) => {
       const next = new Set(prev);
@@ -220,6 +239,9 @@ export function ReportsPage() {
         for (const t of sub.transactions) {
           rows.push({
             'Data': formatDate(t.date),
+            // Só quando o mês tem alguma linha ancorada: coluna vazia em todo
+            // mês normal seria ruído na planilha.
+            ...(anchoredElsewhere.size > 0 ? { 'Nota da data': anchoredElsewhere.has(t.id) ? dateNote(t) : '' } : {}),
             'Descricao': t.description,
             'Valor': t.amount,
             'Categoria': group.label,
@@ -239,7 +261,8 @@ export function ReportsPage() {
 
     // Auto-width
     const colWidths = Object.keys(rows[0] || {}).map((key) => ({
-      wch: Math.max(key.length, ...rows.map((r) => String(r[key] || '').length)) + 2,
+      // Teto: a nota da data é uma frase inteira e esticaria a coluna sem fim.
+      wch: Math.min(Math.max(key.length, ...rows.map((r) => String(r[key] || '').length)) + 2, 60),
     }));
     ws['!cols'] = colWidths;
 
@@ -258,6 +281,17 @@ export function ReportsPage() {
 
     doc.setFontSize(9);
     doc.text(`Receitas: ${formatBRL(totalEntries)}   |   Despesas: ${formatBRL(totalExits)}   |   Saldo: ${formatBRL(totalBalance)}`, 14, 22);
+
+    // Rodapé no topo: sem ele, a linha com data de outro mês faz a soma das
+    // linhas parecer divergente do total da categoria.
+    const hasAnchored = anchoredElsewhere.size > 0;
+    if (hasAnchored) {
+      doc.text(
+        `* reembolso vinculado: data real de outro mes, mas abate a despesa em ${getMonthLabel(monthYear)} e conta neste total.`,
+        14,
+        28
+      );
+    }
 
     const tableRows: (string | number)[][] = [];
 
@@ -285,7 +319,7 @@ export function ReportsPage() {
 
         for (const t of sub.transactions) {
           tableRows.push([
-            formatDate(t.date),
+            anchoredElsewhere.has(t.id) ? `${formatDate(t.date)} *` : formatDate(t.date),
             `        ${t.description}`,
             t.account,
             t.titular,
@@ -296,7 +330,7 @@ export function ReportsPage() {
     }
 
     autoTable(doc, {
-      startY: 27,
+      startY: hasAnchored ? 33 : 27,
       head: [['Data', 'Descricao', 'Conta', 'Titular', 'Valor']],
       body: tableRows,
       styles: { fontSize: 7, cellPadding: 1.5 },
@@ -438,6 +472,21 @@ export function ReportsPage() {
           <div className="text-caption text-text-secondary">
             {filteredTransactions.length} lancamentos em {grouped.length} categorias
           </div>
+
+          {/* Linhas datadas em outro mês: sem esta nota, a soma das linhas de
+              uma categoria parece divergir do total exibido. */}
+          {anchoredElsewhere.size > 0 && (
+            <div className="flex gap-2 text-caption text-text-secondary leading-snug bg-bg-card border border-border rounded-card p-3">
+              <Link2 size={12} className="text-accent flex-shrink-0 mt-0.5" />
+              <span>
+                {anchoredElsewhere.size === 1
+                  ? '1 lançamento com data de outro mês entra'
+                  : `${anchoredElsewhere.size} lançamentos com data de outro mês entram`}{' '}
+                nos totais de {getMonthLabel(monthYear)}: são reembolsos vinculados, que abatem a despesa no mês da
+                compra. A lista mostra a data real — passe o mouse na data em <span className="text-accent">laranja</span>.
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Right column - Categories */}
@@ -497,16 +546,30 @@ export function ReportsPage() {
                             <div className="border-t border-border/30">
                               {sub.transactions.map((t) => {
                                 const project = t.projectId ? activeProjects.find((p) => p.id === t.projectId) : null;
+                                const otherMonth = anchoredElsewhere.has(t.id);
+                                const reimb = isReimbursementTx(t);
                                 return (
                                   <div
                                     key={t.id}
                                     className="w-full flex items-center gap-3 px-4 pr-6 py-1 pl-10 border-b border-border/20 last:border-b-0 hover:bg-bg-secondary/30 text-body text-left cursor-pointer transition-colors"
                                   >
-                                    <span className="text-text-secondary w-[72px] flex-shrink-0 tnum">
+                                    <span
+                                      className={`w-[86px] flex-shrink-0 tnum flex items-center gap-1 ${otherMonth ? 'text-accent' : 'text-text-secondary'}`}
+                                      title={otherMonth ? dateNote(t) : undefined}
+                                    >
                                       {formatDate(t.date)}
+                                      {otherMonth && <Link2 size={11} className="flex-shrink-0" />}
                                     </span>
-                                    <span className="text-text-primary flex-1 min-w-0 truncate">
-                                      {t.description}
+                                    <span className="flex-1 min-w-0 flex items-center gap-1.5">
+                                      <span className="text-text-primary truncate">{t.description}</span>
+                                      {reimb && (
+                                        <span
+                                          className="flex-shrink-0 px-1 bg-accent/10 text-accent rounded text-[10px] leading-4"
+                                          title="Reembolso: valor positivo que abate a despesa em vez de entrar como receita."
+                                        >
+                                          reemb.
+                                        </span>
+                                      )}
                                     </span>
                                     <span className={`font-bold w-[100px] flex-shrink-0 text-right tnum ${t.amount >= 0 ? 'text-accent-green' : 'text-accent-red'}`}>
                                       {formatBRL(t.amount)}
