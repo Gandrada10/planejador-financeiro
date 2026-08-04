@@ -57,8 +57,8 @@ export function CategoryDetailPanel({
   onClose,
 }: Props) {
   const detail = useMemo(
-    () => computeCategoryDetail(transactions, categories, categoryId, monthYear, isMonthInProgress),
-    [transactions, categories, categoryId, monthYear, isMonthInProgress]
+    () => computeCategoryDetail(transactions, categories, categoryId, monthYear),
+    [transactions, categories, categoryId, monthYear]
   );
   // Só os lançamentos ANOTADOS do mês: o painel é agregado, não é lista de
   // lançamentos — mas a nota é justamente o que explica um gasto que a
@@ -121,7 +121,7 @@ export function CategoryDetailPanel({
         </div>
         <div
           className="min-w-0"
-          title={`média de ${detail.windowLabel} · ${detail.monthsCount} ${detail.monthsCount === 1 ? 'mês' : 'meses'} com lançamento`}
+          title={`média de ${detail.windowLabel} — os 12 meses ANTERIORES a ${detail.monthName} · ${detail.monthsCount} ${detail.monthsCount === 1 ? 'mês' : 'meses'} com lançamento`}
         >
           <p className="text-caption font-semibold uppercase tracking-wider text-ink-3">Média 12M</p>
           <p className="text-[21px] font-bold tracking-tight tnum text-text-primary truncate">
@@ -215,7 +215,7 @@ export function CategoryDetailPanel({
         <p className="text-caption text-ink-3 uppercase tracking-wider">
           Últimos 12 meses{' '}
           <span className="normal-case tracking-normal">
-            · tracejado = média 12M · clique numa barra para ver os lançamentos
+            · tracejado = média dos 12 meses anteriores · clique numa barra para ver os lançamentos
           </span>
         </p>
         <div className="h-[130px]">

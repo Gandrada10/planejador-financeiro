@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AlertTriangle, CalendarClock } from 'lucide-react';
-import { formatBRL0 } from '../../lib/utils';
+import { formatBRL0, getMonthYearOffset } from '../../lib/utils';
 import { CashFlowSankey } from './CashFlowSankey';
 import { computeCategoryFlow, type FlowPeriod } from '../../lib/categoryFlow';
 import type { Transaction, Category } from '../../types';
@@ -49,13 +49,25 @@ export function MonthFlowPanel({
 
   // Média mensal 12M por categoria, para o ▲▼ dos rótulos do Sankey.
   // Na visão "Média 12M" não existe delta: o valor exibido É a média.
+  //
+  // A janela termina no mês ANTERIOR ao selecionado — uma régua não pode conter
+  // o que ela mede. Antes, num mês fechado, a janela ia até o próprio mês: um
+  // gasto atípico entrava na própria base e o ▲ saía menor do que o real.
+  // Passar o mês anterior com `isMonthInProgress: false` dá exatamente os 12
+  // meses cheios que antecedem o selecionado, seja ele fechado ou em andamento.
   const averages = useMemo(() => {
     if (period !== 'month') return undefined;
-    const m12 = computeCategoryFlow(transactions, categories, monthYear, isMonthInProgress, 'm12');
+    const m12 = computeCategoryFlow(
+      transactions,
+      categories,
+      getMonthYearOffset(monthYear, -1),
+      false,
+      'm12'
+    );
     const map = new Map<string, number>();
     for (const c of m12.categories) if (c.amount < 0) map.set(c.id, -c.amount);
     return map;
-  }, [transactions, categories, monthYear, isMonthInProgress, period]);
+  }, [transactions, categories, monthYear, period]);
 
   // Fatia sem categoria dentro das despesas do período — a base do aviso de
   // classificação, que veio do card "O que puxou o ano" ao migrar para o anual.
