@@ -227,17 +227,34 @@ export function MonthlyDashboard({ transactions, monthYear }: Props) {
           DENTRO da moldura em vez de um buraco na página — a mesma escolha que
           a versão anterior desta tela já fazia com `flex-1`. */}
       <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4">
+        {/* A análise da categoria clicada abre NO LUGAR do diagrama, na mesma
+            moldura — o Sankey é o navegador, e o que ele navega aparece onde
+            ele estava, como um drill-down. Aberta abaixo, ela empurrava a
+            página e obrigava a rolar para ver o resultado do próprio clique;
+            ao lado, não havia coluna livre depois que o caixa subiu. O X do
+            painel devolve o diagrama. */}
         <div className="min-w-0">
-          <MonthFlowPanel
-            transactions={transactions}
-            categories={categories}
-            monthYear={monthYear}
-            isMonthInProgress={isMonthInProgress}
-            selectedCategory={flowCategory}
-            onSelectCategory={setFlowCategory}
-            nextMonthCommitted={nextMonth.total}
-            nextMonthLabel={getMonthLabel(getMonthYearOffset(monthYear, 1))}
-          />
+          {flowCategory ? (
+            <CategoryDetailPanel
+              transactions={transactions}
+              categories={categories}
+              categoryId={flowCategory}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+              onClose={() => setFlowCategory(null)}
+            />
+          ) : (
+            <MonthFlowPanel
+              transactions={transactions}
+              categories={categories}
+              monthYear={monthYear}
+              isMonthInProgress={isMonthInProgress}
+              selectedCategory={flowCategory}
+              onSelectCategory={setFlowCategory}
+              nextMonthCommitted={nextMonth.total}
+              nextMonthLabel={getMonthLabel(getMonthYearOffset(monthYear, 1))}
+            />
+          )}
         </div>
 
         <div className="min-w-0">
@@ -251,21 +268,6 @@ export function MonthlyDashboard({ transactions, monthYear }: Props) {
           />
         </div>
       </div>
-
-      {/* A análise da categoria clicada entra em largura total logo abaixo do
-          diagrama que a gerou — com o caixa ocupando a coluna da direita, não
-          há mais uma lateral livre para ela, e em largura total a lista de
-          subcategorias respira em vez de truncar. */}
-      {flowCategory && (
-        <CategoryDetailPanel
-          transactions={transactions}
-          categories={categories}
-          categoryId={flowCategory}
-          monthYear={monthYear}
-          isMonthInProgress={isMonthInProgress}
-          onClose={() => setFlowCategory(null)}
-        />
-      )}
 
       {/* ---- BANDA 2: OS COMPROMISSOS ----
           Projetos e metas lado a lado: os dois respondem "o que eu combinei

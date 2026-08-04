@@ -74,9 +74,10 @@ export function CategoryDetailPanel({
   // Mês da barra clicada na série de 12 meses. null = popup fechado.
   const [drillMonth, setDrillMonth] = useState<string | null>(null);
 
-  // O painel nasce abaixo do Sankey (que é alto), muitas vezes fora da dobra —
-  // sem rolar até ele o toque parece não ter feito nada. block:'nearest' não
-  // mexe na rolagem quando ele já está visível.
+  // O painel abre NO LUGAR do Sankey, então em telas largas ele já nasce sob os
+  // olhos e isto não faz nada (block:'nearest' não mexe na rolagem quando o
+  // elemento já está visível). Continua valendo no celular: lá o diagrama é
+  // alto, e trocá-lo por um painel mais curto pode deixar a dobra abaixo dele.
   useEffect(() => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [categoryId]);
