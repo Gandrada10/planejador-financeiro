@@ -13,6 +13,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import type { Category, CategoryRule } from '../types';
+import { matchCategoryId } from '../lib/categoryRules';
 import { ICON_MAP, suggestIconForCategory, SEED_CATEGORIES } from '../components/shared/CategoryIcon';
 
 // Categoria reservada de exclusão-de-total. `excludeFromTotals` é a chave
@@ -185,37 +186,21 @@ export function useCategories() {
     await deleteDoc(doc(db, 'users', uid, 'categoryRules', id));
   }
 
-  // Use a ref so matchCategory always sees the latest rules without re-creating
-  const rulesRef = useRef(rules);
-  rulesRef.current = rules;
-
-  // Check if a single pattern matches a description (wildcard support)
-  function patternMatches(lower: string, rawPattern: string): boolean {
-    const pattern = rawPattern.toLowerCase();
-    if (pattern.startsWith('*') && pattern.endsWith('*')) {
-      return lower.includes(pattern.slice(1, -1));
-    } else if (pattern.startsWith('*')) {
-      return lower.endsWith(pattern.slice(1));
-    } else if (pattern.endsWith('*')) {
-      return lower.startsWith(pattern.slice(0, -1));
-    } else {
-      return lower.includes(pattern);
-    }
-  }
-
-  // Match a description against rules (pattern + keywords) and return category ID
-  const matchCategory = useCallback((description: string): string | null => {
-    const lower = description.toLowerCase();
-    for (const rule of rulesRef.current) {
-      if (patternMatches(lower, rule.pattern)) return rule.categoryId;
-      if (rule.keywords?.length) {
-        for (const kw of rule.keywords) {
-          if (kw && patternMatches(lower, kw)) return rule.categoryId;
-        }
-      }
-    }
-    return null;
-  }, []);
+  /**
+   * Categoria de uma descrição, pelo motor de `lib/categoryRules` — que
+   * normaliza acento e espaço e escolhe a regra MAIS ESPECÍFICA. A cópia que
+   * vivia aqui comparava com `.toLowerCase()` puro e devolvia a primeira regra
+   * que casasse, o que fazia regras legítimas nunca pegarem.
+   *
+   * Depende de `rules` de propósito: a `ref` que existia aqui só para manter a
+   * identidade estável escrevia durante o render (o que o React proíbe) e não
+   * resolvia nada que a dependência não resolva — os consumidores são handlers
+   * de evento, não efeitos.
+   */
+  const matchCategory = useCallback(
+    (description: string): string | null => matchCategoryId(rules, description),
+    [rules]
+  );
 
   // Root categories (no parent)
   const rootCategories = categories.filter((c) => !c.parentId);

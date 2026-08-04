@@ -1,7 +1,11 @@
 import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
+import { AlertTriangle, CalendarClock } from 'lucide-react';
+import { formatBRL0 } from '../../lib/utils';
 import { CashFlowSankey } from './CashFlowSankey';
 import { computeCategoryFlow, type FlowPeriod } from '../../lib/categoryFlow';
 import type { Transaction, Category } from '../../types';
+import { SegmentedControl } from '../shared/SegmentedControl';
 
 interface Props {
   transactions: Transaction[];
@@ -11,6 +15,9 @@ interface Props {
   /** Categoria em análise no painel lateral (o dashboard é o dono do estado). */
   selectedCategory: string | null;
   onSelectCategory: (id: string | null) => void;
+  /** Despesas já lançadas com data no mês seguinte (parcelas contratadas). */
+  nextMonthCommitted: number;
+  nextMonthLabel: string;
 }
 
 /**
@@ -30,6 +37,8 @@ export function MonthFlowPanel({
   isMonthInProgress,
   selectedCategory,
   onSelectCategory,
+  nextMonthCommitted,
+  nextMonthLabel,
 }: Props) {
   const [period, setPeriod] = useState<FlowPeriod>('month');
 
@@ -48,6 +57,19 @@ export function MonthFlowPanel({
     return map;
   }, [transactions, categories, monthYear, isMonthInProgress, period]);
 
+  // Fatia sem categoria dentro das despesas do período — a base do aviso de
+  // classificação, que veio do card "O que puxou o ano" ao migrar para o anual.
+  const uncategorized = useMemo(() => {
+    let spent = 0;
+    let uncat = 0;
+    for (const c of flow.categories) {
+      if (c.amount >= 0) continue;
+      spent += -c.amount;
+      if (c.id === '__uncategorized') uncat += -c.amount;
+    }
+    return spent > 0 && uncat > 0 ? { value: uncat, share: uncat / spent } : null;
+  }, [flow]);
+
   return (
     // Altura NATURAL: a coluna vizinha cresce sozinha quando a análise abre
     // ou quando entram mais metas/projetos, sem arrastar o diagrama junto.
@@ -62,20 +84,15 @@ export function MonthFlowPanel({
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div
-            className="flex bg-bg-secondary border border-border rounded-control p-0.5 flex-shrink-0"
-            role="group"
-            aria-label="Período do fluxo"
-          >
-            <PeriodButton active={period === 'month'} onClick={() => setPeriod('month')}>
-              Este mês
-            </PeriodButton>
-            <PeriodButton active={period === 'm12'} onClick={() => setPeriod('m12')}>
-              Média 12M
-            </PeriodButton>
-          </div>
-        </div>
+        <SegmentedControl
+          ariaLabel="Período do fluxo"
+          value={period}
+          onChange={setPeriod}
+          options={[
+            { value: 'month', label: 'Este mês' },
+            { value: 'm12', label: 'Média 12M' },
+          ]}
+        />
       </div>
 
       <CashFlowSankey
@@ -94,29 +111,39 @@ export function MonthFlowPanel({
           investimento ou crédito (o app não sabe de qual).
         </p>
       )}
+
+      {/* Este aviso morava no card "O que puxou o ano", que mudou para o
+          dashboard anual. A cobrança precisa continuar no dia a dia — e aqui é
+          o lugar natural: "Sem categoria" já aparece como fatia deste diagrama. */}
+      {uncategorized !== null && uncategorized.share >= 0.05 && (
+        <p className="text-caption text-text-secondary leading-snug flex items-start gap-1.5">
+          <AlertTriangle size={12} className="flex-shrink-0 mt-0.5 text-status-warn" />
+          <span>
+            <span className="tnum text-status-warn">{formatBRL0(uncategorized.value)}</span> (
+            {(uncategorized.share * 100).toFixed(0)}%) das despesas do período estão sem
+            categoria — o fluxo fica em parte inexplicado até classificá-las.{' '}
+            <Link
+              to={`/transacoes?mes=${monthYear}&categoria=uncategorized`}
+              className="text-accent hover:underline whitespace-nowrap"
+            >
+              Classificar
+            </Link>
+          </span>
+        </p>
+      )}
+
+      {/* Curto prazo do planejamento: o que já está contratado para o mês que
+          vem (as parcelas futuras que a importação grava adiantadas). */}
+      {nextMonthCommitted > 0 && (
+        <p className="text-caption text-ink-3 flex items-start gap-1.5">
+          <CalendarClock size={12} className="flex-shrink-0 mt-0.5" />
+          <span>
+            <span className="tnum text-text-secondary">{formatBRL0(nextMonthCommitted)}</span> já
+            comprometidos em {nextMonthLabel} — parcelas e lançamentos já registrados com data lá.
+          </span>
+        </p>
+      )}
     </div>
   );
 }
 
-function PeriodButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`tap px-3 py-1 rounded-[10px] text-caption font-medium transition-colors ${
-        active ? 'bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary active:bg-elevated/60'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}

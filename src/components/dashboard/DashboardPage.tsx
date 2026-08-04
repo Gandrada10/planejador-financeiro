@@ -1,47 +1,33 @@
 import { useState, useMemo } from 'react';
 import { FileBarChart } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
-import { useCategories } from '../../hooks/useCategories';
-import { useBudgets } from '../../hooks/useBudgets';
-import { useAccounts } from '../../hooks/useAccounts';
-import { useBillingCycles } from '../../hooks/useBillingCycles';
-import { useProjects } from '../../hooks/useProjects';
 import { MonthSelector } from '../shared/MonthSelector';
-import { CashFlowTable } from './CashFlowTable';
-import { MonthFlowPanel } from './MonthFlowPanel';
-import { CategoryDetailPanel } from './CategoryDetailPanel';
-import { YoyDeviationPanel } from './YoyDeviationPanel';
-import { ExpensesPanel } from './ExpensesPanel';
-import { ProjectsPanel } from './ProjectsPanel';
-import { BudgetGoalsPanel } from './BudgetGoalsPanel';
-import { VitalSigns } from './VitalSigns';
-import { computeCostOfLiving } from '../../lib/costOfLiving';
-import { getMonthYear, getClosedMonthYear, getMonthLabel, countsInTotals, getExcludedFromTotalsIds, isIncomeAmount, isExpenseAmount, accountingDate } from '../../lib/utils';
+import { SegmentedControl } from '../shared/SegmentedControl';
+import { MonthlyDashboard } from './MonthlyDashboard';
+import { AnnualDashboard } from './annual/AnnualDashboard';
+import { getMonthYear, getClosedMonthYear } from '../../lib/utils';
 
-const MONTH_ABBR = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+type DashboardMode = 'mes' | 'ano';
 
+/**
+ * A casca do dashboard: a chave Mês/Ano e o seletor de mês, sobre duas faces
+ * que respondem perguntas diferentes.
+ *
+ *   Mês — "como foi este mês?". Um recorte, comparado com a média.
+ *   Ano — "de onde eu venho e para onde vou?". Doze meses móveis como régua,
+ *         com o ano corrente destacado em um card de progresso e projeção.
+ *
+ * Por que 12 meses móveis e não o ano do calendário: é a única janela que
+ * sempre contém um Natal, um IPVA, umas férias e um 13º — a média significa
+ * alguma coisa e não muda de sentido entre março e novembro. O ano corrente
+ * é ciclo de compromisso (metas, imposto), não janela de análise, e por isso
+ * aparece uma vez só, como placar, em vez de duplicar todos os números.
+ */
 export function DashboardPage() {
+  const [mode, setMode] = useState<DashboardMode>('mes');
   // Abre no último mês FECHADO: o mês corrente tem números pela metade.
   const [monthYear, setMonthYear] = useState(getClosedMonthYear());
-  // Categoria clicada no Sankey: enquanto aberta, a análise dela ocupa a
-  // coluna ao lado do fluxo (Metas/Caixa voltam ao fechar). O estado vive
-  // aqui porque atravessa os dois cards da banda.
-  const [flowCategory, setFlowCategory] = useState<string | null>(null);
   const { transactions, loading: loadingTx } = useTransactions();
-  const { categories } = useCategories();
-  const { getBudgetsForMonth } = useBudgets();
-  const { accounts } = useAccounts();
-  const { getCycleForCard } = useBillingCycles();
-  const { projects } = useProjects();
-
-  // Ids de categorias fora-dos-totais ("Transferência") — pré-computado uma vez
-  // e reutilizado em todos os blocos de agregação abaixo (regra: countsInTotals).
-  const excludedIds = useMemo(() => getExcludedFromTotalsIds(categories), [categories]);
-
-  const monthTransactions = useMemo(
-    () => transactions.filter((t) => getMonthYear(accountingDate(t)) === monthYear),
-    [transactions, monthYear]
-  );
 
   const availableMonths = useMemo(() => {
     const set = new Set(transactions.map((t) => getMonthYear(t.date)));
@@ -50,254 +36,48 @@ export function DashboardPage() {
     return Array.from(set).sort().reverse();
   }, [transactions]);
 
-  const totalEntries = useMemo(() => monthTransactions.filter((t) => countsInTotals(t, excludedIds) && isIncomeAmount(t)).reduce((s, t) => s + t.amount, 0), [monthTransactions, excludedIds]);
-  const totalExits = useMemo(() => monthTransactions.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0), [monthTransactions, excludedIds]);
-  const totalBalance = totalEntries + totalExits;
-
-  // Average monthly result over last 12 months (only months with data)
-  const avg12months = useMemo(() => {
-    const [y, m] = monthYear.split('-').map(Number);
-    const last12: string[] = [];
-    for (let i = 0; i < 12; i++) {
-      const d = new Date(y, m - 1 - i, 1);
-      last12.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
-    }
-    const withData = last12.filter((mo) => transactions.some((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)) === mo));
-    if (withData.length === 0) return 0;
-    const total = withData.reduce((sum, mo) => {
-      return sum + transactions.filter((t) => countsInTotals(t, excludedIds) && getMonthYear(accountingDate(t)) === mo).reduce((s, t) => s + t.amount, 0);
-    }, 0);
-    return total / withData.length;
-  }, [transactions, monthYear, excludedIds]);
-
-  // Selected month is "in progress" when it matches the current real month (not yet closed).
-  const isMonthInProgress = monthYear === getMonthYear();
-  const selectedMonthIdx = Number(monthYear.split('-')[1]) - 1;
-  const periodLabel = `Jan–${MONTH_ABBR[selectedMonthIdx]}`;
-
-  // Custo de vida (média móvel 12M) — compartilhado entre o tile de sinais
-  // vitais e o card de trajetória.
-  const costOfLiving = useMemo(
-    () => computeCostOfLiving(transactions, categories, monthYear, isMonthInProgress),
-    [transactions, categories, monthYear, isMonthInProgress]
-  );
-
-  // Cash flow by account
-  const cashFlowData = useMemo(() => {
-    const map = new Map<string, { entries: number; exits: number }>();
-    for (const t of monthTransactions) {
-      if (!countsInTotals(t, excludedIds)) continue;
-      const key = t.account || 'Sem conta';
-      if (!map.has(key)) map.set(key, { entries: 0, exits: 0 });
-      const acc = map.get(key)!;
-      if (isIncomeAmount(t)) acc.entries += t.amount;
-      else acc.exits += t.amount;
-    }
-    // A ORDEM entre tipos é do CashFlowTable (que agrupa por tipo); aqui só
-    // ordena alfabeticamente dentro de cada grupo.
-    return Array.from(map.entries())
-      .map(([name, v]) => {
-        const account = accounts.find((a) => a.name === name);
-        const isCard = account?.type === 'cartao';
-        const cycle = isCard && account ? getCycleForCard(account.id, monthYear) : undefined;
-        return {
-          accountName: name,
-          type: account?.type,
-          entries: v.entries,
-          exits: v.exits,
-          balance: v.entries + v.exits,
-          isCard,
-          cycleStatus: cycle?.status ?? (isCard ? 'open' : undefined),
-        };
-      })
-      .sort((a, b) => a.accountName.localeCompare(b.accountName, 'pt-BR'));
-  }, [monthTransactions, accounts, getCycleForCard, monthYear, excludedIds]);
-
-  // Budget progress - group by parent category, aggregate sub spending
-  const budgetData = useMemo(() => {
-    const monthBudgets = getBudgetsForMonth(monthYear);
-
-    // Actual spending per category (absolute values)
-    const actualByCategory = new Map<string, number>();
-    for (const t of monthTransactions) {
-      if (!isExpenseAmount(t) || !countsInTotals(t, excludedIds)) continue;
-      const catId = t.categoryId || '__uncategorized';
-      // `-t.amount`: para despesa (negativa) é o mesmo que Math.abs; para um
-      // reembolso (positivo) SUBTRAI, reduzindo o realizado (contra-despesa).
-      actualByCategory.set(catId, (actualByCategory.get(catId) || 0) - t.amount);
-    }
-
-    // Build rows: parent budgets aggregate all sub spending, sub budgets are individual
-    const processedParents = new Set<string>();
-    const rows: Array<{
-      categoryName: string;
-      icon: string;
-      color: string;
-      limit: number;
-      spent: number;
-      remaining: number;
-      isParent: boolean;
-    }> = [];
-
-    for (const b of monthBudgets) {
-      const cat = categories.find((c) => c.id === b.categoryId);
-      if (!cat) continue;
-
-      const isParent = !cat.parentId;
-
-      if (isParent) {
-        // Parent: sum spending from self + all subcategories
-        let totalSpent = actualByCategory.get(cat.id) || 0;
-        const subs = categories.filter((c) => c.parentId === cat.id);
-        for (const sub of subs) {
-          totalSpent += actualByCategory.get(sub.id) || 0;
-        }
-        rows.push({
-          categoryName: cat.name,
-          icon: cat.icon,
-          color: cat.color || '#737373',
-          limit: b.limitAmount,
-          spent: totalSpent,
-          remaining: Math.max(b.limitAmount - totalSpent, 0),
-          isParent: true,
-        });
-        processedParents.add(cat.id);
-      } else {
-        // Subcategory: only its own spending
-        const spent = actualByCategory.get(cat.id) || 0;
-        rows.push({
-          categoryName: cat.name,
-          icon: cat.icon,
-          color: cat.color || '#737373',
-          limit: b.limitAmount,
-          spent,
-          remaining: Math.max(b.limitAmount - spent, 0),
-          isParent: false,
-        });
-      }
-    }
-
-    return rows;
-  }, [monthYear, categories, monthTransactions, getBudgetsForMonth, excludedIds]);
-
-  // Grand totals - only parent-level budgets
-
   if (loadingTx) {
     return <DashboardSkeleton />;
   }
 
   const hasData = transactions.length > 0;
 
-
   return (
     // Largura máxima centralizada: sem ela, num monitor de 1900px os cards
     // esticavam de borda a borda — colunas de ~830px para tabelas que pedem
     // ~600px, e os cards das pontas colados nas margens da janela.
     <div className="max-w-[1440px] mx-auto space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-lg font-bold tracking-tight text-text-primary">Dashboard</h2>
-        <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
+        {/* A chave fica SEMPRE na ponta direita, com o seletor de mês à sua
+            esquerda quando existe: assim ela não dança de posição ao trocar de
+            face — quem acabou de clicar em "Ano" encontra "Mês" no mesmo pixel
+            para voltar. */}
+        <div className="flex items-center gap-2">
+          {/* O seletor de mês só existe na face mensal — a anual deriva a
+              janela do relógio e não tem o que escolher. */}
+          {mode === 'mes' && (
+            <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
+          )}
+          <SegmentedControl
+            ariaLabel="Janela do dashboard"
+            size="lg"
+            value={mode}
+            onChange={setMode}
+            options={[
+              { value: 'mes', label: 'Mês' },
+              { value: 'ano', label: 'Ano', title: 'Últimos 12 meses fechados' },
+            ]}
+          />
+        </div>
       </div>
 
       {hasData ? (
-        <div className="space-y-4">
-        {/* Sinais vitais: "como estou?" em 4 números, antes de qualquer tabela */}
-        <VitalSigns
-          transactions={transactions}
-          categories={categories}
-          monthLabel={getMonthLabel(monthYear)}
-          monthIncome={totalEntries}
-          monthExpenses={totalExits}
-          monthBalance={totalBalance}
-          avg12mResult={avg12months}
-          isMonthInProgress={isMonthInProgress}
-          costOfLiving={costOfLiving}
-        />
-
-        {/* ---- O MÊS | O ANO E OS COMPROMISSOS ----
-            Esquerda (4/7): o mês por dentro — o fluxo do dinheiro e, logo
-            abaixo, a conferência do caixa daquele mesmo mês.
-            Direita (3/7): o ano ("o que puxou"), cara a cara com o fluxo,
-            que é a comparação que se faz de fato ("gastei muito neste mês ou
-            o ano todo está assim?"), e embaixo os compromissos: projetos e
-            metas. A análise da categoria clicada entra ACIMA de tudo, ao lado
-            do diagrama que a gerou.
-
-            ── Por que as duas colunas são pilhas com o último card elástico ──
-            Duas colunas de altura independente sempre terminam desalinhadas,
-            e a sobra vira um buraco na página — era o vão embaixo do Sankey,
-            que só cresce quando as metas se populam. Aqui cada lado carrega um
-            card fixo (fluxo / o ano) e um card que cresce com os dados (caixa
-            / metas), o que já aproxima as alturas; o que ainda sobra é
-            absorvido PELO ÚLTIMO CARD de cada coluna (`flex-1`), então a folga
-            vira respiro DENTRO de uma moldura em vez de um vazio na página.
-            O diagrama do fluxo continua de altura natural: ele não pode mudar
-            de tamanho a cada clique. */}
-        <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4">
-          <div className="flex flex-col gap-4 min-w-0">
-            <MonthFlowPanel
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-              selectedCategory={flowCategory}
-              onSelectCategory={setFlowCategory}
-            />
-
-            <CashFlowTable
-              data={cashFlowData}
-              totalEntries={totalEntries}
-              totalExits={totalExits}
-              totalBalance={totalBalance}
-              monthLabel={getMonthLabel(monthYear)}
-              className="lg:flex-1"
-            />
-          </div>
-
-          <div className="flex flex-col gap-4 min-w-0">
-            {flowCategory && (
-              <CategoryDetailPanel
-                transactions={transactions}
-                categories={categories}
-                categoryId={flowCategory}
-                monthYear={monthYear}
-                isMonthInProgress={isMonthInProgress}
-                onClose={() => setFlowCategory(null)}
-              />
-            )}
-
-            <YoyDeviationPanel
-              transactions={transactions}
-              categories={categories}
-              monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-              periodLabel={periodLabel}
-            />
-
-            <ProjectsPanel
-              projects={projects}
-              transactions={transactions}
-              excludedIds={excludedIds}
-              monthYear={monthYear}
-            />
-
-            <BudgetGoalsPanel rows={budgetData} className="lg:flex-1" />
-
-          </div>
-        </div>
-
-        {/* Fecha a página em largura total: 24 barras (e 36, nas janelas
-            longas) respiram. É o único card cuja leitura depende de largura,
-            então é o que fica de fora da grade de duas colunas. */}
-        <ExpensesPanel
-          transactions={transactions}
-          categories={categories}
-          monthYear={monthYear}
-          costOfLiving={costOfLiving}
-          isMonthInProgress={isMonthInProgress}
-        />
-
-        </div>
+        mode === 'mes' ? (
+          <MonthlyDashboard transactions={transactions} monthYear={monthYear} />
+        ) : (
+          <AnnualDashboard transactions={transactions} />
+        )
       ) : (
         <div className="bg-bg-card border border-border rounded-card p-10 text-center space-y-2">
           <FileBarChart size={24} className="mx-auto text-ink-3" strokeWidth={1.5} />
@@ -329,4 +109,3 @@ function DashboardSkeleton() {
     </div>
   );
 }
-

@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import { TrendingUp, TrendingDown, Minus, ArrowRight } from 'lucide-react';
 import {
   formatBRL0,
   getMonthYear,
@@ -12,6 +12,9 @@ import {
 } from '../../lib/utils';
 import type { Transaction, Category } from '../../types';
 import type { CostOfLivingData } from '../../lib/costOfLiving';
+import { Group, Tile } from './StatTile';
+import type { TileDelta } from './StatTile';
+import type { MonthProjection } from '../../lib/annualStats';
 
 interface Props {
   transactions: Transaction[];
@@ -26,6 +29,8 @@ interface Props {
   avg12mResult: number;
   isMonthInProgress: boolean;
   costOfLiving: CostOfLivingData;
+  /** Onde o mês em andamento deve fechar. `null` fora do mês corrente. */
+  projection?: MonthProjection | null;
 }
 
 /**
@@ -53,6 +58,7 @@ export function VitalSigns({
   avg12mResult,
   isMonthInProgress,
   costOfLiving,
+  projection,
 }: Props) {
   const col = costOfLiving;
 
@@ -126,6 +132,22 @@ export function VitalSigns({
     context: '',
   };
 
+  /**
+   * No mês em andamento o delta contra a média não existe (mês pela metade
+   * sempre parece "abaixo do normal"), mas o espaço não precisa ser desperdiçado
+   * com um aviso mudo: mostra ONDE O MÊS DEVE FECHAR. Só a partir do 5º dia —
+   * antes disso `computeMonthProjection` devolve null e o aviso volta.
+   */
+  const projected = (value: number, tone: string): TileDelta =>
+    projection
+      ? {
+          Icon: ArrowRight,
+          tone,
+          text: `≈ ${formatBRL0(value)}`,
+          context: `projeção · dia ${projection.daysElapsed}/${projection.daysInMonth}`,
+        }
+      : inProgress;
+
   /** Delta percentual com semântica: para despesa, subir é ruim. */
   const pctDelta = (pct: number | null, higherIsBetter: boolean, context: string): TileDelta | undefined => {
     if (pct === null) return isMonthInProgress ? inProgress : undefined;
@@ -153,14 +175,29 @@ export function VitalSigns({
           hint="Total de receitas do mês selecionado. O delta compara com a sua receita média dos últimos 12 meses."
           value={formatBRL0(monthIncome)}
           valueTone="text-positive"
-          delta={pctDelta(incomeDelta, true, 'vs média 12M')}
+          delta={
+            isMonthInProgress
+              ? projected(projection?.income ?? 0, 'text-ink-3')
+              : pctDelta(incomeDelta, true, 'vs média 12M')
+          }
         />
         <Tile
           label="Despesas do mês"
           hint="Total de despesas do mês selecionado. O delta compara com o seu custo de vida (média móvel de 12 meses)."
           value={formatBRL0(spentMonth)}
           valueTone="text-negative"
-          delta={pctDelta(spentDelta, false, 'vs custo de vida')}
+          delta={
+            isMonthInProgress
+              ? projected(
+                  projection?.expense ?? 0,
+                  // A projeção da despesa TEM lado: fechar acima do custo de
+                  // vida é o aviso que faz agir enquanto ainda dá tempo.
+                  projection && col.endMA !== null && projection.expense > col.endMA
+                    ? 'text-negative'
+                    : 'text-ink-3'
+                )
+              : pctDelta(spentDelta, false, 'vs custo de vida')
+          }
         />
         <Tile
           label="Resultado do mês"
@@ -169,7 +206,14 @@ export function VitalSigns({
           valueTone={monthBalance >= 0 ? 'text-positive' : 'text-negative'}
           delta={
             resultDelta === null
-              ? inProgress
+              ? projected(
+                  projection?.result ?? 0,
+                  !projection
+                    ? 'text-ink-3'
+                    : projection.result >= 0
+                      ? 'text-positive'
+                      : 'text-negative'
+                )
               : {
                   Icon: resultDelta > 0 ? TrendingUp : resultDelta < 0 ? TrendingDown : Minus,
                   tone:
@@ -255,78 +299,3 @@ export function VitalSigns({
   );
 }
 
-/**
- * No grupo de 3 (o mês), o celular usa 2 colunas com o TERCEIRO tile na linha
- * inteira — empilhar deixaria a tela com quase 2000px de rolagem, e o terceiro
- * é justamente a conclusão (Resultado), então ganhar largura é hierarquia.
- * O grupo de tendência tem 2 tiles e vive em 2 colunas em qualquer largura.
- */
-function Group({ label, cols = 3, children }: { label: string; cols?: 2 | 3; children: React.ReactNode }) {
-  return (
-    <div>
-      <p className="text-caption font-semibold uppercase tracking-wider text-ink-3 mb-1.5 px-0.5">
-        {label}
-      </p>
-      <div
-        className={
-          cols === 3
-            ? 'grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 [&>*:nth-child(3)]:col-span-2 sm:[&>*:nth-child(3)]:col-span-1'
-            : 'grid grid-cols-2 gap-2 sm:gap-3'
-        }
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
-
-interface TileDelta {
-  Icon: typeof TrendingUp;
-  tone: string;
-  text: string;
-  context: string;
-}
-
-function Tile({
-  label,
-  hint,
-  value,
-  valueSuffix,
-  valueTone = 'text-text-primary',
-  delta,
-}: {
-  label: string;
-  hint?: string;
-  value: string;
-  valueSuffix?: string;
-  valueTone?: string;
-  delta?: TileDelta;
-}) {
-  return (
-    <div
-      className="bg-bg-card border border-border rounded-card px-3 py-3 sm:px-4 sm:py-3.5 flex flex-col gap-1 sm:gap-1.5 min-w-0"
-      title={hint}
-    >
-      {/* Quebra em 2 linhas em vez de truncar: em 2 colunas no celular,
-          "TAXA DE POUPANÇA · ANO" não cabe numa linha e virava "TAXA DE ...". */}
-      <span className="text-caption font-semibold uppercase tracking-wider text-ink-3 leading-tight">{label}</span>
-      {/* 21px no celular, 24px no desktop. O token text-kpi (28px) é para UM
-          número-herói por tela — repetido em seis tiles ficava desproporcional. */}
-      <span className={`text-[21px] sm:text-[24px] font-bold tracking-tight tnum leading-none truncate ${valueTone}`}>
-        {value}
-        {valueSuffix && <span className="text-caption sm:text-body font-medium text-text-secondary tracking-normal">{valueSuffix}</span>}
-      </span>
-      {delta ? (
-        <span className={`flex items-baseline gap-x-1.5 flex-wrap text-caption font-semibold tnum ${delta.tone} min-w-0`}>
-          <delta.Icon size={12} className="flex-shrink-0 self-center" />
-          <span>{delta.text}</span>
-          {/* Quebra em vez de truncar: com o valor da média junto, o contexto
-              não cabe numa linha em 2 colunas de celular. */}
-          {delta.context && <span className="text-ink-3 font-normal">{delta.context}</span>}
-        </span>
-      ) : (
-        <span className="text-caption text-ink-3">—</span>
-      )}
-    </div>
-  );
-}
