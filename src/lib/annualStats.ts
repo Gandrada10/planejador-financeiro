@@ -132,6 +132,12 @@ export interface AnnualStats {
   ytd: WindowTotals;
   /** O mesmo recorte de meses no ano passado. */
   prevYtd: WindowTotals;
+  /**
+   * O ano-calendário ANTERIOR inteiro (jan–dez). É a régua da PROJEÇÃO: um ano
+   * projetado fechado só se compara com um ano fechado de verdade — contra o
+   * acumulado parcial do ano passado seria 12 meses contra 7.
+   */
+  prevYearFull: WindowTotals;
   best: AnnualMonthRow | null;
   worst: AnnualMonthRow | null;
   /** Meses de resultado positivo dentro dos 12. */
@@ -215,7 +221,14 @@ export function computeAnnualStats(
   // saldoAnterior), então precisam de um segundo passe restrito.
   const prevMonths = period.months.map((m) => getMonthYearOffset(m, -12));
   const prevYtdMonths = period.ytdMonths.map((m) => getMonthYearOffset(m, -12));
-  const prevSet = new Set([...prevMonths, ...prevYtdMonths]);
+  // Ano-calendário anterior inteiro. Parte dele pode cair DENTRO da janela
+  // (ago/25–dez/25 numa janela ago/25–jul/26), então esses meses acabam nos
+  // dois mapas — sem problema: cada um responde uma pergunta diferente.
+  const prevYearMonths = Array.from(
+    { length: 12 },
+    (_, i) => `${period.year - 1}-${String(i + 1).padStart(2, '0')}`
+  );
+  const prevSet = new Set([...prevMonths, ...prevYtdMonths, ...prevYearMonths]);
   const prevByMonth = new Map<string, MonthAgg>();
   if (prevSet.size > 0) {
     for (const t of transactions) {
@@ -268,6 +281,7 @@ export function computeAnnualStats(
     prevM12: totalsFor(prevByMonth, prevMonths),
     ytd: totalsFor(byMonth, period.ytdMonths),
     prevYtd: totalsFor(prevByMonth, prevYtdMonths),
+    prevYearFull: totalsFor(prevByMonth, prevYearMonths),
     best,
     worst,
     positiveMonths: withData.filter((r) => r.result > 0).length,
@@ -291,14 +305,10 @@ export interface MatrixRow {
 }
 
 export interface AnnualMatrix {
-  income: MatrixRow[];
   expense: MatrixRow[];
-  /** Maior célula de cada bloco — a régua da escala de cor do mapa de calor. */
-  incomeMax: number;
+  /** Maior célula da tabela — a régua da escala de cor do mapa de calor. */
   expenseMax: number;
-  incomeTotals: Record<string, number>;
   expenseTotals: Record<string, number>;
-  incomeTotal12m: number;
   expenseTotal12m: number;
   /** Fatia das 5 maiores categorias no total de despesas (0–1). */
   expenseConcentration: number | null;
@@ -321,13 +331,15 @@ function finishRow(row: MatrixRow, period: AnnualPeriod): MatrixRow {
 }
 
 /**
- * Categoria × mês, em dois blocos (receitas e despesas), com as raízes
- * agregando as subcategorias e guardando os filhos para o drill-down.
+ * DESPESA por categoria × mês, com as raízes agregando as subcategorias e
+ * guardando os filhos para o drill-down. Receita fica de fora: são duas ou três
+ * linhas sem variação interessante entre meses, e o total dela já aparece nos
+ * indicadores, no gráfico e no fluxo de caixa.
  *
- * `incomeMax`/`expenseMax` saem daqui de propósito: a escala do mapa de calor é
- * do BLOCO INTEIRO, não de cada linha. Normalizar por linha (como o relatório
- * de evolução faz hoje) faz uma célula de R$ 80 ficar tão escura quanto uma de
- * R$ 3.000 e impede comparar linhas entre si.
+ * `expenseMax` sai daqui de propósito: a escala do mapa de calor é da TABELA
+ * INTEIRA, não de cada linha. Normalizar por linha (como o relatório de evolução
+ * faz hoje) faz uma célula de R$ 80 ficar tão escura quanto uma de R$ 3.000 e
+ * impede comparar linhas entre si.
  */
 export function computeAnnualMatrix(
   transactions: Transaction[],
@@ -338,10 +350,7 @@ export function computeAnnualMatrix(
   const monthSet = new Set(period.months);
   const byId = new Map(categories.map((c) => [c.id, c]));
 
-  // rootId -> row; e rootId -> (childId -> row)
-  const incomeRoots = new Map<string, MatrixRow>();
   const expenseRoots = new Map<string, MatrixRow>();
-  const incomeTotals: Record<string, number> = {};
   const expenseTotals: Record<string, number> = {};
 
   const bump = (row: MatrixRow, key: string, value: number) => {
@@ -353,14 +362,12 @@ export function computeAnnualMatrix(
     const key = getMonthYear(accountingDate(t));
     if (!monthSet.has(key)) continue;
 
-    const income = isIncomeAmount(t);
-    const expense = isExpenseAmount(t);
-    if (!income && !expense) continue;
+    if (!isExpenseAmount(t)) continue;
 
-    const value = income ? t.amount : -t.amount;
-    const roots = income ? incomeRoots : expenseRoots;
-    const totals = income ? incomeTotals : expenseTotals;
-    totals[key] = (totals[key] ?? 0) + value;
+    // Reembolso é contra-despesa: `-amount` de um positivo SUBTRAI do gasto.
+    const value = -t.amount;
+    const roots = expenseRoots;
+    expenseTotals[key] = (expenseTotals[key] ?? 0) + value;
 
     const cat = t.categoryId ? byId.get(t.categoryId) : undefined;
     const root = cat?.parentId ? byId.get(cat.parentId) ?? cat : cat;
@@ -393,7 +400,6 @@ export function computeAnnualMatrix(
       .filter((r) => r.total12m !== 0)
       .sort((a, b) => b.total12m - a.total12m);
 
-  const income = finalize(incomeRoots);
   const expense = finalize(expenseRoots);
 
   // A régua da cor considera raízes E filhos: uma subcategoria expandida não
@@ -416,13 +422,9 @@ export function computeAnnualMatrix(
   const top5 = expense.slice(0, 5).reduce((s, r) => s + r.total12m, 0);
 
   return {
-    income,
     expense,
-    incomeMax: maxOf(income),
     expenseMax: maxOf(expense),
-    incomeTotals,
     expenseTotals,
-    incomeTotal12m: sumOver(incomeTotals),
     expenseTotal12m,
     // Concentração responde "onde mexer dá resultado": se 5 categorias são 70%
     // do gasto, cortar nas outras 30 é esforço sem efeito.
@@ -708,6 +710,8 @@ export interface YearProjection {
   ytd: WindowTotals;
   /** O mesmo recorte de meses no ano passado — a única comparação honesta. */
   prevYtd: WindowTotals;
+  /** O ano anterior INTEIRO — a régua contra a qual a projeção se compara. */
+  prevYearFull: WindowTotals;
   /** Fechamento estimado do ano. */
   projected: { income: number; expense: number; result: number };
   /** Média mensal dos 12M que alimenta a projeção (a premissa, exibida na tela). */
@@ -752,6 +756,7 @@ export function computeYearProjection(stats: AnnualStats): YearProjection {
     remainingMonths,
     ytd: stats.ytd,
     prevYtd: stats.prevYtd,
+    prevYearFull: stats.prevYearFull,
     projected,
     monthlyAvg,
     neededPerMonth:

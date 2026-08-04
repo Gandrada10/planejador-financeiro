@@ -49,9 +49,19 @@ export function DashboardPage() {
     <div className="max-w-[1440px] mx-auto space-y-4">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h2 className="text-lg font-bold tracking-tight text-text-primary">Dashboard</h2>
+        {/* A chave fica SEMPRE na ponta direita, com o seletor de mês à sua
+            esquerda quando existe: assim ela não dança de posição ao trocar de
+            face — quem acabou de clicar em "Ano" encontra "Mês" no mesmo pixel
+            para voltar. */}
         <div className="flex items-center gap-2">
+          {/* O seletor de mês só existe na face mensal — a anual deriva a
+              janela do relógio e não tem o que escolher. */}
+          {mode === 'mes' && (
+            <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
+          )}
           <SegmentedControl
             ariaLabel="Janela do dashboard"
+            size="lg"
             value={mode}
             onChange={setMode}
             options={[
@@ -59,11 +69,6 @@ export function DashboardPage() {
               { value: 'ano', label: 'Ano', title: 'Últimos 12 meses fechados' },
             ]}
           />
-          {/* O seletor de mês só existe na face mensal — a anual deriva a
-              janela do relógio e não tem o que escolher. */}
-          {mode === 'mes' && (
-            <MonthSelector value={monthYear} onChange={setMonthYear} months={availableMonths} />
-          )}
         </div>
       </div>
 

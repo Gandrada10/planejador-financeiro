@@ -12,6 +12,7 @@ interface Props {
   transactions: Transaction[];
   excludedIds: Set<string>;
   monthYear: string;
+  className?: string;
 }
 
 interface ProjectRow extends Project {
@@ -35,7 +36,7 @@ interface ProjectRow extends Project {
  * e, em qualquer caso, um ano com lançamento do projeto conta. Assim nenhum
  * projeto some da tela por falta de data.
  */
-export function ProjectsPanel({ projects, transactions, excludedIds, monthYear }: Props) {
+export function ProjectsPanel({ projects, transactions, excludedIds, monthYear, className = '' }: Props) {
   const [showDone, setShowDone] = useState(false);
 
   const { active, done, year } = useMemo(() => {
@@ -121,7 +122,7 @@ export function ProjectsPanel({ projects, transactions, excludedIds, monthYear }
   const doneYear = done.reduce((s, p) => s + p.spentYear, 0);
 
   return (
-    <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
+    <div className={`bg-bg-card border border-border rounded-card p-4 space-y-3 ${className}`}>
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="text-title font-semibold text-text-primary">Projetos · {year}</h3>
         {totalYear < 0 && (

@@ -37,6 +37,14 @@ export function YearProgressCard({ projection: p, ytdLabel }: Props) {
   const yoy = (curr: number, prev: number): number | null =>
     prev > 0 ? ((curr - prev) / prev) * 100 : null;
 
+  /**
+   * Variação do RESULTADO. A base é o módulo do valor anterior: resultado troca
+   * de sinal, e com base negativa a divisão inverte o sentido do percentual
+   * (sair de −1.000 para −500 daria "−50%" quando na verdade melhorou).
+   */
+  const yoyResult = (curr: number, prev: number): number | null =>
+    prev !== 0 ? ((curr - prev) / Math.abs(prev)) * 100 : null;
+
   const projectedTone = p.projected.result >= 0 ? 'text-positive' : 'text-negative';
 
   return (
@@ -66,15 +74,12 @@ export function YearProgressCard({ projection: p, ytdLabel }: Props) {
           value={`${p.ytd.result > 0 ? '+' : ''}${formatBRL0(p.ytd.result)}`}
           tone={p.ytd.result >= 0 ? 'text-positive' : 'text-negative'}
           foot={
-            p.prevYtd.monthsWithData > 0 ? (
-              <span className="text-caption text-ink-3">
-                {p.year - 1}:{' '}
-                <span className="tnum">
-                  {p.prevYtd.result > 0 ? '+' : ''}
-                  {formatBRL0(p.prevYtd.result)}
-                </span>
-              </span>
-            ) : null
+            <Yoy
+              pct={yoyResult(p.ytd.result, p.prevYtd.result)}
+              higherIsBetter
+              year={p.year - 1}
+              base={p.prevYtd.monthsWithData > 0 ? p.prevYtd.result : null}
+            />
           }
         />
         {/* A projeção fica no mesmo tamanho dos outros, não maior: é estimativa,
@@ -84,9 +89,13 @@ export function YearProgressCard({ projection: p, ytdLabel }: Props) {
           value={`${p.projected.result > 0 ? '+' : ''}${formatBRL0(p.projected.result)}`}
           tone={projectedTone}
           foot={
-            <span className="text-caption text-ink-3">
-              estimativa · {formatBRL0(p.projected.income)} − {formatBRL0(p.projected.expense)}
-            </span>
+            <Yoy
+              pct={yoyResult(p.projected.result, p.prevYearFull.result)}
+              higherIsBetter
+              year={p.year - 1}
+              base={p.prevYearFull.monthsWithData > 0 ? p.prevYearFull.result : null}
+              estimate
+            />
           }
         />
       </div>
@@ -95,10 +104,16 @@ export function YearProgressCard({ projection: p, ytdLabel }: Props) {
           respondem "e daí?" — a 11px muda ninguém lê. */}
       <div className="pt-2 border-t border-border space-y-1 text-body text-text-secondary leading-snug">
         <p>
-          A projeção assume os {p.remainingMonths}{' '}
-          {p.remainingMonths === 1 ? 'mês restante' : 'meses restantes'} na média dos últimos 12:{' '}
-          <span className="tnum">{formatBRL0(p.monthlyAvg.income)}</span> de receita e{' '}
-          <span className="tnum">{formatBRL0(p.monthlyAvg.expense)}</span> de despesa por mês.
+          <span className="text-text-primary font-medium">Como a projeção é feita:</span> aos{' '}
+          <span className="tnum">{formatBRL0(p.ytd.income)}</span> de receita e{' '}
+          <span className="tnum">{formatBRL0(p.ytd.expense)}</span> de despesa já realizados,
+          somam-se os {p.remainingMonths}{' '}
+          {p.remainingMonths === 1 ? 'mês que falta' : 'meses que faltam'} na média dos últimos 12
+          (<span className="tnum">{formatBRL0(p.monthlyAvg.income)}</span> e{' '}
+          <span className="tnum">{formatBRL0(p.monthlyAvg.expense)}</span> por mês). Dá{' '}
+          <span className="tnum text-positive">{formatBRL0(p.projected.income)}</span> de receita
+          contra <span className="tnum text-negative">{formatBRL0(p.projected.expense)}</span> de
+          despesa em {p.year}.
         </p>
         {p.neededPerMonth !== null ? (
           <p>
@@ -115,7 +130,19 @@ export function YearProgressCard({ projection: p, ytdLabel }: Props) {
             <span className="tnum font-semibold text-positive">
               {formatBRL0(p.projected.result)}
             </span>{' '}
-            de sobra.
+            de sobra
+            {p.prevYearFull.monthsWithData > 0 && (
+              <>
+                {' '}
+                — contra{' '}
+                <span className="tnum">
+                  {p.prevYearFull.result > 0 ? '+' : ''}
+                  {formatBRL0(p.prevYearFull.result)}
+                </span>{' '}
+                que {p.year - 1} fechou
+              </>
+            )}
+            .
           </p>
         ) : (
           <p>
@@ -164,29 +191,55 @@ function Cell({
   );
 }
 
+/**
+ * Variação contra o ano anterior. Quando `base` vem preenchida, o valor de
+ * comparação aparece junto do percentual: "+43,5% vs 2025 (R$ 28.582)" — sem
+ * ele o percentual flutua sem âncora e não dá para julgar se é muito ou pouco.
+ */
 function Yoy({
   pct,
   higherIsBetter,
   year,
+  base,
+  estimate,
 }: {
   pct: number | null;
   higherIsBetter: boolean;
   year: number;
+  base?: number | null;
+  estimate?: boolean;
 }) {
-  if (pct === null) return <span className="text-caption text-ink-3">sem base em {year}</span>;
+  if (pct === null) {
+    return (
+      <span className="text-caption text-ink-3">
+        {estimate ? 'estimativa · ' : ''}sem base em {year}
+      </span>
+    );
+  }
   const flat = Math.abs(pct) < 0.05;
   const good = higherIsBetter ? pct > 0 : pct < 0;
   const Icon = flat ? Minus : pct > 0 ? TrendingUp : TrendingDown;
   return (
-    <span
-      className={`flex items-center gap-1 text-caption font-semibold tnum ${
-        flat ? 'text-ink-3' : good ? 'text-positive' : 'text-negative'
-      }`}
-    >
-      <Icon size={12} className="flex-shrink-0" />
-      {pct > 0 ? '+' : ''}
-      {pct.toFixed(1).replace('.', ',')}%
-      <span className="text-ink-3 font-normal">vs {year}</span>
+    <span className="flex flex-wrap items-center gap-x-1 text-caption font-semibold tnum">
+      <span
+        className={`flex items-center gap-1 ${
+          flat ? 'text-ink-3' : good ? 'text-positive' : 'text-negative'
+        }`}
+      >
+        <Icon size={12} className="flex-shrink-0" />
+        {pct > 0 ? '+' : ''}
+        {pct.toFixed(1).replace('.', ',')}%
+      </span>
+      <span className="text-ink-3 font-normal">
+        vs {year}
+        {base != null && (
+          <>
+            {' '}
+            ({base > 0 ? '+' : ''}
+            {formatBRL0(base)})
+          </>
+        )}
+      </span>
     </span>
   );
 }

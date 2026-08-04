@@ -15,16 +15,20 @@ const MAX_ALPHA = 0.34;
 /**
  * Categoria × mês nos 12 meses da janela: onde o dinheiro foi, e quando.
  *
+ * Só DESPESAS: receita tem duas ou três linhas e nenhuma variação interessante
+ * de mês para mês — um mapa de calor dela seria uma tabela cara de renderizar
+ * para dizer "o salário caiu todo mês". O total de receitas do período já está
+ * nos indicadores, no gráfico e no fluxo de caixa.
+ *
  * ── A correção de escala ──
  * O relatório de evolução por categoria normaliza a cor POR LINHA: cada linha
  * tem o próprio máximo, então uma célula de R$ 80 em "Farmácia" fica tão escura
  * quanto uma de R$ 3.000 em "Moradia". A cor mente sobre a comparação e as
  * linhas não se comparam entre si — o defeito registrado em MELHORIAS-VISUAIS.
  *
- * Aqui a escala é POR BLOCO (um máximo para todas as células de Receitas, outro
- * para Despesas), então a intensidade significa a mesma coisa na tabela toda e
- * a legenda pode declarar o topo da escala. O matiz continua semântico (menta =
- * entrou, coral = saiu), o que é seguro porque cada bloco já é de um só sinal.
+ * Aqui a escala é da TABELA INTEIRA (um único máximo), então a intensidade
+ * significa a mesma coisa em qualquer célula e a legenda pode declarar o topo
+ * da escala.
  */
 export function AnnualHeatmap({ matrix, period }: Props) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -37,7 +41,7 @@ export function AnnualHeatmap({ matrix, period }: Props) {
       return next;
     });
 
-  const hasAny = matrix.income.length > 0 || matrix.expense.length > 0;
+  const hasAny = matrix.expense.length > 0;
 
   return (
     <div className="bg-bg-card border border-border rounded-card p-4 space-y-3">
@@ -53,7 +57,7 @@ export function AnnualHeatmap({ matrix, period }: Props) {
       </div>
 
       {!hasAny ? (
-        <p className="text-body text-text-secondary">Nenhum lançamento categorizado na janela.</p>
+        <p className="text-body text-text-secondary">Nenhuma despesa categorizada na janela.</p>
       ) : (
         <div className="scroll-x">
           <table className="w-full min-w-[820px] text-body border-separate border-spacing-0">
@@ -73,17 +77,6 @@ export function AnnualHeatmap({ matrix, period }: Props) {
             </thead>
             <tbody>
               <Block
-                title="Receitas"
-                rows={matrix.income}
-                max={matrix.incomeMax}
-                totals={matrix.incomeTotals}
-                grandTotal={matrix.incomeTotal12m}
-                hue="52 224 160"
-                period={period}
-                expanded={expanded}
-                onToggle={toggle}
-              />
-              <Block
                 title="Despesas"
                 rows={matrix.expense}
                 max={matrix.expenseMax}
@@ -94,39 +87,6 @@ export function AnnualHeatmap({ matrix, period }: Props) {
                 expanded={expanded}
                 onToggle={toggle}
               />
-
-              {/* O resultado fecha a tabela: receitas − despesas, mês a mês. É a
-                  linha que amarra os dois blocos e bate com o gráfico acima. */}
-              <tr className="font-semibold">
-                <td className="sticky left-0 z-10 bg-bg-card py-2 pr-3 border-t-2 border-ink-3/40">
-                  Resultado
-                </td>
-                {period.months.map((m) => {
-                  const v = (matrix.incomeTotals[m] ?? 0) - (matrix.expenseTotals[m] ?? 0);
-                  return (
-                    <td
-                      key={m}
-                      className={`text-right py-2 px-1.5 tnum whitespace-nowrap border-t-2 border-ink-3/40 ${
-                        v > 0 ? 'text-positive' : v < 0 ? 'text-negative' : 'text-ink-3'
-                      }`}
-                    >
-                      {v === 0 ? '—' : compact(v)}
-                    </td>
-                  );
-                })}
-                <td className="text-right py-2 px-2 tnum text-ink-3 border-t-2 border-ink-3/40">
-                  {compact((matrix.incomeTotal12m - matrix.expenseTotal12m) / 12)}
-                </td>
-                <td
-                  className={`text-right py-2 pl-2 tnum whitespace-nowrap border-t-2 border-ink-3/40 ${
-                    matrix.incomeTotal12m - matrix.expenseTotal12m >= 0
-                      ? 'text-positive'
-                      : 'text-negative'
-                  }`}
-                >
-                  {formatBRL0(matrix.incomeTotal12m - matrix.expenseTotal12m)}
-                </td>
-              </tr>
             </tbody>
           </table>
         </div>
@@ -136,7 +96,9 @@ export function AnnualHeatmap({ matrix, period }: Props) {
           resultado, e quais meses pesam. */}
       {(matrix.expenseConcentration !== null || matrix.expensivestMonths.length > 0) && (
         <div className="pt-2 border-t border-border space-y-1 text-body text-text-secondary leading-snug">
-          {matrix.expenseConcentration !== null && matrix.expense.length > 5 && (
+          {/* Só vale dizer com base larga: com 6 categorias, "as 5 maiores são
+              98%" é aritmética, não descoberta. */}
+          {matrix.expenseConcentration !== null && matrix.expense.length >= 9 && (
             <p>
               As 5 maiores categorias concentram{' '}
               <span className="tnum font-semibold text-text-primary">

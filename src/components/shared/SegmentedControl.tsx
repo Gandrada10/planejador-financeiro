@@ -33,7 +33,7 @@ export function SegmentedControl<T extends string>({
   size = 'sm',
   className = '',
 }: Props<T>) {
-  const pad = size === 'lg' ? 'px-3.5 py-1.5 text-body' : 'px-3 py-1 text-caption';
+  const pad = size === 'lg' ? 'px-4 py-1.5 text-body' : 'px-3 py-1 text-caption';
 
   return (
     <div

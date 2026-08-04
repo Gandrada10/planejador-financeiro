@@ -215,23 +215,19 @@ export function MonthlyDashboard({ transactions, monthYear }: Props) {
         projection={projection}
       />
 
-      {/* ---- O MÊS | OS COMPROMISSOS ----
-          Esquerda (4/7): o mês por dentro — o fluxo do dinheiro e, logo
-          abaixo, a conferência do caixa daquele mesmo mês.
-          Direita (3/7): os compromissos — projetos e metas. A análise da
-          categoria clicada entra ACIMA de tudo, ao lado do diagrama que a
-          gerou.
+      {/* ---- BANDA 1: O MÊS POR DENTRO ----
+          O fluxo do dinheiro e a conferência do caixa LADO A LADO: são a mesma
+          pergunta vista de dois ângulos ("para onde foi" e "de qual conta
+          saiu"), e um em cima do outro obrigava a rolar para cruzar os dois.
+          O Sankey leva 4/7 porque é desenho e precisa de largura; a tabela de
+          caixa tem 4 colunas e cabe em 3/7.
 
-          ── Por que as duas colunas são pilhas com o último card elástico ──
-          Duas colunas de altura independente sempre terminam desalinhadas,
-          e a sobra vira um buraco na página — era o vão embaixo do Sankey,
-          que só cresce quando as metas se populam. O que sobra é absorvido
-          PELO ÚLTIMO CARD de cada coluna (`flex-1`), então a folga vira
-          respiro DENTRO de uma moldura em vez de um vazio na página.
-          O diagrama do fluxo continua de altura natural: ele não pode mudar
-          de tamanho a cada clique. */}
+          Sem `items-start`: as duas colunas terminam em alturas diferentes e a
+          sobra é absorvida pelo card mais curto (`h-full`), virando respiro
+          DENTRO da moldura em vez de um buraco na página — a mesma escolha que
+          a versão anterior desta tela já fazia com `flex-1`. */}
       <div className="grid grid-cols-1 lg:grid-cols-[4fr_3fr] gap-4">
-        <div className="flex flex-col gap-4 min-w-0">
+        <div className="min-w-0">
           <MonthFlowPanel
             transactions={transactions}
             categories={categories}
@@ -242,37 +238,51 @@ export function MonthlyDashboard({ transactions, monthYear }: Props) {
             nextMonthCommitted={nextMonth.total}
             nextMonthLabel={getMonthLabel(getMonthYearOffset(monthYear, 1))}
           />
+        </div>
 
+        <div className="min-w-0">
           <CashFlowTable
             data={cashFlowData}
             totalEntries={totalEntries}
             totalExits={totalExits}
             totalBalance={totalBalance}
             monthLabel={getMonthLabel(monthYear)}
-            className="lg:flex-1"
+            className="h-full"
           />
         </div>
+      </div>
 
-        <div className="flex flex-col gap-4 min-w-0">
-          {flowCategory && (
-            <CategoryDetailPanel
-              transactions={transactions}
-              categories={categories}
-              categoryId={flowCategory}
-              monthYear={monthYear}
-              isMonthInProgress={isMonthInProgress}
-              onClose={() => setFlowCategory(null)}
-            />
-          )}
+      {/* A análise da categoria clicada entra em largura total logo abaixo do
+          diagrama que a gerou — com o caixa ocupando a coluna da direita, não
+          há mais uma lateral livre para ela, e em largura total a lista de
+          subcategorias respira em vez de truncar. */}
+      {flowCategory && (
+        <CategoryDetailPanel
+          transactions={transactions}
+          categories={categories}
+          categoryId={flowCategory}
+          monthYear={monthYear}
+          isMonthInProgress={isMonthInProgress}
+          onClose={() => setFlowCategory(null)}
+        />
+      )}
 
+      {/* ---- BANDA 2: OS COMPROMISSOS ----
+          Projetos e metas lado a lado: os dois respondem "o que eu combinei
+          comigo mesmo, e como está indo". */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="min-w-0">
           <ProjectsPanel
             projects={projects}
             transactions={transactions}
             excludedIds={excludedIds}
             monthYear={monthYear}
+            className="h-full"
           />
+        </div>
 
-          <BudgetGoalsPanel rows={budgetData} className="lg:flex-1" />
+        <div className="min-w-0">
+          <BudgetGoalsPanel rows={budgetData} className="h-full" />
         </div>
       </div>
 
