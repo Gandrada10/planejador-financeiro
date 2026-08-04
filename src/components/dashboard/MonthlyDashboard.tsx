@@ -63,11 +63,14 @@ export function MonthlyDashboard({ transactions, monthYear }: Props) {
   const totalExits = useMemo(() => monthTransactions.filter((t) => countsInTotals(t, excludedIds) && isExpenseAmount(t)).reduce((s, t) => s + t.amount, 0), [monthTransactions, excludedIds]);
   const totalBalance = totalEntries + totalExits;
 
-  // Average monthly result over last 12 months (only months with data)
+  // Resultado médio mensal dos 12 meses ANTERIORES ao selecionado (só meses com
+  // dado). O laço começa em 1, não em 0: a régua do "Resultado do mês" não pode
+  // conter o próprio mês, senão um mês atípico entra no próprio denominador e
+  // encolhe o desvio que deveria denunciá-lo.
   const avg12months = useMemo(() => {
     const [y, m] = monthYear.split('-').map(Number);
     const last12: string[] = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 1; i <= 12; i++) {
       const d = new Date(y, m - 1 - i, 1);
       last12.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`);
     }
@@ -205,6 +208,7 @@ export function MonthlyDashboard({ transactions, monthYear }: Props) {
       <VitalSigns
         transactions={transactions}
         categories={categories}
+        monthYear={monthYear}
         monthLabel={getMonthLabel(monthYear)}
         monthIncome={totalEntries}
         monthExpenses={totalExits}

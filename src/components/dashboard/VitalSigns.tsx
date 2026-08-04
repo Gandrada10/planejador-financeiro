@@ -19,6 +19,8 @@ import type { MonthProjection } from '../../lib/annualStats';
 interface Props {
   transactions: Transaction[];
   categories: Category[];
+  /** Mês selecionado ("2026-07") — origem da janela de comparação. */
+  monthYear: string;
   /** Rótulo do mês selecionado, ex.: "junho de 2026". */
   monthLabel: string;
   /** Receitas do mês (positivo) e despesas do mês (negativo), como vêm do DashboardPage. */
@@ -51,6 +53,7 @@ interface Props {
 export function VitalSigns({
   transactions,
   categories,
+  monthYear,
   monthLabel,
   monthIncome,
   monthExpenses,
@@ -95,24 +98,37 @@ export function VitalSigns({
 
     let currRate: number | null = null;
     let prevRate: number | null = null;
-    let incomeAvg12m: number | null = null;
 
+    // TAXA DE POUPANÇA é métrica de ESTADO: a janela termina no último mês
+    // fechado e o inclui — é o que descreve como estou vivendo agora. A
+    // comparação é contra os 12 meses ANTERIORES a essa janela, que não a
+    // tocam, então aqui não há contaminação.
     if (col.endKey) {
-      const curr = window12(col.endKey);
-      currRate = rateOf(curr);
+      currRate = rateOf(window12(col.endKey));
       prevRate = rateOf(window12(getMonthYearOffset(col.endKey, -12)));
-      // Mesmo divisor do custo de vida (12 na janela cheia; nº de meses com
-      // dado na parcial) — sem isso os dois números do grupo não fecham.
-      const divisor = col.endPartialMonths ?? 12;
-      if (curr.inc > 0) incomeAvg12m = curr.inc / divisor;
     }
 
+    // RÉGUA DOS TILES DO MÊS: os 12 meses ANTERIORES ao selecionado. Uma base
+    // de comparação não pode conter o valor que ela julga — a janela ia até o
+    // próprio mês, então um mês atípico entrava no próprio denominador e
+    // encolhia o desvio que deveria denunciá-lo.
+    //
+    // Divisor = meses COM lançamento na janela, mesma convenção do custo de
+    // vida e da análise de categoria: um mês sem movimento é buraco de
+    // histórico, não um zero legítimo.
+    const baseEnd = getMonthYearOffset(monthYear, -1);
+    const base = window12(baseEnd);
+    let baseMonths = 0;
+    for (let i = 0; i < 12; i++) if (byMonth.has(getMonthYearOffset(baseEnd, -i))) baseMonths += 1;
+    const divisor = Math.max(baseMonths, 1);
+
     return {
-      incomeAvg12m,
+      incomeAvg12m: base.inc > 0 ? base.inc / divisor : null,
+      expenseAvg12m: base.exp > 0 ? base.exp / divisor : null,
       currRate,
       savingsDeltaPp: currRate !== null && prevRate !== null ? (currRate - prevRate) * 100 : null,
     };
-  }, [transactions, categories, col.endKey, col.endPartialMonths]);
+  }, [transactions, categories, monthYear, col.endKey]);
 
   const spentMonth = Math.abs(monthExpenses);
 
@@ -122,7 +138,7 @@ export function VitalSigns({
     !isMonthInProgress && base !== null && base > 0 ? ((value - base) / base) * 100 : null;
 
   const incomeDelta = pctVs(monthIncome, data.incomeAvg12m);
-  const spentDelta = pctVs(spentMonth, col.endMA);
+  const spentDelta = pctVs(spentMonth, data.expenseAvg12m);
   const resultDelta = isMonthInProgress ? null : monthBalance - avg12mResult;
 
   const inProgress: TileDelta = {
@@ -172,18 +188,18 @@ export function VitalSigns({
       <Group label={monthTitle}>
         <Tile
           label="Receitas do mês"
-          hint="Total de receitas do mês selecionado. O delta compara com a sua receita média dos últimos 12 meses."
+          hint="Total de receitas do mês selecionado. O delta compara com a média dos 12 meses ANTERIORES a ele — a régua não inclui o mês que está sendo julgado."
           value={formatBRL0(monthIncome)}
           valueTone="text-positive"
           delta={
             isMonthInProgress
               ? projected(projection?.income ?? 0, 'text-ink-3')
-              : pctDelta(incomeDelta, true, 'vs média 12M')
+              : pctDelta(incomeDelta, true, 'vs 12M anteriores')
           }
         />
         <Tile
           label="Despesas do mês"
-          hint="Total de despesas do mês selecionado. O delta compara com o seu custo de vida (média móvel de 12 meses)."
+          hint="Total de despesas do mês selecionado. O delta compara com a despesa média dos 12 meses ANTERIORES a ele. Não é o mesmo número do tile de custo de vida, que por ser retrato do momento inclui este mês."
           value={formatBRL0(spentMonth)}
           valueTone="text-negative"
           delta={
@@ -196,12 +212,12 @@ export function VitalSigns({
                     ? 'text-negative'
                     : 'text-ink-3'
                 )
-              : pctDelta(spentDelta, false, 'vs custo de vida')
+              : pctDelta(spentDelta, false, 'vs 12M anteriores')
           }
         />
         <Tile
           label="Resultado do mês"
-          hint="Receitas menos despesas do mês. O delta compara com o seu resultado médio dos últimos 12 meses."
+          hint="Receitas menos despesas do mês. O delta compara com o resultado médio dos 12 meses ANTERIORES a ele."
           value={`${monthBalance > 0 ? '+' : ''}${formatBRL0(monthBalance)}`}
           valueTone={monthBalance >= 0 ? 'text-positive' : 'text-negative'}
           delta={
@@ -225,7 +241,7 @@ export function VitalSigns({
                   text: `${resultDelta > 0 ? '+' : ''}${formatBRL0(resultDelta)}`,
                   // A média deixa de ser referência abstrata e mostra o valor:
                   // é a régua do resultado do mês, e agora mora junto dele.
-                  context: `vs média 12M (${formatBRL0(avg12mResult)})`,
+                  context: `vs 12M anteriores (${formatBRL0(avg12mResult)})`,
                 }
           }
         />
