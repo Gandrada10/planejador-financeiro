@@ -4,6 +4,7 @@ import { CostOfLivingChart } from './CostOfLivingChart';
 import { computeCostOfLiving } from '../../lib/costOfLiving';
 import type { CostOfLivingData } from '../../lib/costOfLiving';
 import type { Transaction, Category } from '../../types';
+import { SegmentedControl } from '../shared/SegmentedControl';
 
 type ViewWindow = 'year' | 'm24' | 'm36';
 
@@ -75,17 +76,16 @@ export function ExpensesPanel({
         </div>
 
         {/* Seletor de janela de tempo — a tendência está presente em todas */}
-        <div className="flex bg-bg-secondary border border-border rounded-control p-0.5 flex-shrink-0" role="group" aria-label="Janela de tempo do gráfico de despesas">
-          <LensButton active={view === 'year'} onClick={() => setView('year')}>
-            Mês a mês
-          </LensButton>
-          <LensButton active={view === 'm24'} onClick={() => setView('m24')}>
-            24M
-          </LensButton>
-          <LensButton active={view === 'm36'} onClick={() => setView('m36')}>
-            36M
-          </LensButton>
-        </div>
+        <SegmentedControl
+          ariaLabel="Janela de tempo do gráfico de despesas"
+          value={view}
+          onChange={setView}
+          options={[
+            { value: 'year', label: 'Mês a mês' },
+            { value: 'm24', label: '24M', title: 'Últimos 24 meses' },
+            { value: 'm36', label: '36M', title: 'Últimos 36 meses' },
+          ]}
+        />
       </div>
 
       {view === 'year' ? (
@@ -99,28 +99,5 @@ export function ExpensesPanel({
         <CostOfLivingChart data={colView} />
       )}
     </div>
-  );
-}
-
-function LensButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={active}
-      className={`tap px-3 py-1 rounded-[10px] text-caption font-medium transition-colors ${
-        active ? 'bg-elevated text-text-primary' : 'text-text-secondary hover:text-text-primary active:bg-elevated/60'
-      }`}
-    >
-      {children}
-    </button>
   );
 }
