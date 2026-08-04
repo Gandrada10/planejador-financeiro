@@ -79,11 +79,18 @@ export function computeCategoryDetail(
   categories: Category[],
   categoryId: string,
   monthYear: string,
-  isMonthInProgress: boolean,
 ): CategoryDetail {
   const excludedIds = getExcludedFromTotalsIds(categories);
 
-  const avgEnd = isMonthInProgress ? getMonthYearOffset(monthYear, -1) : monthYear;
+  // A média é a RÉGUA do mês analisado, então NÃO pode conter esse mês: um
+  // julho atípico entrava no próprio denominador, inflava a base e diluía o
+  // desvio que deveria denunciá-lo (com 12 meses, um pico contribui com 1/12
+  // da própria referência). Na prática o "▲208%" de uma subcategoria que
+  // triplicou aparecia como bem menos.
+  //
+  // São sempre os 12 meses ANTERIORES ao analisado — janela cheia, e o mês em
+  // andamento já ficava de fora por consequência.
+  const avgEnd = getMonthYearOffset(monthYear, -1);
   const avgWindow = new Set<string>();
   for (let i = 0; i < 12; i++) avgWindow.add(getMonthYearOffset(avgEnd, -i));
 
