@@ -30,3 +30,6 @@ tools/mypka/*.json
 *.sln
 *.sw?
 __pycache__/
+
+# Aprovacoes pessoais do Claude Code: ficam na maquina, nao no repositorio
+.claude/settings.local.json
