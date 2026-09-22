@@ -129,7 +129,21 @@ function invoiceLineMatches(item: ImportItem, t: Transaction): boolean {
   if (Math.abs(t.amount - item.amount) >= 0.01) return false;
   if (!accountsCompatible(t.account, item.account)) return false;
   if (installmentKey(t) !== installmentKey(item)) return false;
-  return anyDatePairMatches(t, item);
+
+  // Numa fatura, a data que identifica a cobrança é a DATA DA COMPRA, e só ela.
+  // O `date` de um lançamento de cartão guarda o VENCIMENTO da fatura — igual
+  // para todas as linhas do mês —, então cruzar um com o outro (o que
+  // `anyDatePairMatches` faz) compara coisas de naturezas diferentes: uma
+  // compra feita no dia 20/08 casava com qualquer lançamento de mesmo valor da
+  // fatura que venceu em 20/08. Com a descrição fora do critério, nada segurava
+  // isso: na fatura de 09/2026, "Uber" de 20/08 virou duplicata de "GOOGLE ONE"
+  // e "Indigo" virou duplicata de "GEPARK", só por coincidirem no valor.
+  if (t.purchaseDate && item.purchaseDate) return datesMatch(t.purchaseDate, item.purchaseDate);
+
+  // Sem data de compra de um dos lados (lançamento antigo ou digitado à mão)
+  // resta o `date`, que é fraco demais sozinho — aqui a descrição volta como
+  // trava, no lugar da precisão que falta.
+  return datesMatch(t.date, item.date) && descriptionsCompatible(t.description, item.description);
 }
 
 /**
