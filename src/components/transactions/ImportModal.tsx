@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { findRuleForDescription } from '../../lib/categoryRules';
 import { X, FileSpreadsheet, AlertTriangle, Check, Sparkles, CreditCard, ChevronDown, Zap, UserX, CalendarClock, Landmark, Globe } from 'lucide-react';
 import * as pdfjsLib from 'pdfjs-dist';
 import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
@@ -2193,7 +2194,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                               <span className="text-text-secondary">—</span>
                             )}
                             {item.categoryId && onCreateRule && (() => {
-                              const hasRule = rules.some((r) => r.pattern.toLowerCase() === item.description.toLowerCase());
+                              const hasRule = findRuleForDescription(rules, item.description) !== undefined;
                               return (
                                 <button
                                   type="button"

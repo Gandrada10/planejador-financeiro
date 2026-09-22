@@ -1,4 +1,5 @@
 import { ChevronDown, ChevronUp, Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, MoveRight, Zap, Pencil, RefreshCcw, Clock } from 'lucide-react';
+import { findRuleForDescription } from '../../lib/categoryRules';
 import { useState, useMemo } from 'react';
 import { formatBRL, formatDate, tabNavigate, getMonthLabel, parseMoneyInput, applyMoneyMask } from '../../lib/utils';
 import type { Transaction, Category, Project, CategoryRule } from '../../types';
@@ -520,8 +521,10 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                               onChange={async (val) => {
                                 const ok = await guardClosedCycle(t);
                                 if (!ok) return;
-                                const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
-                                if (existingRule && onDeleteRule && val !== t.categoryId) {
+                                // Ver a nota equivalente em TransactionTable: só oferecer a
+                                // remoção quando a categoria escolhida DISCORDA da regra.
+                                const existingRule = findRuleForDescription(rules, t.description);
+                                if (existingRule && onDeleteRule && val && val !== existingRule.categoryId) {
                                   const confirm = window.confirm(
                                     `Existe uma regra de categorização para "${t.description}".\n\nAo mudar a categoria, a regra será removida. Deseja continuar?`
                                   );
@@ -533,7 +536,7 @@ export function InvoiceTransactionList({ groups, categories, projects = [], ever
                               compact
                             />
                             {t.categoryId && onCreateRule && (() => {
-                              const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
+                              const hasRule = findRuleForDescription(rules, t.description) !== undefined;
                               return (
                                 <button
                                   title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}

@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { toggleCategoryRule } from '../../lib/categoryRules';
 import { CreditCard, LockOpen } from 'lucide-react';
 import { useTransactions } from '../../hooks/useTransactions';
 import { useCategories } from '../../hooks/useCategories';
@@ -234,22 +235,14 @@ export function CreditCardPage() {
     return { cycleId: closed.id, label: `${account.name} — ${getMonthLabel(closed.monthYear)}` };
   }
 
-  const handleCreateRule = useCallback(async (description: string, categoryId: string) => {
-    const existing = rules.find((r) => r.pattern.toLowerCase() === description.toLowerCase());
-    if (existing) {
-      const confirmDelete = window.confirm(
-        `Já existe uma regra para "${description}".\n\nDeseja remover a regra?`
-      );
-      if (!confirmDelete) return;
-      await deleteRule(existing.id);
-    } else {
-      const confirmCreate = window.confirm(
-        `Deseja criar uma regra para categorizar automaticamente transações com a descrição "${description}"?`
-      );
-      if (!confirmCreate) return;
-      await addRule({ pattern: description, keywords: [], categoryId });
-    }
-  }, [rules, addRule, deleteRule]);
+  // Terceira cópia deste toggle, agora apontando para a lib — era a única das
+  // três que não recebia o padrão curto editável nem o aviso de regra mais
+  // abrangente, então o mesmo ⚡ fazia coisas diferentes conforme a tela.
+  const handleCreateRule = useCallback(
+    (description: string, categoryId: string) =>
+      toggleCategoryRule({ rules, addRule, deleteRule }, description, categoryId),
+    [rules, addRule, deleteRule]
+  );
 
   if (loadingTx || loadingAccounts) {
     return <div className="text-accent text-body animate-pulse">Carregando cartoes...</div>;
