@@ -32,7 +32,7 @@ type ImportRow = ImportItem & {
    *  uma importação anterior que deu errado, contra lançamentos digitados à
    *  mão, ou contra nada (falso positivo). Era o que transformava um número
    *  assustador em beco sem saída. */
-  duplicateOf?: { account: string; date: Date; description: string; via: 'id' | 'valor' };
+  duplicateOf?: { account: string; date: Date; description: string; via: 'id' | 'valor' | 'fatura' };
   installmentType: 'unica' | 'parcelada';
   periodicity: number; // months between installments
   installmentAmount: number | null;
@@ -43,22 +43,125 @@ function datesMatch(a: Date | null, b: Date | null): boolean {
   return a.toDateString() === b.toDateString();
 }
 
+/** Casa se QUALQUER par de datas alinhar — cobre o caso em que um lado guarda
+ *  a data da fatura e o outro a data da compra original. */
+function anyDatePairMatches(t: Transaction, item: ImportItem): boolean {
+  return (
+    datesMatch(t.date, item.date) ||
+    datesMatch(t.purchaseDate, item.purchaseDate) ||
+    datesMatch(t.date, item.purchaseDate) ||
+    datesMatch(t.purchaseDate, item.date)
+  );
+}
+
+/** Identidade da PARCELA. Duas linhas com a mesma descrição, mesmo valor e
+ *  mesma data de compra ainda são cobranças DIFERENTES quando são parcelas
+ *  diferentes do mesmo carnê — e é exatamente o que a fatura mostra: o banco
+ *  repete a DATA DA COMPRA ORIGINAL em toda parcela seguinte, então a "Parcela
+ *  5 de 6" de agosto é idêntica à "Parcela 4 de 6" de julho em tudo, menos no
+ *  número da parcela. Era o que faltava olhar: sem isso o importador marcava as
+ *  parcelas do mês como duplicata da fatura anterior, elas entravam
+ *  DESMARCADAS e a fatura fechava abaixo do que o banco cobrou. */
+function installmentKey(t: Pick<Transaction, 'installmentNumber' | 'totalInstallments'>): string {
+  if (t.installmentNumber == null || t.totalInstallments == null) return '';
+  return `${t.installmentNumber}/${t.totalInstallments}`;
+}
+
+/** Núcleo comparável da descrição: só letras e dígitos, sem marcador de
+ *  parcela. Espaço, pontuação e asterisco variam a cada leitura e não
+ *  distinguem nada ("ZIG*ZIGPAY" e "Zig* *Zigpay" são o mesmo lugar). */
+function descriptionCore(desc: string): string {
+  return normalizeDescriptionForDedup(desc).replace(/[^a-z0-9]/g, '');
+}
+
+/** Núcleo mínimo para aceitar casamento por truncamento. Abaixo disso o
+ *  prefixo é curto demais e casaria estabelecimentos diferentes. */
+const DESC_CORE_MIN = 6;
+
+/** Descrições compatíveis: iguais, ou uma é o começo da outra. O extrato trunca
+ *  o nome do estabelecimento em larguras diferentes conforme a seção
+ *  ("ELUBEL INDUSTRIA" na lista de compras, "Elubel Industria Ecotia" na de
+ *  parcelados), então exigir igualdade byte a byte fazia o dedupe não
+ *  reconhecer a própria linha já importada. */
+function descriptionsCompatible(a: string, b: string): boolean {
+  const ca = descriptionCore(a);
+  const cb = descriptionCore(b);
+  if (!ca || !cb) return ca === cb;
+  if (ca === cb) return true;
+  const [short, long] = ca.length <= cb.length ? [ca, cb] : [cb, ca];
+  return short.length >= DESC_CORE_MIN && long.startsWith(short);
+}
+
+/** Contas compatíveis: iguais, ou ao menos uma indefinida. Exigir igualdade
+ *  quando as duas estão preenchidas impede que um lançamento de um cartão seja
+ *  tratado como duplicata de outro cartão com o mesmo valor e data; aceitar o
+ *  lado vazio preserva o fallback do OFX, onde a linha pode vir sem conta. */
+function accountsCompatible(a: string, b: string): boolean {
+  if (!a || !b) return true;
+  return a === b;
+}
+
+/** Casamento para EXTRATO (conta corrente): data + valor + descrição, agora
+ *  também exigindo conta e parcela compatíveis. A parcela só desempata quando
+ *  os DOIS lados a declaram — num extrato ela costuma vir ausente, e tratar
+ *  ausente como diferente faria toda reimportação duplicar. */
+function statementLineMatches(item: ImportItem, t: Transaction): boolean {
+  if (Math.abs(t.amount - item.amount) >= 0.01) return false;
+  if (!accountsCompatible(t.account, item.account)) return false;
+  const kt = installmentKey(t);
+  const ki = installmentKey(item);
+  if (kt && ki && kt !== ki) return false;
+  if (!descriptionsCompatible(t.description, item.description)) return false;
+  return anyDatePairMatches(t, item);
+}
+
+/** Casamento para FATURA DE CARTÃO. A chave natural da linha é conta + data da
+ *  compra + valor + parcela. A DESCRIÇÃO FICA FORA de propósito: é o único
+ *  campo que a leitura por IA transcreve de formas diferentes a cada
+ *  importação ("BRAZL COMERCIO DE AL" e "Brazrio Comercio De Al" são a mesma
+ *  cobrança), e foi por exigir descrição idêntica que o dedupe deixou passar
+ *  duplicatas reais numa segunda importação da mesma fatura. Uma compra tem uma
+ *  data só e cada parcela tem número próprio — isso identifica a linha sem
+ *  depender de como o texto saiu. Repetição legítima no mesmo dia (duas
+ *  passagens de metrô de R$ 7,90) é resolvida pela CONTAGEM em
+ *  `markDuplicates`, não pela descrição. */
+function invoiceLineMatches(item: ImportItem, t: Transaction): boolean {
+  if (Math.abs(t.amount - item.amount) >= 0.01) return false;
+  if (!accountsCompatible(t.account, item.account)) return false;
+  if (installmentKey(t) !== installmentKey(item)) return false;
+  return anyDatePairMatches(t, item);
+}
+
+/**
+ * Marca as duplicatas do lote CONTANDO ocorrências, em vez de perguntar
+ * "existe alguma igual?".
+ *
+ * A fatura repete cobranças legítimas: duas passagens de metrô de R$ 7,90 no
+ * mesmo dia são duas linhas, não erro de leitura. Com a pergunta de existência,
+ * bastava UMA delas estar gravada para as DUAS serem marcadas — e a segunda
+ * nunca entrava. Aqui cada transação já gravada explica NO MÁXIMO uma linha do
+ * arquivo: as N primeiras de cada chave batem com as N que já existem, e o
+ * excedente entra como novo.
+ */
+function markDuplicates(
+  items: ImportItem[],
+  existing: Transaction[],
+  matches: (item: ImportItem, t: Transaction) => boolean,
+  via: NonNullable<ImportRow['duplicateOf']>['via']
+): (ImportRow['duplicateOf'] | undefined)[] {
+  const claimed = new Set<string>();
+  return items.map((item) => {
+    const hit = existing.find((t) => !claimed.has(t.id) && matches(item, t));
+    if (!hit) return undefined;
+    claimed.add(hit.id);
+    return { account: hit.account, date: hit.date, description: hit.description, via };
+  });
+}
+
 /** Devolve a transação que colide, ou `null`. Antes era um booleano — mas
  *  quem está olhando o preview precisa saber CONTRA O QUÊ bateu. */
 function findDuplicate(item: ImportItem, existing: Transaction[]): Transaction | null {
-  const itemDescNorm = normalizeDescriptionForDedup(item.description);
-  return existing.find((t) => {
-    if (Math.abs(t.amount - item.amount) >= 0.01) return false;
-    if (normalizeDescriptionForDedup(t.description) !== itemDescNorm) return false;
-    // Match if any date pair aligns — handles the case where one side stores
-    // the billing/invoice date while the other stores the original purchase date.
-    return (
-      datesMatch(t.date, item.date) ||
-      datesMatch(t.purchaseDate, item.purchaseDate) ||
-      datesMatch(t.date, item.purchaseDate) ||
-      datesMatch(t.purchaseDate, item.date)
-    );
-  }) ?? null;
+  return existing.find((t) => statementLineMatches(item, t)) ?? null;
 }
 
 function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
@@ -1067,7 +1170,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         };
         return {
           ...item,
-          isDuplicate: isDuplicate(item, existingTransactions),
+          // Decidido mais abaixo, em UM passo sobre o lote inteiro: o critério
+          // conta ocorrências (ver `markDuplicates`) e a conta de destino ainda
+          // pode mudar no bloco de cartão, então aqui a linha nasce sem marca.
+          isDuplicate: false,
           // Only auto-expand future installments for bank statements where the AI
           // itself identified the parcel. Credit card imports and parcels that we
           // recovered from a trailing marker in the description are already
@@ -1116,6 +1222,25 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
           parsed.forEach((p) => { p.account = ccName; });
         }
       }
+
+      // Dedupe SÓ AQUI, com o lote pronto e a conta de destino já resolvida.
+      // Antes cada linha se comparava sozinha, no meio do `map`: contava
+      // existência em vez de ocorrências, e ainda rodava antes do bloco acima
+      // definir a conta do cartão — então o critério de conta nunca valia.
+      // Fatura e extrato usam critérios diferentes de propósito: numa fatura a
+      // descrição é o campo menos confiável (a IA a transcreve diferente a cada
+      // leitura), num extrato ela é o que distingue lançamentos do mesmo valor.
+      const duplicates = markDuplicates(
+        parsed,
+        existingTransactions,
+        detectedCreditCard ? invoiceLineMatches : statementLineMatches,
+        detectedCreditCard ? 'fatura' : 'valor'
+      );
+      duplicates.forEach((hit, i) => {
+        if (!hit) return;
+        parsed[i].isDuplicate = true;
+        parsed[i].duplicateOf = hit;
+      });
 
       setItems(parsed);
       setSelected(new Set(parsed.map((_, i) => i).filter((i) => !parsed[i].isDuplicate)));
@@ -1339,7 +1464,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   /** Duplicatas agrupadas por conta de destino + critério de casamento. É o
    *  que transforma "84 possíveis duplicatas" em algo acionável. */
   const duplicateBreakdown = useMemo(() => {
-    const acc = new Map<string, { key: string; account: string; via: 'id' | 'valor'; count: number }>();
+    const acc = new Map<string, { key: string; account: string; via: 'id' | 'valor' | 'fatura'; count: number }>();
     for (const it of items) {
       if (!it.duplicateOf) continue;
       const key = `${it.duplicateOf.account}|${it.duplicateOf.via}`;
@@ -1495,7 +1620,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                   {duplicateBreakdown.map((d) => (
                     <p key={d.key} className="text-caption text-text-secondary">
                       <b className="text-text-primary">{d.account || 'sem conta definida'}</b> — {d.count} lançamento{d.count !== 1 ? 's' : ''},
-                      {' '}casando por {d.via === 'id' ? 'id do extrato' : 'data, valor e descrição'}
+                      {' '}casando por {d.via === 'id' ? 'id do extrato' : d.via === 'fatura' ? 'data da compra, valor e parcela' : 'data, valor e descrição'}
                     </p>
                   ))}
                   <p className="text-caption text-ink-3">
@@ -2090,7 +2215,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
                             <span
                               title={
                                 item.duplicateOf
-                                  ? `Já existe: "${item.duplicateOf.description}" em ${item.duplicateOf.account || 'conta não definida'}, ${formatDate(item.duplicateOf.date)} — casou por ${item.duplicateOf.via === 'id' ? 'id do extrato' : 'data, valor e descrição'}`
+                                  ? `Já existe: "${item.duplicateOf.description}" em ${item.duplicateOf.account || 'conta não definida'}, ${formatDate(item.duplicateOf.date)} — casou por ${item.duplicateOf.via === 'id' ? 'id do extrato' : item.duplicateOf.via === 'fatura' ? 'data da compra, valor e parcela' : 'data, valor e descrição'}`
                                   : 'Possivel duplicata — ja existe transacao com mesma data, valor e descricao'
                               }
                             >
