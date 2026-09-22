@@ -133,6 +133,45 @@ function invoiceLineMatches(item: ImportItem, t: Transaction): boolean {
 }
 
 /**
+ * A categoria que as parcelas ANTERIORES deste mesmo carnê já receberam.
+ *
+ * Uma compra parcelada chega picada: cada fatura traz uma parcela, e cada uma
+ * entra como lançamento novo. Sem isto, o usuário categoriza "Airbnb" em julho
+ * e a parcela seguinte volta sem categoria em agosto — e de novo em setembro,
+ * por seis meses. As 16 parcelas recuperadas na fatura de 08/2026 vieram todas
+ * assim, e todas as 16 tinham parcela anterior já categorizada.
+ *
+ * O carnê é identificável com precisão porque o banco repete a DATA DA COMPRA
+ * ORIGINAL em toda parcela: `conta + data da compra + valor + total de
+ * parcelas` isola a compra, e o número da parcela ordena. (É a mesma
+ * propriedade que `invoiceLineMatches` usa para o dedupe.)
+ *
+ * Só serve de RESERVA: roda quando nenhuma regra casou. E quando as parcelas
+ * anteriores discordam entre si — duas compras distintas de mesmo valor, mesma
+ * data e mesmo parcelamento existem (dois carnês de R$ 83,64 em 20/10/2025) —
+ * devolve `null` em vez de chutar; a linha fica sem categoria, como antes.
+ */
+function categoryFromPreviousInstallment(item: ImportItem, existing: Transaction[]): string | null {
+  if (item.installmentNumber == null || item.totalInstallments == null) return null;
+
+  const anteriores = existing.filter(
+    (t) =>
+      t.categoryId &&
+      t.totalInstallments === item.totalInstallments &&
+      t.installmentNumber != null &&
+      t.installmentNumber < item.installmentNumber! &&
+      Math.abs(t.amount - item.amount) < 0.01 &&
+      accountsCompatible(t.account, item.account) &&
+      anyDatePairMatches(t, item)
+  );
+  if (anteriores.length === 0) return null;
+
+  const categorias = new Set(anteriores.map((t) => t.categoryId));
+  if (categorias.size > 1) return null;
+  return anteriores[0].categoryId;
+}
+
+/**
  * Marca as duplicatas do lote CONTANDO ocorrências, em vez de perguntar
  * "existe alguma igual?".
  *
@@ -1241,6 +1280,14 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         parsed[i].isDuplicate = true;
         parsed[i].duplicateOf = hit;
       });
+
+      // Reserva de categoria para parcela: o que as parcelas anteriores do
+      // mesmo carnê já receberam. Depois das regras (que continuam tendo
+      // precedência) e só para a linha que ficou sem categoria.
+      for (const row of parsed) {
+        if (row.categoryId) continue;
+        row.categoryId = categoryFromPreviousInstallment(row, existingTransactions);
+      }
 
       setItems(parsed);
       setSelected(new Set(parsed.map((_, i) => i).filter((i) => !parsed[i].isDuplicate)));
