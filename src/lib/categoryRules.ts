@@ -113,6 +113,22 @@ export function matchCategoryId(rules: CategoryRule[], description: string): str
 }
 
 /**
+ * A regra cujo padrão É a descrição (não apenas a cobre). É o que o ⚡ liga e
+ * desliga, e o que as telas usam para saber se aquela linha já tem regra
+ * própria.
+ *
+ * Existia copiada em quatro lugares como `r.pattern.toLowerCase() ===
+ * description.toLowerCase()`, enquanto o toggle usava `normalizeForMatch`.
+ * Duas noções diferentes de "mesmo padrão" no mesmo recurso: o raio podia
+ * indicar que não havia regra e o toggle encontrar uma, ou o contrário.
+ */
+export function findRuleForDescription(rules: CategoryRule[], description: string): CategoryRule | undefined {
+  const alvo = normalizeForMatch(description);
+  if (!alvo) return undefined;
+  return rules.find((r) => normalizeForMatch(r.pattern) === alvo);
+}
+
+/**
  * O padrão que a regra DEVERIA guardar, a partir de uma descrição de extrato.
  *
  * O ⚡ gravava a descrição INTEIRA como padrão, e o casamento exige que esse
@@ -174,8 +190,7 @@ export async function toggleCategoryRule(
 ): Promise<void> {
   // Mesma normalização do casamento: com `.toLowerCase()` puro, "Farmácia SP" e
   // "FARMACIA SP" eram padrões diferentes e o toggle criava a segunda regra.
-  const target = normalizeForMatch(description);
-  const existing = deps.rules.find((r) => normalizeForMatch(r.pattern) === target);
+  const existing = findRuleForDescription(deps.rules, description);
   if (existing) {
     const ok = window.confirm(`Já existe uma regra para "${description}".\n\nDeseja remover a regra?`);
     if (!ok) return;

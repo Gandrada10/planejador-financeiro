@@ -1,4 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
+import { findRuleForDescription } from '../../lib/categoryRules';
 import {
   Trash2, CheckCircle2, ArrowUp, ArrowDown, ArrowUpDown, Zap, Pencil, RefreshCcw, Clock,
   ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
@@ -504,8 +505,14 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       onChange={async (val) => {
                         const ok = await guardClosedCycle(t);
                         if (!ok) return;
-                        const existingRule = rules.find((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
-                        if (existingRule && onDeleteRule && val !== t.categoryId) {
+                        // Só faz sentido oferecer a remoção quando a categoria escolhida
+                        // DISCORDA da regra. Escolher justamente o que ela já manda — o caso
+                        // de uma linha que entrou sem categoria porque a regra nasceu depois
+                        // da importação — não a invalida. Antes a condição comparava com a
+                        // categoria ATUAL da linha, então numa linha sem categoria qualquer
+                        // escolha disparava o aviso, e categorizar exigia destruir a regra certa.
+                        const existingRule = findRuleForDescription(rules, t.description);
+                        if (existingRule && onDeleteRule && val && val !== existingRule.categoryId) {
                           const ok = await askConfirm({
                             title: 'Remover regra de categorização?',
                             message: `Existe uma regra de categorização para "${t.description}". Ao mudar a categoria, a regra será removida.`,
@@ -519,7 +526,7 @@ export function TransactionTable({ transactions, categories, projects = [], acco
                       }}
                     />
                     {t.categoryId && onCreateRule && (() => {
-                      const hasRule = rules.some((r) => r.pattern.toLowerCase() === t.description.toLowerCase());
+                      const hasRule = findRuleForDescription(rules, t.description) !== undefined;
                       return (
                         <button
                           title={hasRule ? 'Remover regra existente' : 'Criar regra para esta descrição'}
