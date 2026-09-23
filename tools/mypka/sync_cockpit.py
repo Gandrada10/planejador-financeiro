@@ -130,8 +130,12 @@ FROM fin_transactions t
 LEFT JOIN fin_categories c ON c.id = t.category_id
 WHERE t.category_id IS NULL OR COALESCE(c.exclude_from_totals, 0) = 0;
 
+-- Mes efetivo do lancamento: billing_month (fatura do cartao) quando preenchido,
+-- senao o mes da data de caixa. Alinha com a constante EFF_MONTH do financeApi.js
+-- (o backend agrega sempre por esse mes). billing_month e' NULL/'' na maioria das
+-- linhas hoje, entao o COALESCE nao altera os totais atuais.
 CREATE VIEW v_fin_monthly AS
-SELECT substr(date, 1, 7) AS month,
+SELECT COALESCE(NULLIF(billing_month, ''), substr(date, 1, 7)) AS month,
        SUM(CASE WHEN amount > 0 THEN amount ELSE 0 END) AS receitas,
        SUM(CASE WHEN amount < 0 THEN amount ELSE 0 END) AS despesas,
        SUM(amount)                                      AS resultado,
@@ -144,7 +148,7 @@ SELECT substr(t.month, 1, 7) AS month, t.root_category_id,
        COALESCE(r.name, 'Sem categoria') AS category_name,
        t.total, t.lancamentos
 FROM (
-  SELECT substr(date, 1, 7) AS month, root_category_id,
+  SELECT COALESCE(NULLIF(billing_month, ''), substr(date, 1, 7)) AS month, root_category_id,
          SUM(amount) AS total, COUNT(*) AS lancamentos
   FROM v_fin_counted
   GROUP BY month, root_category_id
