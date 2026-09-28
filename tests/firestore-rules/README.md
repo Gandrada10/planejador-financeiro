@@ -98,6 +98,55 @@ node gerar-regras-producao.mjs <operador.json fora do repo> <saida fora do repo>
 
 Recusa UIDs iguais, fora do formato, marcador sobrando e saída dentro do repo.
 
+## Tipos dos campos do operador — `operator-tipos.test.mjs`
+
+Tudo o que o operador cria tem o tipo que o app grava (`src/types/index.ts`,
+`useTransactions.importBatch`/`addTransaction`, `useAccounts.addAccount`).
+Nenhum campo do lançamento ou da conta é mapa. Os limites de tamanho ficam
+folgados sobre os máximos observados na referência de 27-09 (só tamanhos):
+
+| Campo | Aceito | Máximo observado |
+| --- | --- | --- |
+| `date`, `createdAt` | timestamp | — |
+| `purchaseDate`, `provisionalDate` | timestamp ou null | — |
+| `amount` | número finito, de −100 milhões a 100 milhões | 5 dígitos inteiros |
+| `amountFx` | idem ou null | 3 dígitos inteiros |
+| `fxRate` | número > 0 e ≤ 1000, ou null | 1 dígito inteiro |
+| `currencyFx` | `^[A-Z]{3}$` ou null (o app grava em maiúsculas) | 3 |
+| `description` | string ≤ 500 | 154 |
+| `notes` | string ≤ 500 (o mesmo teto do fluxo público da sessão) | 96 |
+| `account` | string de 1 a 100 (o app aceita vazio; o operador não) | 18 |
+| `familyMember`, `titular` | string ≤ 100 | 24 |
+| `cardNumber` | string ≤ 32 ou null | — |
+| `fitid` | string ≤ 255 ou null (teto do FITID no OFX) | — |
+| `categoryId`, `projectId` | id `[A-Za-z0-9_-]{1,128}` ou null | 20 |
+| `installmentNumber`, `totalInstallments` | inteiro de 1 a 99 ou null (o parser lê 2 dígitos) | 12 |
+| `billingMonth` | `AAAA-MM` (mês 01–12) ou null | 7 |
+| `tags` | lista de até 10 strings de até 50 (o app só grava `[]`) | — |
+| conta `name` / `bank` | string 1–100 / string ≤ 100 | 18 / 23 |
+| conta `closingDay`, `dueDay` | inteiro de 1 a 31 ou null | 20 |
+| conta `creditLimit` | número de 0 a 100 milhões, ou null | — |
+
+NaN e ±Infinity caem pela faixa com os dois limites (`math.isInfinite` não
+existe no emulador). As regras não têm laço, e `join()` converte número e null
+em texto sem errar; por isso `tags` é checada posição por posição.
+
+`REF_FILE=<referência JSON fora do repo>` liga um teste a mais: cria pelo
+operador cada lançamento e conta da referência (só contagens na saída). As
+linhas com `account` vazio têm de ser recusadas como estão e aceitas com a
+conta preenchida.
+
+## Prova diferencial — `operator-diferencial.test.mjs`
+
+Teste do Vex (parecer de 28-09-2026): 115 operações × 4 perfis (dono,
+estranho, anônimo, sem login) contra a regra de antes do operador
+(`e32704a`, via `git show`; `RULES_BASE` troca) e a regra nova. Zero
+divergência exigida. Para o operador, o que ganha tem de ser exatamente a
+leitura da árvore do dono.
+
+Contra o texto de produção: `RULES_FILE=<texto gerado>` e `T_OWNER`/`T_OPERATOR`
+com os UIDs reais (nunca impressos) rodam as quatro suítes com os UIDs de lá.
+
 ## Quando rodar
 
 Obrigatório **antes de qualquer `firebase deploy --only firestore:rules`**

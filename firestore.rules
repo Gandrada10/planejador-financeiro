@@ -41,10 +41,55 @@ service cloud.firestore {
       return !(k in d) || d[k] == null || (d[k] is int && d[k] >= 1 && d[k] <= 31);
     }
 
+    // ---- Tipos dos campos que o operador grava (F4-1) ----
+    // Número finito com módulo até `max`. A faixa com os DOIS limites recusa
+    // também NaN e ±Infinity: NaN falha nas comparações (e, na ordenação do
+    // Firestore, fica abaixo de todo número), Infinity passa do limite. Não
+    // usar math.abs (abs(NaN) é NaN) nem math.isInfinite (não existe no
+    // emulador; os testes pegam NaN e Infinity pela faixa).
+    function finiteNum(v, max) {
+      return v is number && v >= -max && v <= max;
+    }
+    function strMax(v, max) {
+      return v is string && v.size() <= max;
+    }
+    // Campo opcional: ausente, ou do tipo pedido. `Null` = aceita null também.
+    function optStr(d, k, max) {
+      return !(k in d) || strMax(d[k], max);
+    }
+    function optNullStr(d, k, max) {
+      return !(k in d) || d[k] == null || strMax(d[k], max);
+    }
+    function optNullTs(d, k) {
+      return !(k in d) || d[k] == null || d[k] is timestamp;
+    }
+    function optNullNum(d, k, max) {
+      return !(k in d) || d[k] == null || finiteNum(d[k], max);
+    }
+    function optNullInt(d, k, lo, hi) {
+      return !(k in d) || d[k] == null || (d[k] is int && d[k] >= lo && d[k] <= hi);
+    }
+    function optNullMatch(d, k, re) {
+      return !(k in d) || d[k] == null || (d[k] is string && d[k].matches(re));
+    }
+
+    // tags: lista de até 10 strings de até 50 caracteres. O app só grava []
+    // hoje. As regras não têm laço, e join() converte número e null em texto
+    // sem errar, então cada posição é checada.
+    function tagAt(l, i) {
+      return l.size() <= i || strMax(l[i], 50);
+    }
+    function tagsOk(l) {
+      return l is list && l.size() <= 10
+        && tagAt(l, 0) && tagAt(l, 1) && tagAt(l, 2) && tagAt(l, 3) && tagAt(l, 4)
+        && tagAt(l, 5) && tagAt(l, 6) && tagAt(l, 7) && tagAt(l, 8) && tagAt(l, 9);
+    }
+
     // Lançamento criado pelo operador: lista FECHADA de campos (a do app, sem
     // reembolso, noteAlert e pluggyTransactionId), carimbo import_<ms> ou null,
-    // nunca já conciliado. Campo obrigatório ausente reprova pela checagem de
-    // tipo (ler campo inexistente é erro, e erro nega).
+    // nunca já conciliado, e TODO campo com o tipo que o app grava. Campo
+    // obrigatório ausente reprova pela checagem de tipo (ler campo inexistente
+    // é erro, e erro nega). Nenhum campo do lançamento é mapa.
     function operatorTxOk() {
       let d = request.resource.data;
       return d.keys().hasOnly([
@@ -54,27 +99,45 @@ service cloud.firestore {
           'reconciledAt', 'createdAt', 'billingMonth', 'provisionalDate', 'fitid',
           'amountFx', 'currencyFx', 'fxRate'])
         && d.date is timestamp
-        && d.description is string
-        && d.amount is number
-        && d.account is string && d.account.size() > 0
         && d.createdAt is timestamp
+        && strMax(d.description, 500)
+        && finiteNum(d.amount, 100000000)
+        && strMax(d.account, 100) && d.account.size() > 0
         && (!('categoryId' in d) || nullOrCategoryId(d.categoryId))
+        && optNullMatch(d, 'projectId', '^[A-Za-z0-9_-]{1,128}$')
+        && optNullTs(d, 'purchaseDate')
+        && optNullTs(d, 'provisionalDate')
+        && optStr(d, 'familyMember', 100)
+        && optStr(d, 'titular', 100)
+        && optStr(d, 'notes', 500)
+        && optNullStr(d, 'cardNumber', 32)
+        && optNullStr(d, 'fitid', 255)
+        && optNullInt(d, 'installmentNumber', 1, 99)
+        && optNullInt(d, 'totalInstallments', 1, 99)
+        && optNullMatch(d, 'billingMonth', '^[0-9]{4}-(0[1-9]|1[0-2])$')
+        && optNullNum(d, 'amountFx', 100000000)
+        && optNullMatch(d, 'currencyFx', '^[A-Z]{3}$')
+        && (!('fxRate' in d) || d.fxRate == null || (finiteNum(d.fxRate, 1000) && d.fxRate > 0))
+        && (!('tags' in d) || tagsOk(d.tags))
         && (!('importBatch' in d) || d.importBatch == null
             || (d.importBatch is string && d.importBatch.matches('^import_[0-9]{10,}$')))
         && (!('reconciled' in d) || d.reconciled == false)
         && (!('reconciledAt' in d) || d.reconciledAt == null);
     }
 
-    // Conta criada pelo operador: só os campos de Account.
+    // Conta criada pelo operador: só os campos de Account, cada um com o tipo
+    // do app. Nenhum campo da conta é mapa.
     function operatorAccountOk() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'type', 'bank', 'closingDay', 'dueDay', 'creditLimit', 'createdAt'])
         && d.name is string && d.name.size() > 0 && d.name.size() <= 100
         && d.type in ['corrente', 'cartao', 'beneficio', 'poupanca', 'investimento', 'outro']
         && d.createdAt is timestamp
+        && optStr(d, 'bank', 100)
         && nullOrDay(d, 'closingDay')
         && nullOrDay(d, 'dueDay')
-        && (!('creditLimit' in d) || d.creditLimit == null || d.creditLimit is number);
+        && (!('creditLimit' in d) || d.creditLimit == null
+            || (finiteNum(d.creditLimit, 100000000) && d.creditLimit >= 0));
     }
 
     // Só os campos em `allowed` foram alterados nesta escrita.

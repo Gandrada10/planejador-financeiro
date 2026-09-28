@@ -36,8 +36,10 @@ const RULES_PATH = process.env.RULES_FILE
   : resolve(__dirname, '..', '..', 'firestore.rules');
 const RAW_RULES = readFileSync(RULES_PATH, 'utf8');
 
-const OWNER = 'owner-uid';
-const OPERATOR = 'operator-uid';
+// T_OWNER / T_OPERATOR: so para rodar contra o texto de producao gerado (que
+// ja traz os UIDs reais no lugar dos marcadores). Nunca imprimir esses valores.
+const OWNER = process.env.T_OWNER || 'owner-uid';
+const OPERATOR = process.env.T_OPERATOR || 'operator-uid';
 const STRANGER = 'stranger-uid';
 const TOK = 'tok-op-valid-0123456789abcdef';
 

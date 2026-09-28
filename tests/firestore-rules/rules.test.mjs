@@ -24,7 +24,10 @@ import {
 } from 'firebase/firestore';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const RULES_PATH = resolve(__dirname, '..', '..', 'firestore.rules');
+// RULES_FILE: roda contra outro texto (o de producao gerado, ou um mutante).
+const RULES_PATH = process.env.RULES_FILE
+  ? resolve(process.env.RULES_FILE)
+  : resolve(__dirname, '..', '..', 'firestore.rules');
 
 const OWNER = 'owner-uid';
 const STRANGER = 'stranger-uid';
