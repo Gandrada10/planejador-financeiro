@@ -7,220 +7,37 @@ import * as XLSX from 'xlsx';
 import type { Transaction, Category, Account, CategoryRule, Project, FxWallet } from '../../types';
 import { parseOfx, type OfxParseMeta } from '../../lib/parseOfx';
 import { parseWiseCsv, parseWiseRows, isWiseCsv, isWiseHeader, type WiseParseResult } from '../../lib/parseWiseStatement';
-import { buildFxLedger, type FxCarry, type FxLedgerResult } from '../../lib/fxLedger';
+import { buildFxLedger, type FxCarry } from '../../lib/fxLedger';
 import { NoteTag } from '../shared/NoteTag';
+import type { AiParseResponse, ImportItem, ImportRow } from '../../lib/importTypes';
+import {
+  billingCardAccountFor,
+  buildAiRows,
+  buildFxRows,
+  buildImportItems,
+  buildOfxRows,
+  effectiveDueDayFor,
+  matchOfxAccountName,
+  parseDecimalInput,
+  round2,
+} from '../../lib/importMapping';
 import {
   formatBRL,
   formatDate,
   getMonthYear,
   getMonthLabel,
   filterCategoriesByAmount,
-  normalizeTitular,
-  extractTrailingInstallment,
-  normalizeDescriptionForDedup,
-  fuzzyMatchMember,
   invoiceDateFor,
   formatFx,
 } from '../../lib/utils';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
-type ImportItem = Omit<Transaction, 'id' | 'createdAt'>;
-type ImportRow = ImportItem & {
-  isDuplicate: boolean;
-  /** POR QUE a linha foi marcada como duplicata. Sem isso o preview diz
-   *  "84 possíveis duplicatas" e não há como saber contra o quê — se contra
-   *  uma importação anterior que deu errado, contra lançamentos digitados à
-   *  mão, ou contra nada (falso positivo). Era o que transformava um número
-   *  assustador em beco sem saída. */
-  duplicateOf?: { account: string; date: Date; description: string; via: 'id' | 'valor' | 'fatura' };
-  installmentType: 'unica' | 'parcelada';
-  periodicity: number; // months between installments
-  installmentAmount: number | null;
-};
-
-function datesMatch(a: Date | null, b: Date | null): boolean {
-  if (!a || !b) return false;
-  return a.toDateString() === b.toDateString();
-}
-
-/** Casa se QUALQUER par de datas alinhar — cobre o caso em que um lado guarda
- *  a data da fatura e o outro a data da compra original. */
-function anyDatePairMatches(t: Transaction, item: ImportItem): boolean {
-  return (
-    datesMatch(t.date, item.date) ||
-    datesMatch(t.purchaseDate, item.purchaseDate) ||
-    datesMatch(t.date, item.purchaseDate) ||
-    datesMatch(t.purchaseDate, item.date)
-  );
-}
-
-/** Identidade da PARCELA. Duas linhas com a mesma descrição, mesmo valor e
- *  mesma data de compra ainda são cobranças DIFERENTES quando são parcelas
- *  diferentes do mesmo carnê — e é exatamente o que a fatura mostra: o banco
- *  repete a DATA DA COMPRA ORIGINAL em toda parcela seguinte, então a "Parcela
- *  5 de 6" de agosto é idêntica à "Parcela 4 de 6" de julho em tudo, menos no
- *  número da parcela. Era o que faltava olhar: sem isso o importador marcava as
- *  parcelas do mês como duplicata da fatura anterior, elas entravam
- *  DESMARCADAS e a fatura fechava abaixo do que o banco cobrou. */
-function installmentKey(t: Pick<Transaction, 'installmentNumber' | 'totalInstallments'>): string {
-  if (t.installmentNumber == null || t.totalInstallments == null) return '';
-  return `${t.installmentNumber}/${t.totalInstallments}`;
-}
-
-/** Núcleo comparável da descrição: só letras e dígitos, sem marcador de
- *  parcela. Espaço, pontuação e asterisco variam a cada leitura e não
- *  distinguem nada ("ZIG*ZIGPAY" e "Zig* *Zigpay" são o mesmo lugar). */
-function descriptionCore(desc: string): string {
-  return normalizeDescriptionForDedup(desc).replace(/[^a-z0-9]/g, '');
-}
-
-/** Núcleo mínimo para aceitar casamento por truncamento. Abaixo disso o
- *  prefixo é curto demais e casaria estabelecimentos diferentes. */
-const DESC_CORE_MIN = 6;
-
-/** Descrições compatíveis: iguais, ou uma é o começo da outra. O extrato trunca
- *  o nome do estabelecimento em larguras diferentes conforme a seção
- *  ("ELUBEL INDUSTRIA" na lista de compras, "Elubel Industria Ecotia" na de
- *  parcelados), então exigir igualdade byte a byte fazia o dedupe não
- *  reconhecer a própria linha já importada. */
-function descriptionsCompatible(a: string, b: string): boolean {
-  const ca = descriptionCore(a);
-  const cb = descriptionCore(b);
-  if (!ca || !cb) return ca === cb;
-  if (ca === cb) return true;
-  const [short, long] = ca.length <= cb.length ? [ca, cb] : [cb, ca];
-  return short.length >= DESC_CORE_MIN && long.startsWith(short);
-}
-
-/** Contas compatíveis: iguais, ou ao menos uma indefinida. Exigir igualdade
- *  quando as duas estão preenchidas impede que um lançamento de um cartão seja
- *  tratado como duplicata de outro cartão com o mesmo valor e data; aceitar o
- *  lado vazio preserva o fallback do OFX, onde a linha pode vir sem conta. */
-function accountsCompatible(a: string, b: string): boolean {
-  if (!a || !b) return true;
-  return a === b;
-}
-
-/** Casamento para EXTRATO (conta corrente): data + valor + descrição, agora
- *  também exigindo conta e parcela compatíveis. A parcela só desempata quando
- *  os DOIS lados a declaram — num extrato ela costuma vir ausente, e tratar
- *  ausente como diferente faria toda reimportação duplicar. */
-function statementLineMatches(item: ImportItem, t: Transaction): boolean {
-  if (Math.abs(t.amount - item.amount) >= 0.01) return false;
-  if (!accountsCompatible(t.account, item.account)) return false;
-  const kt = installmentKey(t);
-  const ki = installmentKey(item);
-  if (kt && ki && kt !== ki) return false;
-  if (!descriptionsCompatible(t.description, item.description)) return false;
-  return anyDatePairMatches(t, item);
-}
-
-/** Casamento para FATURA DE CARTÃO. A chave natural da linha é conta + data da
- *  compra + valor + parcela. A DESCRIÇÃO FICA FORA de propósito: é o único
- *  campo que a leitura por IA transcreve de formas diferentes a cada
- *  importação ("BRAZL COMERCIO DE AL" e "Brazrio Comercio De Al" são a mesma
- *  cobrança), e foi por exigir descrição idêntica que o dedupe deixou passar
- *  duplicatas reais numa segunda importação da mesma fatura. Uma compra tem uma
- *  data só e cada parcela tem número próprio — isso identifica a linha sem
- *  depender de como o texto saiu. Repetição legítima no mesmo dia (duas
- *  passagens de metrô de R$ 7,90) é resolvida pela CONTAGEM em
- *  `markDuplicates`, não pela descrição. */
-function invoiceLineMatches(item: ImportItem, t: Transaction): boolean {
-  if (Math.abs(t.amount - item.amount) >= 0.01) return false;
-  if (!accountsCompatible(t.account, item.account)) return false;
-  if (installmentKey(t) !== installmentKey(item)) return false;
-
-  // Numa fatura, a data que identifica a cobrança é a DATA DA COMPRA, e só ela.
-  // O `date` de um lançamento de cartão guarda o VENCIMENTO da fatura — igual
-  // para todas as linhas do mês —, então cruzar um com o outro (o que
-  // `anyDatePairMatches` faz) compara coisas de naturezas diferentes: uma
-  // compra feita no dia 20/08 casava com qualquer lançamento de mesmo valor da
-  // fatura que venceu em 20/08. Com a descrição fora do critério, nada segurava
-  // isso: na fatura de 09/2026, "Uber" de 20/08 virou duplicata de "GOOGLE ONE"
-  // e "Indigo" virou duplicata de "GEPARK", só por coincidirem no valor.
-  if (t.purchaseDate && item.purchaseDate) return datesMatch(t.purchaseDate, item.purchaseDate);
-
-  // Sem data de compra de um dos lados (lançamento antigo ou digitado à mão)
-  // resta o `date`, que é fraco demais sozinho — aqui a descrição volta como
-  // trava, no lugar da precisão que falta.
-  return datesMatch(t.date, item.date) && descriptionsCompatible(t.description, item.description);
-}
-
-/**
- * A categoria que as parcelas ANTERIORES deste mesmo carnê já receberam.
- *
- * Uma compra parcelada chega picada: cada fatura traz uma parcela, e cada uma
- * entra como lançamento novo. Sem isto, o usuário categoriza "Airbnb" em julho
- * e a parcela seguinte volta sem categoria em agosto — e de novo em setembro,
- * por seis meses. As 16 parcelas recuperadas na fatura de 08/2026 vieram todas
- * assim, e todas as 16 tinham parcela anterior já categorizada.
- *
- * O carnê é identificável com precisão porque o banco repete a DATA DA COMPRA
- * ORIGINAL em toda parcela: `conta + data da compra + valor + total de
- * parcelas` isola a compra, e o número da parcela ordena. (É a mesma
- * propriedade que `invoiceLineMatches` usa para o dedupe.)
- *
- * Só serve de RESERVA: roda quando nenhuma regra casou. E quando as parcelas
- * anteriores discordam entre si — duas compras distintas de mesmo valor, mesma
- * data e mesmo parcelamento existem (dois carnês de R$ 83,64 em 20/10/2025) —
- * devolve `null` em vez de chutar; a linha fica sem categoria, como antes.
- */
-function categoryFromPreviousInstallment(item: ImportItem, existing: Transaction[]): string | null {
-  if (item.installmentNumber == null || item.totalInstallments == null) return null;
-
-  const anteriores = existing.filter(
-    (t) =>
-      t.categoryId &&
-      t.totalInstallments === item.totalInstallments &&
-      t.installmentNumber != null &&
-      t.installmentNumber < item.installmentNumber! &&
-      Math.abs(t.amount - item.amount) < 0.01 &&
-      accountsCompatible(t.account, item.account) &&
-      anyDatePairMatches(t, item)
-  );
-  if (anteriores.length === 0) return null;
-
-  const categorias = new Set(anteriores.map((t) => t.categoryId));
-  if (categorias.size > 1) return null;
-  return anteriores[0].categoryId;
-}
-
-/**
- * Marca as duplicatas do lote CONTANDO ocorrências, em vez de perguntar
- * "existe alguma igual?".
- *
- * A fatura repete cobranças legítimas: duas passagens de metrô de R$ 7,90 no
- * mesmo dia são duas linhas, não erro de leitura. Com a pergunta de existência,
- * bastava UMA delas estar gravada para as DUAS serem marcadas — e a segunda
- * nunca entrava. Aqui cada transação já gravada explica NO MÁXIMO uma linha do
- * arquivo: as N primeiras de cada chave batem com as N que já existem, e o
- * excedente entra como novo.
- */
-function markDuplicates(
-  items: ImportItem[],
-  existing: Transaction[],
-  matches: (item: ImportItem, t: Transaction) => boolean,
-  via: NonNullable<ImportRow['duplicateOf']>['via']
-): (ImportRow['duplicateOf'] | undefined)[] {
-  const claimed = new Set<string>();
-  return items.map((item) => {
-    const hit = existing.find((t) => !claimed.has(t.id) && matches(item, t));
-    if (!hit) return undefined;
-    claimed.add(hit.id);
-    return { account: hit.account, date: hit.date, description: hit.description, via };
-  });
-}
-
-/** Devolve a transação que colide, ou `null`. Antes era um booleano — mas
- *  quem está olhando o preview precisa saber CONTRA O QUÊ bateu. */
-function findDuplicate(item: ImportItem, existing: Transaction[]): Transaction | null {
-  return existing.find((t) => statementLineMatches(item, t)) ?? null;
-}
-
-function isDuplicate(item: ImportItem, existing: Transaction[]): boolean {
-  return findDuplicate(item, existing) !== null;
-}
+// O mapeamento (datas, parcelas, conta, categoria) e os critérios de duplicata
+// moram em `src/lib/importMapping.ts` e `src/lib/importDedupe.ts`: são as
+// regras de negócio da importação e valem para qualquer caminho que grave
+// lançamentos, não só para esta tela. Aqui fica o estado da tela, a leitura
+// do arquivo e a chamada à IA.
 
 // Teto de tamanho para o arquivo OFX (~15 MB). Extrato de conta corrente é
 // texto puro e nunca chega perto disso — o teto só existe pra rejeitar
@@ -229,138 +46,6 @@ const OFX_MAX_BYTES = 15_000_000;
 
 /** Teto de espera da leitura com IA (ver a chamada em `handleParse`). */
 const AI_TIMEOUT_MS = 120_000;
-
-// ─── OFX (conta corrente) — dedupe, encoding e auto-match de conta ─────────
-//
-// Irmão do caminho de IA acima: dedupe primeiro pelo FITID (chave natural do
-// OFX, id estável emitido pelo próprio banco). FITID é único
-// POR CONTA, não global (dois bancos podem emitir o mesmo FITID) — por isso só
-// tratamos como duplicata quando a CONTA de destino também casa. Sem conta
-// definida na linha OFX, ou sem match de conta, caímos no fallback por
-// data+valor+descrição, que não corre esse risco de colisão entre contas.
-function isOfxDuplicate(item: ImportItem, existing: Transaction[]): boolean {
-  if (item.fitid && item.account) {
-    // Casa também pelo VALOR: alguns bancos (ex.: Banco do Brasil) reusam o
-    // mesmo FITID em transações diferentes (todos os "Resgate CDB" com o mesmo
-    // id). Sem o valor, um Resgate novo seria marcado como duplicata de outro
-    // já importado. Duplicata real tem FITID, conta E valor iguais.
-    const fitidMatch = existing.some(
-      (t) => t.fitid === item.fitid && t.account === item.account && Math.abs(t.amount - item.amount) < 0.01
-    );
-    if (fitidMatch) return true;
-  }
-  return isDuplicate(item, existing);
-}
-
-/**
- * Dedupe do extrato em moeda estrangeira. Diferente do OFX de propósito: NÃO
- * entra o valor na comparação.
- *
- * O `TransferWise ID` é único por lançamento dentro da conta (ao contrário do
- * FITID, que alguns bancos reciclam), então id + conta já identificam a
- * transação com segurança. E o valor em BRL da MESMA transação pode mudar
- * legitimamente entre duas importações — ele é derivado do custo dos lotes de
- * câmbio (ver `fxLedger`), que se refina quando o carry-over da carteira é
- * informado. Exigir valor igual faria a reimportação de um período que se
- * sobrepõe ao anterior duplicar tudo, calada.
- */
-function findFxDuplicate(item: ImportItem, existing: Transaction[]): ImportRow['duplicateOf'] {
-  if (item.fitid && item.account) {
-    const byId = existing.find((t) => t.fitid === item.fitid && t.account === item.account);
-    if (byId) return { account: byId.account, date: byId.date, description: byId.description, via: 'id' };
-  }
-  const byValue = findDuplicate(item, existing);
-  if (byValue) {
-    return { account: byValue.account, date: byValue.date, description: byValue.description, via: 'valor' };
-  }
-  return undefined;
-}
-
-// BANKID (OFX) → padrões de nome/banco, para auto-selecionar a conta de
-// destino quando existe uma conta corrente cadastrada daquele banco. Best
-// effort: sem match, cai para seleção manual (MVP), como combinado.
-const OFX_BANK_HINTS: Record<string, string[]> = {
-  '1': ['banco do brasil', ' bb '],
-  '33': ['santander'],
-  '77': ['inter', 'banco inter'],
-  '104': ['caixa', 'cef'],
-  '212': ['original'],
-  '237': ['bradesco'],
-  '260': ['nubank', 'nu pagamentos'],
-  '290': ['pagbank', 'pagseguro'],
-  '336': ['c6', 'c6 bank'],
-  '341': ['itau', 'itaú'],
-  '380': ['pagbank'],
-};
-
-function normalizeBankId(bankId: string | null): string {
-  if (!bankId) return '';
-  const stripped = bankId.trim().replace(/^0+/, '');
-  return stripped === '' ? '0' : stripped;
-}
-
-function stripAccents(s: string): string {
-  return s.normalize('NFD').replace(/[̀-ͯ]/g, '');
-}
-
-/** Tenta casar o BANKID do OFX com uma conta corrente cadastrada (por nome
- *  do banco/conta); se não achar e houver exatamente UMA conta elegível,
- *  usa essa como padrão. Caso contrário devolve '' (seleção manual). */
-function matchOfxAccountName(bankId: string | null, candidates: Account[]): string {
-  const hints = OFX_BANK_HINTS[normalizeBankId(bankId)];
-  if (hints && hints.length > 0) {
-    const found = candidates.find((a) => {
-      // Padding com espaços nas bordas para hints curtos (" bb ") baterem
-      // mesmo quando o token aparece no início/fim do texto concatenado.
-      const hay = stripAccents(` ${a.bank} ${a.name} `.toLowerCase());
-      return hints.some((h) => hay.includes(stripAccents(h)));
-    });
-    if (found) return found.name;
-  }
-  return candidates.length === 1 ? candidates[0].name : '';
-}
-
-/**
- * Sugere a conta/cartão cadastrada a partir do descritor lido pela IA no
- * cabeçalho da fatura/extrato (ex.: "Latam Pass Itau Black Mastercard final
- * 4640"). Pontua cada conta pelos tokens do seu nome/banco que aparecem no
- * descritor (soma o comprimento dos tokens que casam) e devolve a de maior
- * pontuação — desde que passe de um mínimo e vença o 2º lugar com folga, para
- * não sugerir errado quando duas contas compartilham um token (ex.: "itau"
- * aparece no banco do cartão E no nome da conta corrente). Sem match confiável,
- * devolve '' e o usuário escolhe manualmente. Irmão do matchOfxAccountName (que
- * casa pelo BANKID do OFX); este casa pelo texto do cabeçalho da fatura.
- */
-function matchAccountFromDescriptor(descriptor: string | null | undefined, candidates: Account[]): string {
-  if (!descriptor) return '';
-  const hay = ` ${stripAccents(descriptor.toLowerCase())} `;
-  const scoreTokens = (text: string, weight: number): number => {
-    let s = 0;
-    for (const t of stripAccents(text.toLowerCase()).split(/\s+/).filter((tok) => tok.length >= 3)) {
-      if (hay.includes(t)) s += t.length * weight;
-    }
-    return s;
-  };
-  let best = '';
-  let bestScore = 0;
-  let secondScore = 0;
-  for (const a of candidates) {
-    // Nome pesa o DOBRO do banco: quando duas contas compartilham o banco (ex.: o
-    // cartão tem banco "Itaú Personalite", que também é o NOME da conta corrente),
-    // é o casamento pelo NOME que decide qual sugerir.
-    const score = scoreTokens(a.name, 2) + scoreTokens(a.bank, 1);
-    if (score > bestScore) {
-      secondScore = bestScore;
-      bestScore = score;
-      best = a.name;
-    } else if (score > secondScore) {
-      secondScore = score;
-    }
-  }
-  // Exige um casamento sólido (>= 6 ≈ um token de nome com 3+ letras) e folga
-  // sobre o 2º lugar — em empate (ambíguo) devolve '' e o usuário escolhe.
-  return bestScore >= 6 && bestScore > secondScore ? best : '';
-}
 
 interface Props {
   existingTransactions: Transaction[];
@@ -382,97 +67,6 @@ interface Props {
   /** Grava o saldo/custo de fechamento após importar um extrato em moeda —
    *  é o ponto de partida da próxima importação. */
   onSaveFxWallet?: (currency: string, snapshot: Omit<FxWallet, 'currency' | 'updatedAt'>) => Promise<void>;
-}
-
-/** Lê um valor em reais digitado à mão ("7.124,37" ou "7124.37"). Devolve
- *  `null` para vazio/ilegível — o caller decide o que fazer com a ausência,
- *  em vez de receber um 0 que se confunde com "custo zero". */
-function parseDecimalInput(raw: string): number | null {
-  const cleaned = raw.trim().replace(/[^\d.,-]/g, '');
-  if (cleaned === '') return null;
-  const lastComma = cleaned.lastIndexOf(',');
-  const lastDot = cleaned.lastIndexOf('.');
-  const normalized = lastComma > lastDot
-    ? cleaned.replace(/\./g, '').replace(',', '.')
-    : cleaned.replace(/,/g, '');
-  const n = Number(normalized);
-  return Number.isFinite(n) ? n : null;
-}
-
-/**
- * Monta as linhas do preview a partir do extrato em moeda já apreçado.
- *
- * Função pura (fora do componente) porque roda em dois momentos: logo após o
- * parse e de novo a cada mudança do custo de abertura — se fosse só o efeito,
- * o preview apareceria vazio por um quadro entre um e outro.
- */
-function buildFxRows(
-  ledger: FxLedgerResult,
-  currency: string,
-  includeConversions: boolean,
-  transferCategoryId: string | null,
-  matchCategory: ((description: string) => string | null) | undefined,
-  existingTransactions: Transaction[],
-  defaultAccount: string
-): ImportRow[] {
-  const priced = includeConversions
-    ? [...ledger.movements, ...ledger.conversions].sort((a, b) => a.entry.date.getTime() - b.entry.date.getTime())
-    : ledger.movements;
-
-  return priced.map((p) => {
-    // A descrição fica com o NOME do estabelecimento e mais nada: o valor
-    // original mora em `amountFx`/`currencyFx` (campos próprios), e é de lá
-    // que as telas o leem. Antes ele era anexado ao texto por falta de campo
-    // — o que sujava a descrição e atrapalhava o casamento das regras de
-    // categoria, que agem sobre ela. A compra de moeda é a exceção: ali o
-    // valor em moeda É a identidade do lançamento ("Compra de EUR 1.165,45"),
-    // já que não há estabelecimento nenhum.
-    const description = p.entry.isConversion
-      ? `Compra de ${currency} — ${formatFx(p.entry.amountFx, currency)}`
-      : p.entry.description;
-    const item: ImportItem = {
-      date: p.entry.date,
-      purchaseDate: null,
-      description,
-      amount: round2(p.amountBrl),
-      amountFx: p.entry.amountFx,
-      currencyFx: currency || null,
-      // Taxa do LOTE que este gasto consumiu (FIFO), não a média do extrato.
-      fxRate: p.rate,
-      // Transferência para o que é troca de bolso; para o resto, as regras de
-      // categoria do app agem sobre o nome LIMPO do estabelecimento (sem o
-      // sufixo em moeda, que atrapalharia o casamento das regras).
-      categoryId: p.entry.isTransfer
-        ? transferCategoryId
-        : (matchCategory ? matchCategory(p.entry.description) : null),
-      account: defaultAccount,
-      familyMember: '',
-      titular: '',
-      installmentNumber: null,
-      totalInstallments: null,
-      cardNumber: null,
-      projectId: null,
-      fitid: p.entry.id,
-      tags: [],
-      notes: '',
-      importBatch: null,
-      reconciled: false,
-      reconciledAt: null,
-    };
-    const duplicateOf = findFxDuplicate(item, existingTransactions);
-    return {
-      ...item,
-      isDuplicate: duplicateOf !== undefined,
-      duplicateOf,
-      installmentType: 'unica' as const,
-      periodicity: 1,
-      installmentAmount: null,
-    };
-  });
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }
 
 /** Generate month options: 6 months back + current + 3 months forward */
@@ -607,27 +201,10 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
   // Member options: only from titular mappings (registered members)
   const memberOptions = titularNames.length > 0 ? titularNames : allTitulars;
 
-  // Cartão-alvo do lote (para o dia de vencimento padrão): com um único cartão,
-  // é ele; com vários, o cartão (type cartao) mais frequente entre as linhas.
-  const billingCardAccount = (() => {
-    if (creditCardAccounts.length === 1) return creditCardAccounts[0];
-    const counts = new Map<string, number>();
-    for (const it of items) {
-      if (it.account) counts.set(it.account, (counts.get(it.account) || 0) + 1);
-    }
-    let best: string | null = null;
-    let bestN = 0;
-    for (const [name, n] of counts) if (n > bestN) { bestN = n; best = name; }
-    return creditCardAccounts.find((a) => a.name === best) || null;
-  })();
-
-  // Dia de vencimento efetivo: override digitado no import > dia cadastrado no
-  // cartão. É o DIA da data de caixa; o MÊS vem do seletor de pagamento.
-  const effectiveDueDay: number | null = (() => {
-    const override = parseInt(billingDueDay, 10);
-    if (billingDueDay.trim() !== '' && Number.isFinite(override)) return override;
-    return billingCardAccount?.dueDay ?? null;
-  })();
+  // Cartão-alvo do lote e dia de vencimento efetivo (override digitado >
+  // cadastro do cartão): ver `billingCardAccountFor`/`effectiveDueDayFor`.
+  const billingCardAccount = billingCardAccountFor(creditCardAccounts, items);
+  const effectiveDueDay = effectiveDueDayFor(billingDueDay, billingCardAccount);
 
   // Data de caixa que TODOS os lançamentos da fatura receberão (dia de
   // vencimento do mês de pagamento escolhido). Espelha exatamente o cálculo do
@@ -922,35 +499,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
       const defaultAccountName = matchOfxAccountName(result.account.bankId, ofxEligibleAccounts);
       setDetectedAccount(defaultAccountName);
 
-      const parsed: ImportRow[] = result.transactions.map((t) => {
-        const item: ImportItem = {
-          date: t.date,
-          purchaseDate: null,
-          description: t.description,
-          amount: t.amount,
-          categoryId: null,
-          account: defaultAccountName,
-          familyMember: '',
-          titular: '',
-          installmentNumber: null,
-          totalInstallments: null,
-          cardNumber: null,
-          projectId: null,
-          fitid: t.fitid,
-          tags: [],
-          notes: '',
-          importBatch: null,
-          reconciled: false,
-          reconciledAt: null,
-        };
-        return {
-          ...item,
-          isDuplicate: isOfxDuplicate(item, existingTransactions),
-          installmentType: 'unica' as const,
-          periodicity: 1,
-          installmentAmount: null,
-        };
-      });
+      const parsed = buildOfxRows(result.transactions, defaultAccountName, existingTransactions);
 
       setOfxMeta(result.meta);
       setItems(parsed);
@@ -1155,92 +704,23 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         throw new Error(errData.error || `Erro ${response.status}`);
       }
 
-      const data = await response.json() as {
-        transactions: Array<{
-          date: string; purchaseDate: string | null; description: string;
-          amount: number; titular: string;
-          installmentNumber: number | null; totalInstallments: number | null; cardNumber: string | null;
-        }>;
-        isCreditCard?: boolean;
-        declaredTotal?: number | null;
-        accountDescriptor?: string | null;
-        usage: { input_tokens: number; output_tokens: number };
-      };
+      const data = await response.json() as AiParseResponse;
 
       setAiUsage(data.usage);
       setDeclaredTotal(data.declaredTotal ?? null);
 
-      // Sugestão de conta: casa o cabeçalho lido pela IA com as contas
-      // cadastradas. Vira o valor pré-preenchido das linhas (o usuário troca no
-      // "Aplicar em lote" se quiser). Espelha o auto-match do caminho OFX.
-      const suggestedAccount = matchAccountFromDescriptor(data.accountDescriptor, accounts);
+      // Linhas, conta sugerida, cartão ou extrato, mês de pagamento sugerido,
+      // duplicatas e categoria de reserva: tudo em `buildAiRows`
+      // (`src/lib/importMapping.ts`), que é a mesma regra para qualquer
+      // caminho de importação.
+      const {
+        rows: parsed,
+        suggestedAccount,
+        detectedCreditCard,
+        billingMonth: suggestedBillingMonth,
+      } = buildAiRows(data, { accounts, accountNames, memberOptions, matchCategory, existingTransactions });
       setDetectedAccount(suggestedAccount);
-
-      // Detect credit card: AI flag or heuristic (most transactions have cardNumber)
-      const hasCardNumbers = data.transactions.filter((t) => t.cardNumber).length > data.transactions.length / 2;
-      const detectedCreditCard = !!data.isCreditCard || hasCardNumbers;
       setIsCreditCard(detectedCreditCard);
-
-      const parsed: ImportRow[] = data.transactions.map((t) => {
-        // Post-process: spreadsheet rows often glue the parcel marker at the end
-        // of the description (e.g. "DA CAPO       02/02" or "MERCA05/05"). When
-        // the AI missed it, extract it ourselves; in any case strip the trailing
-        // marker so descriptions are clean and duplicates match across imports.
-        const extracted = extractTrailingInstallment(t.description);
-        const cleanDescription = (extracted ? extracted.description : (t.description || ''))
-          .replace(/\s+/g, ' ')
-          .trim();
-        const installmentNumber = t.installmentNumber ?? extracted?.installmentNumber ?? null;
-        const totalInstallments = t.totalInstallments ?? extracted?.totalInstallments ?? null;
-        // True when the parcel came from our regex rather than the AI —
-        // these rows are already one-row-per-parcel-occurrence, so we must
-        // NOT auto-expand them into future installments.
-        const installmentFromDescription = extracted !== null && t.totalInstallments == null;
-
-        const date = new Date(t.date + 'T12:00:00');
-        const matchedMember = fuzzyMatchMember(t.titular || '', memberOptions);
-        const hasInstallments = totalInstallments != null && totalInstallments > 1;
-        const item: ImportItem = {
-          date,
-          purchaseDate: t.purchaseDate ? new Date(t.purchaseDate + 'T12:00:00') : null,
-          description: cleanDescription,
-          amount: t.amount,
-          categoryId: matchCategory ? matchCategory(cleanDescription) : null,
-          account: suggestedAccount || accountNames[0] || '',
-          familyMember: matchedMember,
-          // Use canonical member name as titular when matched; otherwise normalize to Title Case.
-          // This prevents duplicates in the titular filter when the same person's name
-          // appears in slightly different formats across different PDF imports.
-          titular: matchedMember || normalizeTitular(t.titular || ''),
-          installmentNumber,
-          totalInstallments,
-          cardNumber: t.cardNumber,
-          projectId: null,
-          tags: [],
-          notes: '',
-          importBatch: null,
-          reconciled: false,
-          reconciledAt: null,
-        };
-        return {
-          ...item,
-          // Decidido mais abaixo, em UM passo sobre o lote inteiro: o critério
-          // conta ocorrências (ver `markDuplicates`) e a conta de destino ainda
-          // pode mudar no bloco de cartão, então aqui a linha nasce sem marca.
-          isDuplicate: false,
-          // Only auto-expand future installments for bank statements where the AI
-          // itself identified the parcel. Credit card imports and parcels that we
-          // recovered from a trailing marker in the description are already
-          // one-row-per-occurrence and must stay as 'unica' to avoid creating
-          // phantom future transactions on every re-import.
-          installmentType:
-            hasInstallments && !detectedCreditCard && !installmentFromDescription
-              ? ('parcelada' as const)
-              : ('unica' as const),
-          periodicity: 1,
-          installmentAmount: hasInstallments ? t.amount : null,
-        };
-      });
 
       if (parsed.length === 0) {
         setError(`A IA nao encontrou transacoes no arquivo (${rawText.length} chars extraidos). Verifique o DevTools > Console para ver o texto extraido.`);
@@ -1248,61 +728,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
         return;
       }
 
-      // Sem sugestão de categoria por IA — o que as regras não categorizaram
-      // fica sem categoria, para o usuário categorizar manualmente (e as
-      // regras aprenderem disso).
-
-      // Auto-detect billing month from the MOST RECENT transaction date — o mês
-      // de pagamento nunca pode ficar anterior à última compra da fatura. (Antes
-      // usava o mês mais FREQUENTE, o que sugeria um mês passado quando a
-      // maioria das compras caía no mês anterior ao fechamento.)
-      if (detectedCreditCard && parsed.length > 0) {
-        // Ignora datas inválidas (Invalid Date) — senão getMonthYear devolveria
-        // "NaN-NaN" e envenenaria o seletor de mês de pagamento.
-        const validDates = parsed
-          .map((p) => p.date)
-          .filter((d): d is Date => d instanceof Date && !isNaN(d.getTime()));
-        if (validDates.length > 0) {
-          const latestDate = validDates.reduce((latest, d) => (d > latest ? d : latest), validDates[0]);
-          setBillingMonth(getMonthYear(latestDate));
-        }
-
-        // Conta do lote: prioridade para a SUGESTÃO (cabeçalho da fatura casado
-        // com uma conta cadastrada). Sem sugestão, cai no fallback de "só existe
-        // um cartão". O pré-preenchimento de "Vence dia:" acontece no efeito
-        // acima (reage a billingCardAccount), cobrindo vários cartões.
-        if (!suggestedAccount && creditCardAccounts.length === 1) {
-          const ccName = creditCardAccounts[0].name;
-          parsed.forEach((p) => { p.account = ccName; });
-        }
-      }
-
-      // Dedupe SÓ AQUI, com o lote pronto e a conta de destino já resolvida.
-      // Antes cada linha se comparava sozinha, no meio do `map`: contava
-      // existência em vez de ocorrências, e ainda rodava antes do bloco acima
-      // definir a conta do cartão — então o critério de conta nunca valia.
-      // Fatura e extrato usam critérios diferentes de propósito: numa fatura a
-      // descrição é o campo menos confiável (a IA a transcreve diferente a cada
-      // leitura), num extrato ela é o que distingue lançamentos do mesmo valor.
-      const duplicates = markDuplicates(
-        parsed,
-        existingTransactions,
-        detectedCreditCard ? invoiceLineMatches : statementLineMatches,
-        detectedCreditCard ? 'fatura' : 'valor'
-      );
-      duplicates.forEach((hit, i) => {
-        if (!hit) return;
-        parsed[i].isDuplicate = true;
-        parsed[i].duplicateOf = hit;
-      });
-
-      // Reserva de categoria para parcela: o que as parcelas anteriores do
-      // mesmo carnê já receberam. Depois das regras (que continuam tendo
-      // precedência) e só para a linha que ficou sem categoria.
-      for (const row of parsed) {
-        if (row.categoryId) continue;
-        row.categoryId = categoryFromPreviousInstallment(row, existingTransactions);
-      }
+      if (suggestedBillingMonth) setBillingMonth(suggestedBillingMonth);
 
       setItems(parsed);
       setSelected(new Set(parsed.map((_, i) => i).filter((i) => !parsed[i].isDuplicate)));
@@ -1380,102 +806,7 @@ export function ImportModal({ existingTransactions, onImport, onClose, accountNa
     }
     setError('');
     setImporting(true);
-    const toImport: ImportItem[] = [];
-
-    // Data de caixa da fatura: DIA = vencimento (cadastro do cartão ou override
-    // no import); MÊS = o mês de pagamento escolhido no seletor. Sob regime de
-    // caixa, essa `date` GOVERNA o mês do lançamento (quando o dinheiro sai),
-    // inclusive quando a fatura fecha num mês e vence no seguinte. Sem dia de
-    // vencimento, cai no dia 1º (retrocompatível). invoiceDateFor trava o dia
-    // dentro do mês, então o mês do lançamento é sempre o do seletor.
-    let billingDate: Date | null = null;
-    if (isCreditCard && billingMonth) {
-      billingDate = invoiceDateFor(billingMonth, effectiveDueDay);
-    }
-
-    for (const [i, row] of items.entries()) {
-      if (!selected.has(i)) continue;
-      // `duplicateOf` SAI aqui junto com os outros campos de tela.
-      //
-      // Ele é metadado do preview (descreve um lançamento JÁ existente que
-      // parece igual a este) e nunca teve o que fazer dentro do documento. Só
-      // que, no caminho do extrato em moeda estrangeira, a linha nasce com a
-      // chave presente e valor `undefined` quando NÃO é duplicata — e o
-      // Firestore recusa `undefined` com exceção síncrona no `batch.set`
-      // (o app não liga `ignoreUndefinedProperties`, de propósito: campo
-      // indefinido em app financeiro é bug, não valor). A exceção subia pelo
-      // `onImport`, ninguém pegava, e o botão ficava "Importando..." para
-      // sempre, sem mensagem. Era exatamente o extrato Wise que travava, e só
-      // ele: os caminhos de IA e OFX não gravam este campo.
-      const {
-        isDuplicate: _isDuplicate,
-        duplicateOf: _duplicateOf,
-        installmentType,
-        periodicity,
-        installmentAmount,
-        ...rest
-      } = row;
-
-      // `purchaseDate` = competência (data da compra original, também de cada
-      // parcela) — referência secundária, NÃO governa o mês. `invoiceDate` = a
-      // data de caixa (pagamento/vencimento) que vira o `date` e governa o mês.
-      // Numa fatura de cartão as parcelas são gravadas como 'unica' e recebem o
-      // vencimento desta fatura — ou seja, cada parcela cai no mês em que é PAGA,
-      // não no mês da compra. Cada fatura mensal é importada com seu vencimento.
-      const purchaseDate = rest.purchaseDate || rest.date;
-      const invoiceDate = billingDate || rest.date;
-
-      // Vínculo ciclo↔transação (T1/T3): gravado só no fluxo de cartão
-      // (billingDate não-nulo). `billingMonth` é o mês da fatura a que a linha
-      // pertence — para a parcela corrente é o mês selecionado; para parcelas
-      // futuras é o mês projetado de cada uma. `provisionalDate` é a data de
-      // caixa no momento da importação (a "provisória"), preservada intacta
-      // quando a baixa da fatura sobrescrever `date` — é o que o reopen (T3)
-      // usa para restaurar. Fora do fluxo de cartão os dois ficam ausentes.
-      if (installmentType === 'parcelada' && rest.totalInstallments && rest.totalInstallments > 1) {
-        const amount = installmentAmount ?? rest.amount;
-        const currentInst = rest.installmentNumber || 1;
-        const remaining = rest.totalInstallments - currentInst;
-
-        // Current installment (the one in this invoice)
-        toImport.push({
-          ...rest,
-          date: invoiceDate,
-          purchaseDate,
-          amount,
-          installmentNumber: currentInst,
-          totalInstallments: rest.totalInstallments,
-          // `?? null` em todo campo opcional: o Firestore recusa `undefined`,
-          // e a linha do extrato em moeda não tem nenhum dos dois.
-          billingMonth: (billingDate ? billingMonth : rest.billingMonth) ?? null,
-          provisionalDate: (billingDate ? invoiceDate : rest.provisionalDate) ?? null,
-        });
-
-        // Future installments
-        for (let offset = 1; offset <= remaining; offset++) {
-          const futureDate = new Date(invoiceDate);
-          futureDate.setMonth(futureDate.getMonth() + offset * (periodicity || 1));
-          toImport.push({
-            ...rest,
-            date: futureDate,
-            purchaseDate,
-            amount,
-            installmentNumber: currentInst + offset,
-            totalInstallments: rest.totalInstallments,
-            billingMonth: (billingDate ? getMonthYear(futureDate) : rest.billingMonth) ?? null,
-            provisionalDate: (billingDate ? futureDate : rest.provisionalDate) ?? null,
-          });
-        }
-      } else {
-        toImport.push({
-          ...rest,
-          date: invoiceDate,
-          purchaseDate,
-          billingMonth: (billingDate ? billingMonth : rest.billingMonth) ?? null,
-          provisionalDate: (billingDate ? invoiceDate : rest.provisionalDate) ?? null,
-        });
-      }
-    }
+    const toImport = buildImportItems(items, selected, { isCreditCard, billingMonth, effectiveDueDay });
 
     // try/finally em volta de TUDO que espera gravação: é o que garante que o
     // botão volta do "Importando...". Antes, um erro no meio pulava o
