@@ -8,7 +8,9 @@ mover essa lógica para `src/lib/` não mude nada.
   (`fixtures.mjs`). Nada aqui vem de fatura real.
 - `npm run test:import`: compara a árvore de trabalho com o golden, pelo
   componente inteiro (montado num mini-runtime de hooks, `stubs/`, sem
-  navegador) e por cada função pura.
+  navegador) e por cada função pura (`import.test.mjs`), e confere que a API
+  de `src/lib` (`buildAiRows`, `buildOfxRows`, `buildImportItems`...)
+  reproduz sozinha o preview e o lote do master (`lib.test.mjs`).
 - `run.mjs --ref <commit>`: roda um commit qualquer contra o golden.
   `--write-golden` regrava o golden, e só a partir de um commit.
 - `compare-real.mjs`: roda uma leitura real (resposta da IA ou OFX) e um
