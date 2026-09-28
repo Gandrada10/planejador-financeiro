@@ -134,6 +134,26 @@ export const invoiceAiHeuristic = {
   ],
 };
 
+// Fatura cuja PRIMEIRA linha é de um mês anterior ao da última compra: o mês
+// de pagamento sugerido tem de sair da data MAIS RECENTE, não da primeira. Um
+// estorno com a mesma data e o mesmo valor absoluto de uma compra gravada não
+// é duplicata dela.
+export const invoiceAiMonths = {
+  isCreditCard: true,
+  declaredTotal: null,
+  accountDescriptor: 'Cartao Beta',
+  usage: { input_tokens: 1, output_tokens: 1 },
+  transactions: [
+    { date: '2026-05-15', purchaseDate: '2026-05-15', description: 'CURSO 2 de 4', amount: -200, titular: 'ANA TESTE', installmentNumber: 2, totalInstallments: 4, cardNumber: '2222' },
+    { date: '2026-06-20', purchaseDate: '2026-06-20', description: 'LOJA ROUPA', amount: -89.9, titular: 'ANA TESTE', installmentNumber: null, totalInstallments: null, cardNumber: '2222' },
+    { date: '2026-06-02', purchaseDate: '2026-06-02', description: 'LOJA ROUPA ESTORNO', amount: 89.9, titular: 'ANA TESTE', installmentNumber: null, totalInstallments: null, cardNumber: '2222' },
+  ],
+};
+
+export const invoiceMonthsExisting = [
+  tx({ date: d('2026-06-30'), purchaseDate: d('2026-06-02'), description: 'Loja Roupa', amount: -89.9, account: 'Cartão Beta' }),
+];
+
 // ─── B: extrato de conta lido pela "IA" ────────────────────────────────────
 export const statementAi = {
   isCreditCard: false,

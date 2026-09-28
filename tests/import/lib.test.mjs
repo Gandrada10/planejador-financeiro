@@ -46,6 +46,7 @@ test('buildAiRows reproduz o preview do master (fatura, fatura por heurística, 
     ['A1 fatura: dedupe por data da compra, contagem, parcelas, reembolso', F.invoiceAi, F.invoiceExisting, F.accounts],
     ['A4 fatura: titular desconhecido trava a gravação', F.invoiceAiUnknownTitular, F.invoiceExisting, F.accounts],
     ['A5 fatura: heurística de cartão, cartão único', F.invoiceAiHeuristic, [], F.accounts.filter((a) => a.name !== 'Cartão Beta')],
+    ['A6 fatura: mês sugerido pela compra mais recente, estorno não casa com compra', F.invoiceAiMonths, F.invoiceMonthsExisting, F.accounts],
     ['B1 extrato via IA: critério com descrição, parcelas futuras automáticas', F.statementAi, F.statementExisting, F.accounts],
   ];
   for (const [name, ai, existing, accounts] of cases) {

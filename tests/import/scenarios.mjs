@@ -93,6 +93,9 @@ export const componentScenarios = {
       props: { accounts: F.accounts.filter((a) => a.name !== 'Cartão Beta') },
     }),
 
+  'A6 fatura: mês sugerido pela compra mais recente, estorno não casa com compra': (L) =>
+    runAi(L, { ai: F.invoiceAiMonths, existing: F.invoiceMonthsExisting }),
+
   // B: extrato via IA — descrição volta ao critério; parcelas futuras
   // automáticas; sem mês de fatura.
   'B1 extrato via IA: critério com descrição, parcelas futuras automáticas': (L) =>
