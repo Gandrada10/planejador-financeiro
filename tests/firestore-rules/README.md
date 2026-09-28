@@ -27,7 +27,7 @@ npm install
 ```bash
 cd tests/firestore-rules
 npm run test:exec
-# = firebase emulators:exec --only firestore --project demo-planejador-rules "node --test rules.test.mjs"
+# = firebase emulators:exec --only firestore --project demo-planejador-rules "node --test rules.test.mjs operator.test.mjs"
 ```
 
 Sobe o emulador, roda a suite, derruba o emulador. Nada toca produção.
@@ -72,6 +72,31 @@ npm test
    anônimo (inclusive em sessão expirada); `applied:true + orphaned:true` na
    subcoleção (delta órfão do C3) passa para o dono e `orphaned` é negado ao
    público.
+
+## Usuário operador (IA) — `operator.test.mjs` (29 testes)
+
+As regras dão a um usuário operador (a IA) um acesso estreito aos dados do
+dono: **ler** `/users/{dono}/**`; **criar** lançamento novo em `transactions`
+(lista fechada de campos, carimbo `import_<ms>` ou null, nunca conciliado);
+**criar** conta nova em `accounts` (só os campos de `Account`); **trocar só o
+`categoryId`** de lançamento existente, para categoria que existe ou null.
+Nunca apaga, nunca escreve em outra coleção, nunca na própria árvore, nunca em
+sessão de categorização (nem com o token). O dono continua igual.
+
+Os UIDs **não** ficam no repositório (ele é público): `firestore.rules` usa os
+marcadores `__OPERADOR_UID__` e `__DONO_UID__`. Publicado com os marcadores, o
+operador não é ninguém; com os dois UIDs iguais, também não (o dono segue
+intacto). A suíte troca os marcadores por UIDs de teste (projeto
+`demo-planejador-operador`). `RULES_FILE=<arquivo>` roda a suíte contra outro
+arquivo de regras (é assim que os mutantes rodam).
+
+Texto de produção, gerado fora do repositório, com sha256 para conferir:
+
+```bash
+node gerar-regras-producao.mjs <operador.json fora do repo> <saida fora do repo>
+```
+
+Recusa UIDs iguais, fora do formato, marcador sobrando e saída dentro do repo.
 
 ## Quando rodar
 

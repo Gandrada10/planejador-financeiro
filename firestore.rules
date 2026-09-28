@@ -11,8 +11,70 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // O operador (IA) nunca é "dono" de nada: nem do próprio /users/{uid},
+    // nem de sessão de categorização. Para o dono real isto não muda nada.
     function isOwner(uid) {
-      return request.auth != null && request.auth.uid == uid;
+      return request.auth != null && request.auth.uid == uid && !isOperator();
+    }
+
+    // ---- Usuário operador (IA) ----
+    // UIDs como MARCADORES: o texto publicado é gerado fora do repositório
+    // (repo público) trocando __OPERADOR_UID__ e __DONO_UID__. Publicado com os
+    // marcadores, o operador não é ninguém (falha fechada). Se os dois UIDs
+    // forem iguais, o operador também não é ninguém e o dono segue intacto.
+    function isOperator() {
+      return request.auth != null
+        && request.auth.uid == '__OPERADOR_UID__'
+        && '__OPERADOR_UID__' != '__DONO_UID__';
+    }
+
+    // Operador agindo SÓ na árvore do dono.
+    function operatorOnOwner(uid) {
+      return isOperator() && uid == '__DONO_UID__';
+    }
+
+    function nullOrCategoryId(v) {
+      return v == null || (v is string && v.matches('^[A-Za-z0-9_-]{1,128}$'));
+    }
+
+    function nullOrDay(d, k) {
+      return !(k in d) || d[k] == null || (d[k] is int && d[k] >= 1 && d[k] <= 31);
+    }
+
+    // Lançamento criado pelo operador: lista FECHADA de campos (a do app, sem
+    // reembolso, noteAlert e pluggyTransactionId), carimbo import_<ms> ou null,
+    // nunca já conciliado. Campo obrigatório ausente reprova pela checagem de
+    // tipo (ler campo inexistente é erro, e erro nega).
+    function operatorTxOk() {
+      let d = request.resource.data;
+      return d.keys().hasOnly([
+          'date', 'purchaseDate', 'description', 'amount', 'categoryId', 'account',
+          'familyMember', 'titular', 'installmentNumber', 'totalInstallments',
+          'cardNumber', 'projectId', 'tags', 'notes', 'importBatch', 'reconciled',
+          'reconciledAt', 'createdAt', 'billingMonth', 'provisionalDate', 'fitid',
+          'amountFx', 'currencyFx', 'fxRate'])
+        && d.date is timestamp
+        && d.description is string
+        && d.amount is number
+        && d.account is string && d.account.size() > 0
+        && d.createdAt is timestamp
+        && (!('categoryId' in d) || nullOrCategoryId(d.categoryId))
+        && (!('importBatch' in d) || d.importBatch == null
+            || (d.importBatch is string && d.importBatch.matches('^import_[0-9]{10,}$')))
+        && (!('reconciled' in d) || d.reconciled == false)
+        && (!('reconciledAt' in d) || d.reconciledAt == null);
+    }
+
+    // Conta criada pelo operador: só os campos de Account.
+    function operatorAccountOk() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'type', 'bank', 'closingDay', 'dueDay', 'creditLimit', 'createdAt'])
+        && d.name is string && d.name.size() > 0 && d.name.size() <= 100
+        && d.type in ['corrente', 'cartao', 'beneficio', 'poupanca', 'investimento', 'outro']
+        && d.createdAt is timestamp
+        && nullOrDay(d, 'closingDay')
+        && nullOrDay(d, 'dueDay')
+        && (!('creditLimit' in d) || d.creditLimit == null || d.creditLimit is number);
     }
 
     // Só os campos em `allowed` foram alterados nesta escrita.
@@ -35,6 +97,25 @@ service cloud.firestore {
     // ---- Dados privados do usuário: só o próprio dono ----
     match /users/{uid}/{document=**} {
       allow read, write: if isOwner(uid);
+      // Operador: só LÊ a árvore do dono.
+      allow read: if operatorOnOwner(uid);
+    }
+
+    // Operador: cria lançamento novo (create só vale para doc que não existe)
+    // e troca SÓ o categoryId de um existente, para uma categoria que existe
+    // (ou null). Nunca delete; nada de importBatch em linha existente.
+    match /users/{uid}/transactions/{txId} {
+      allow create: if operatorOnOwner(uid) && operatorTxOk();
+      allow update: if operatorOnOwner(uid)
+        && changedOnly(['categoryId'])
+        && nullOrCategoryId(request.resource.data.categoryId)
+        && (request.resource.data.categoryId == null
+            || exists(/databases/$(database)/documents/users/$(uid)/categories/$(request.resource.data.categoryId)));
+    }
+
+    // Operador: só cria conta nova. Nome inédito é checagem do escritor.
+    match /users/{uid}/accounts/{accountId} {
+      allow create: if operatorOnOwner(uid) && operatorAccountOk();
     }
 
     // ---- Sessões de categorização (acesso público por token) ----
@@ -45,8 +126,8 @@ service cloud.firestore {
       // de expiração abaixo). `list` só o dono: as rules avaliam a query, então
       // só passa um list cujo filtro garanta userId == request.auth.uid —
       // bloqueia a enumeração de tokens por conta autenticada qualquer.
-      allow get: if true;
-      allow list: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow get: if !isOperator();
+      allow list: if request.auth != null && !isOperator() && resource.data.userId == request.auth.uid;
 
       // Criação: só autenticado E em nome de quem cria (bloqueia forja de
       // sessão apontando para o userId de outra conta). Os campos dos quais as
@@ -66,7 +147,8 @@ service cloud.firestore {
       // fica FORA da allow-list pública → imutável (ninguém estende o próprio
       // prazo com o token); idem `status`, `applied*` e `transactionIds`.
       allow update: if isOwner(resource.data.userId)
-        || (changedOnly(['categorizedCount', 'lastActivityAt'])
+        || (!isOperator()
+            && changedOnly(['categorizedCount', 'lastActivityAt'])
             && request.time < resource.data.expiresAt
             && request.resource.data.categorizedCount is int
             && request.resource.data.categorizedCount >= 0
@@ -76,7 +158,7 @@ service cloud.firestore {
       // Categorias copiadas para a sessão: leitura pública só enquanto o link
       // vale (o dono lê sempre); escrita só do dono da sessão-pai.
       match /categories/{catId} {
-        allow read: if isSessionOwner(token) || sessionNotExpired(token);
+        allow read: if isSessionOwner(token) || (!isOperator() && sessionNotExpired(token));
         allow write: if isSessionOwner(token);
       }
 
@@ -92,10 +174,11 @@ service cloud.firestore {
       // nas transações reais já excluídas (C3 — consome o delta órfão);
       // `orphaned` fica FORA da allow-list pública.
       match /transactions/{txId} {
-        allow read: if isSessionOwner(token) || sessionNotExpired(token);
+        allow read: if isSessionOwner(token) || (!isOperator() && sessionNotExpired(token));
         allow create, delete: if isSessionOwner(token);
         allow update: if isSessionOwner(token)
-          || (changedOnly(['categoryId', 'notes', 'applied'])
+          || (!isOperator()
+              && changedOnly(['categoryId', 'notes', 'applied'])
               && sessionNotExpired(token)
               && (request.resource.data.categoryId == null
                   || (request.resource.data.categoryId is string
